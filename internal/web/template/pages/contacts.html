@@ -1,0 +1,21 @@
+{{ define "content" }}
+<div class="contacts-page">
+    <div class="page-header">
+        <h1>Contacts</h1>
+        <form method="GET" action="/contacts" class="search-form">
+            <input type="text" name="q" value="{{ .Query }}" placeholder="Search contacts...">
+            <button type="submit">Search</button>
+        </form>
+    </div>
+
+    <div class="contact-list">
+        {{ range .Contacts }}
+        {{ template "contact_row" . }}
+        {{ else }}
+        <p class="empty-state">No contacts found.</p>
+        {{ end }}
+    </div>
+
+    {{ template "pagination" .Pagination }}
+</div>
+{{ end }}

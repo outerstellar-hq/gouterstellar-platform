@@ -1,0 +1,16 @@
+{{ define "contact_row" }}
+<div class="contact-row{{ if .Deleted }} deleted{{ end }}{{ if .Dirty }} dirty{{ end }}">
+    <div class="contact-name">{{ .Name }}</div>
+    <div class="contact-details">
+        {{ if .Company }}<span class="contact-company">{{ .Company }}</span>{{ end }}
+        {{ range .Emails }}<span class="contact-email">{{ . }}</span>{{ end }}
+        {{ range .Phones }}<span class="contact-phone">{{ . }}</span>{{ end }}
+        {{ range .Social }}<span class="contact-social">{{ . }}</span>{{ end }}
+    </div>
+    <div class="contact-meta">
+        <span class="contact-time">{{ .UpdatedAt }}</span>
+        {{ if .Dirty }}<span class="badge badge-warning">Unsynced</span>{{ end }}
+        {{ if .Deleted }}<span class="badge badge-error">Deleted</span>{{ end }}
+    </div>
+</div>
+{{ end }}

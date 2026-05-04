@@ -1,0 +1,31 @@
+{{ define "content" }}
+<div class="messages-page">
+    <div class="page-header">
+        <h1>Messages</h1>
+        <form method="GET" action="/messages" class="search-form">
+            <input type="text" name="q" value="{{ .Query }}" placeholder="Search messages...">
+            <button type="submit">Search</button>
+        </form>
+    </div>
+
+    {{ if .Years }}
+    <div class="year-filter">
+        <span>Filter by year:</span>
+        {{ range .Years }}
+        <a href="/messages?year={{ . }}{{ if $.Query }}&q={{ $.Query }}{{ end }}"
+           class="year-link{{ if eq . $.Year }} active{{ end }}">{{ . }}</a>
+        {{ end }}
+    </div>
+    {{ end }}
+
+    <div class="message-list">
+        {{ range .Messages }}
+        {{ template "message_row" . }}
+        {{ else }}
+        <p class="empty-state">No messages found.</p>
+        {{ end }}
+    </div>
+
+    {{ template "pagination" .Pagination }}
+</div>
+{{ end }}

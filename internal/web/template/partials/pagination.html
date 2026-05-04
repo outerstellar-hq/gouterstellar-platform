@@ -1,0 +1,13 @@
+{{ define "pagination" }}
+{{ if or .HasPrevious .HasNext }}
+<nav class="pagination" aria-label="Pagination">
+    {{ if .HasPrevious }}
+    <a href="?page={{ sub .CurrentPage 1 }}" class="btn btn-sm">&laquo; Previous</a>
+    {{ end }}
+    <span class="pagination-info">Page {{ .CurrentPage }} of {{ .TotalPages }}</span>
+    {{ if .HasNext }}
+    <a href="?page={{ add .CurrentPage 1 }}" class="btn btn-sm">Next &raquo;</a>
+    {{ end }}
+</nav>
+{{ end }}
+{{ end }}

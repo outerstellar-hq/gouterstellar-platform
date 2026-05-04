@@ -1,2 +1,5 @@
 dev_dashboard_enabled: true
 dev_mode: true
+database_url: "postgres://outerstellar:outerstellar@127.0.0.1:15432/outerstellar?sslmode=disable"
+csrf_enabled: false
+session_cookie_secure: false

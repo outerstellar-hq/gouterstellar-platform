@@ -1,0 +1,10 @@
+{{ define "content" }}
+<div class="error-page">
+    <h1>{{ .StatusCode }} - {{ .Title }}</h1>
+    <p>{{ .Message }}</p>
+    {{ if .RequestID }}
+    <p class="request-id">Request ID: {{ .RequestID }}</p>
+    {{ end }}
+    <a href="/" class="btn btn-primary">Back to Home</a>
+</div>
+{{ end }}

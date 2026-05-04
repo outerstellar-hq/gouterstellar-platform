@@ -1,0 +1,30 @@
+{{ define "content" }}
+<div class="notifications-page">
+    <div class="page-header">
+        <h1>Notifications</h1>
+        {{ if .UnreadCount }}
+        <span class="badge badge-unread">{{ .UnreadCount }} unread</span>
+        {{ end }}
+    </div>
+
+    <div class="notification-list">
+        {{ range .Notifications }}
+        <div class="notification-item{{ if not .Read }} unread{{ end }}">
+            <div class="notification-header">
+                <span class="notification-type badge badge-{{ .Type }}">{{ .Type }}</span>
+                <span class="notification-time">{{ .CreatedAt }}</span>
+            </div>
+            <h3>{{ .Title }}</h3>
+            <p>{{ .Body }}</p>
+            {{ if not .Read }}
+            <form method="POST" action="/notifications/{{ .ID }}/read">
+                <button type="submit" class="btn btn-sm">Mark as read</button>
+            </form>
+            {{ end }}
+        </div>
+        {{ else }}
+        <p class="empty-state">No notifications.</p>
+        {{ end }}
+    </div>
+</div>
+{{ end }}

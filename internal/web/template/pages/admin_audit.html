@@ -1,0 +1,34 @@
+{{ define "content" }}
+<div class="admin-audit-page">
+    <div class="page-header">
+        <h1>Audit Log</h1>
+    </div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Actor</th>
+                <th>Target</th>
+                <th>Action</th>
+                <th>Detail</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ range .Entries }}
+            <tr>
+                <td>{{ .CreatedAt }}</td>
+                <td>{{ .ActorUsername }}</td>
+                <td>{{ .TargetUsername }}</td>
+                <td><span class="badge">{{ .Action }}</span></td>
+                <td>{{ .Detail }}</td>
+            </tr>
+            {{ else }}
+            <tr><td colspan="5" class="empty-state">No audit entries found.</td></tr>
+            {{ end }}
+        </tbody>
+    </table>
+
+    {{ template "pagination" .Pagination }}
+</div>
+{{ end }}
