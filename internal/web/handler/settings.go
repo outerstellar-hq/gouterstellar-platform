@@ -63,11 +63,13 @@ func (h *SettingsHandler) Show(w http.ResponseWriter, r *http.Request) {
 		PushNotificationsEnabled:  user.PushNotificationsEnabled,
 	}
 
-	h.renderer.Render(w, "settings.html", viewmodel.SettingsPage{
+	if err := h.renderer.Render(w, "settings.html", viewmodel.SettingsPage{
 		Profile:  profile,
 		Theme:    theme,
 		Language: language,
-	})
+	}); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
 }
 
 func (h *SettingsHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {

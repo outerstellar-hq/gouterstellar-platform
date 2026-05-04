@@ -21,7 +21,7 @@ func NewErrorHandler(renderer *web.Renderer, version string) *ErrorHandler {
 }
 
 func (h *ErrorHandler) NotFound(w http.ResponseWriter, r *http.Request) {
-	h.renderer.RenderWithStatus(w, "error.html", viewmodel.ErrorPage{
+	_ = h.renderer.RenderWithStatus(w, "error.html", viewmodel.ErrorPage{
 		StatusCode: http.StatusNotFound,
 		Title:      "Not Found",
 		Message:    "The page you are looking for does not exist.",
@@ -36,7 +36,7 @@ func (h *ErrorHandler) InternalError(w http.ResponseWriter, r *http.Request, err
 		"method", r.Method,
 	)
 
-	h.renderer.RenderWithStatus(w, "error.html", viewmodel.ErrorPage{
+	_ = h.renderer.RenderWithStatus(w, "error.html", viewmodel.ErrorPage{
 		StatusCode: http.StatusInternalServerError,
 		Title:      "Internal Server Error",
 		Message:    "Something went wrong. Please try again later.",

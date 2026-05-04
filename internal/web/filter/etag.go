@@ -42,7 +42,7 @@ func ETag() func(http.Handler) http.Handler {
 			}
 
 			w.Header().Set("Etag", etag)
-			w.Write(er.buf.Bytes())
+			_, _ = w.Write(er.buf.Bytes())
 		})
 	}
 }

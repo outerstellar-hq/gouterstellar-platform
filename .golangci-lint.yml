@@ -1,0 +1,171 @@
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+
+output:
+  formats:
+    - format: colored-line-number
+  sort-results: true
+
+linters:
+  enable:
+    # Bugs & correctness
+    - govet
+    - staticcheck
+    - gosimple
+    - ineffassign
+    - errcheck
+    - typecheck
+    - unused
+    - bodyclose
+    - durationcheck
+    - errname
+    - errorlint
+    - govet
+    - nilerr
+    - nilnil
+    - rowserrcheck
+    - sqlclosecheck
+    - exportloopref
+    - copyloopvar
+
+    # Security
+    - gosec
+
+    # Style & formatting
+    - gofmt
+    - gofumpt
+    - goimports
+    - misspell
+    - whitespace
+    - wsl
+
+    # Complexity
+    - gocyclo
+    - cyclop
+    - gocognit
+    - nestif
+    - funlen
+
+    # Duplication
+    - dupl
+
+    # Performance
+    - prealloc
+
+    # Diagnostics
+    - goprintffuncname
+    - nakedret
+    - unconvert
+    - unparam
+    - wastedassign
+    - revive
+
+linters-settings:
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment
+
+  staticcheck:
+    checks: ["all"]
+
+  gosec:
+    excludes:
+      - G104
+
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+    exclude-functions:
+      - fmt.Fprintf
+      - fmt.Fprintln
+      - fmt.Fprint
+      - fmt.Fprintf
+      - (io.Writer).Write
+
+  gocyclo:
+    min-complexity: 15
+
+  cyclop:
+    max-complexity: 15
+
+  gocognit:
+    min-complexity: 20
+
+  funlen:
+    lines: 80
+    statements: 60
+
+  nestif:
+    min-depth: 4
+
+  dupl:
+    threshold: 100
+
+  gofumpt:
+    extra-rules: true
+
+  goimports:
+    local-prefixes: github.com/rygel/gouterstellar-platform
+
+  misspell:
+    locale: US
+
+  revive:
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: increment-decrement
+      - name: indent-error-flow
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: var-declaration
+      - name: var-naming
+
+  nakedret:
+    max-func-lines: 30
+
+  prealloc:
+    simple: true
+    range-loops: true
+    for-loops: false
+
+  unparam:
+    check-exported: false
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - dupl
+        - gosec
+        - funlen
+        - gocyclo
+        - errcheck
+    - path: internal/persistence/db/
+      linters:
+        - all
+      text: ".*"
+    - linters:
+        - revive
+      text: "package-comments"
+    - linters:
+        - gosec
+      text: "G40[0-9]"
+    - linters:
+        - gosec
+      text: "G50[0-9]"
+  max-issues-per-linter: 50
+  max-same-issues: 5
+  fix: false

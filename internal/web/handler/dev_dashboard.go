@@ -43,7 +43,9 @@ func (h *DevDashboardHandler) RegisterRoutes(r chi.Router) {
 }
 
 func (h *DevDashboardHandler) Show(w http.ResponseWriter, r *http.Request) {
-	h.renderer.Render(w, "dev_dashboard.html", nil)
+	if err := h.renderer.Render(w, "dev_dashboard.html", nil); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
 }
 
 func (h *DevDashboardHandler) ProcessOutbox(w http.ResponseWriter, r *http.Request) {

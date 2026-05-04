@@ -67,10 +67,12 @@ func (h *UserAdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		PageSize:    pageSize,
 	}
 
-	h.renderer.Render(w, "admin_users.html", viewmodel.AdminUsersPage{
+	if err := h.renderer.Render(w, "admin_users.html", viewmodel.AdminUsersPage{
 		Users:      userItems,
 		Pagination: pagination,
-	})
+	}); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
 }
 
 func (h *UserAdminHandler) SetEnabled(w http.ResponseWriter, r *http.Request) {
@@ -184,14 +186,16 @@ func (h *UserAdminHandler) ShowAudit(w http.ResponseWriter, r *http.Request) {
 		PageSize:    pageSize,
 	}
 
-	h.renderer.Render(w, "admin_audit.html", viewmodel.AdminAuditPage{
+	if err := h.renderer.Render(w, "admin_audit.html", viewmodel.AdminAuditPage{
 		Entries:    auditItems,
 		Pagination: pagination,
-	})
+	}); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
 }
 
 func (h *UserAdminHandler) renderError(w http.ResponseWriter, message string, status int) {
-	h.renderer.RenderWithStatus(w, "error.html", viewmodel.ErrorPage{
+	_ = h.renderer.RenderWithStatus(w, "error.html", viewmodel.ErrorPage{
 		StatusCode: status,
 		Title:      "Error",
 		Message:    message,

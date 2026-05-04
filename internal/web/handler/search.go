@@ -34,9 +34,11 @@ func (h *SearchHandler) RegisterRoutes(r chi.Router) {
 func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
 	if query == "" {
-		h.renderer.Render(w, "search.html", viewmodel.MessagesPage{
+		if err := h.renderer.Render(w, "search.html", viewmodel.MessagesPage{
 			Query: query,
-		})
+		}); err != nil {
+			http.Error(w, "Template error", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -46,7 +48,7 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.messageService.ListMessages(r.Context(), int32(pageSize), int32(offset))
 	if err != nil {
-		h.renderer.RenderWithStatus(w, "error.html", viewmodel.ErrorPage{
+		_ = h.renderer.RenderWithStatus(w, "error.html", viewmodel.ErrorPage{
 			StatusCode: http.StatusInternalServerError,
 			Title:      "Error",
 			Message:    "Search failed",
@@ -77,9 +79,11 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 		PageSize:    result.Metadata.PageSize,
 	}
 
-	h.renderer.Render(w, "search.html", viewmodel.MessagesPage{
+	if err := h.renderer.Render(w, "search.html", viewmodel.MessagesPage{
 		Messages:   messageItems,
 		Pagination: pagination,
 		Query:      query,
-	})
+	}); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
 }

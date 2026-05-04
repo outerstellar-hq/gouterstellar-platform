@@ -1,4 +1,4 @@
-.PHONY: build test lint generate clean migrate-up migrate-down dev seed
+.PHONY: build test lint lint-full vet fmt check generate clean migrate-up migrate-down dev seed security
 
 build:
 	go build -o bin/server.exe ./cmd/server
@@ -9,6 +9,19 @@ test:
 lint:
 	golangci-lint run ./...
 
+lint-full:
+	golangci-lint run --enable-all ./...
+
+vet:
+	go vet ./...
+
+fmt:
+	gofumpt -w .
+	goimports -w -local github.com/rygel/gouterstellar-platform .
+
+check: fmt vet lint
+	@echo "All checks passed."
+
 generate:
 	sqlc generate
 
@@ -16,13 +29,19 @@ clean:
 	rm -rf bin/
 
 migrate-up:
-	migrate -path migrations -database "postgres://outerstellar:outerstellar@localhost:5432/outerstellar?sslmode=disable" up
-
-migrate-down:
-	migrate -path migrations -database "postgres://outerstellar:outerstellar@localhost:5432/outerstellar?sslmode=disable" down 1
+	go run ./cmd/migrate
 
 dev:
-	go run ./cmd/server
+	APP_PROFILE=dev go run ./cmd/server
 
 seed:
 	go run ./cmd/seed
+
+security:
+	gosec ./...
+
+build-seed:
+	go build -o bin/seed.exe ./cmd/seed
+
+build-migrate:
+	go build -o bin/migrate.exe ./cmd/migrate

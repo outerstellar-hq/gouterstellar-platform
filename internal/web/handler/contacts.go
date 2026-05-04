@@ -38,7 +38,7 @@ func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	contacts, err := h.contactService.ListContacts(r.Context(), int32(pageSize), int32(offset))
 	if err != nil {
-		h.renderer.RenderWithStatus(w, "error.html", viewmodel.ErrorPage{
+		_ = h.renderer.RenderWithStatus(w, "error.html", viewmodel.ErrorPage{
 			StatusCode: http.StatusInternalServerError,
 			Title:      "Error",
 			Message:    "Failed to load contacts",
@@ -76,10 +76,12 @@ func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {
 		PageSize:    pageSize,
 	}
 
-	h.renderer.Render(w, "contacts.html", viewmodel.ContactsPage{
+	if err := h.renderer.Render(w, "contacts.html", viewmodel.ContactsPage{
 		Contacts:   contactItems,
 		Pagination: pagination,
-	})
+	}); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
 }
 
 func (h *ContactsHandler) Detail(w http.ResponseWriter, r *http.Request) {

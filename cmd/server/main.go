@@ -66,7 +66,7 @@ func main() {
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	})
 	r.Handle("/metrics", promhttp.HandlerFor(app.Registry, promhttp.HandlerOpts{}))
 
@@ -101,7 +101,7 @@ func main() {
 	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusMethodNotAllowed)
-		w.Write([]byte("405 method not allowed"))
+		_, _ = w.Write([]byte("405 method not allowed"))
 	})
 
 	srv := &http.Server{
@@ -124,9 +124,13 @@ func main() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
-			app.OutboxProcessor.ProcessPending(context.Background())
+			if err := app.OutboxProcessor.ProcessPending(context.Background()); err != nil {
+				slog.Error("Outbox processing failed", "error", err)
+			}
 			app.ActivityUpdater.Flush()
-			app.SecurityService.DeleteExpiredSessions(context.Background())
+			if err := app.SecurityService.DeleteExpiredSessions(context.Background()); err != nil {
+				slog.Error("Session cleanup failed", "error", err)
+			}
 		}
 	}()
 

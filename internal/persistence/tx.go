@@ -21,7 +21,7 @@ func (tm *TransactionManager) InTransaction(ctx context.Context, fn func(tx pgx.
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := fn(tx); err != nil {
 		return err
 	}

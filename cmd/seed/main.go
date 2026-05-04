@@ -30,7 +30,10 @@ func main() {
 	defer pool.Close()
 
 	var count int
-	pool.QueryRow(ctx, "SELECT COUNT(*) FROM plt_users WHERE username = $1", *adminUsername).Scan(&count)
+	if err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM plt_users WHERE username = $1", *adminUsername).Scan(&count); err != nil {
+		slog.Error("Failed to check existing user", "error", err)
+		os.Exit(1)
+	}
 	if count > 0 {
 		slog.Info("Admin user already exists", "username", *adminUsername)
 		return

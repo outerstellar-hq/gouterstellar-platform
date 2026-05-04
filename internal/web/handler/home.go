@@ -48,7 +48,9 @@ func (h *HomeHandler) Show(w http.ResponseWriter, r *http.Request) {
 		UserCount:    userCount,
 	}
 
-	h.renderer.Render(w, "home.html", page)
+	if err := h.renderer.Render(w, "home.html", page); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
 }
 
 func (h *HomeHandler) countMessages(r *http.Request) (int64, error) {

@@ -66,10 +66,12 @@ func (h *ComponentsHandler) MessageList(w http.ResponseWriter, r *http.Request) 
 		PageSize:    result.Metadata.PageSize,
 	}
 
-	h.renderer.Render(w, "components/message_list.html", viewmodel.MessagesPage{
+	if err := h.renderer.Render(w, "components/message_list.html", viewmodel.MessagesPage{
 		Messages:   messageItems,
 		Pagination: pagination,
-	})
+	}); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
 }
 
 func (h *ComponentsHandler) ContactList(w http.ResponseWriter, r *http.Request) {
@@ -112,8 +114,10 @@ func (h *ComponentsHandler) ContactList(w http.ResponseWriter, r *http.Request) 
 		PageSize:    pageSize,
 	}
 
-	h.renderer.Render(w, "components/contact_list.html", viewmodel.ContactsPage{
+	if err := h.renderer.Render(w, "components/contact_list.html", viewmodel.ContactsPage{
 		Contacts:   contactItems,
 		Pagination: pagination,
-	})
+	}); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
 }
