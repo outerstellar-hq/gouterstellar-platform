@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
@@ -36,7 +37,7 @@ func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {
 	pageSize := getIntParam(r, "pageSize", 20)
 	offset := (page - 1) * pageSize
 
-	contacts, err := h.contactService.ListContacts(r.Context(), int32(pageSize), int32(offset))
+	contacts, err := h.contactService.ListContacts(r.Context(), safeInt32(pageSize), safeInt32(offset))
 	if err != nil {
 		_ = h.renderer.RenderWithStatus(w, "error.html", viewmodel.ErrorPage{
 			StatusCode: http.StatusInternalServerError,
@@ -128,14 +129,14 @@ func (h *ContactsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	contact := &model.StoredContact{
-		SyncID:           syncID,
-		Name:             r.FormValue("name"),
-		Emails:           r.Form["emails"],
-		Phones:           r.Form["phones"],
-		SocialMedia:      r.Form["socials"],
-		Company:          r.FormValue("company"),
-		CompanyAddress:   r.FormValue("companyAddress"),
-		Department:       r.FormValue("department"),
+		SyncID:         syncID,
+		Name:           r.FormValue("name"),
+		Emails:         r.Form["emails"],
+		Phones:         r.Form["phones"],
+		SocialMedia:    r.Form["socials"],
+		Company:        r.FormValue("company"),
+		CompanyAddress: r.FormValue("companyAddress"),
+		Department:     r.FormValue("department"),
 	}
 
 	_, err := h.contactService.UpdateContact(r.Context(), contact)

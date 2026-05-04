@@ -26,8 +26,10 @@ type AuthRealm interface {
 	Authenticate(token string) AuthResult
 }
 
-type SessionLookupFunc func(token string) model.SessionLookup
-type ApiKeyLookupFunc func(rawKey string) *model.User
+type (
+	SessionLookupFunc func(token string) model.SessionLookup
+	ApiKeyLookupFunc  func(rawKey string) *model.User
+)
 
 type sessionRealm struct {
 	lookup SessionLookupFunc

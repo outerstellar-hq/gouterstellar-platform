@@ -9,10 +9,10 @@ import (
 )
 
 type mockPlugin struct {
-	name        string
-	version     string
-	description string
-	initErr     error
+	name           string
+	version        string
+	description    string
+	initErr        error
 	shutdownCalled bool
 }
 
@@ -25,6 +25,7 @@ func (m *mockPlugin) Initialize() error {
 	}
 	return nil
 }
+
 func (m *mockPlugin) Shutdown() {
 	m.shutdownCalled = true
 }

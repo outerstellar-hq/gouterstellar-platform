@@ -46,7 +46,8 @@ func main() {
 	}
 
 	adminID := uuid.New()
-	_, err = pool.Exec(ctx,
+	_, err = pool.Exec(
+		ctx,
 		`INSERT INTO plt_users (id, username, email, password_hash, role, enabled, email_notifications_enabled, push_notifications_enabled)
 		 VALUES ($1, $2, $3, $4, 'ADMIN', true, true, true)`,
 		adminID, *adminUsername, fmt.Sprintf("%s@outerstellar.local", *adminUsername), string(hash),

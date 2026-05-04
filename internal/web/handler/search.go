@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
 	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
@@ -46,7 +47,7 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	pageSize := getIntParam(r, "pageSize", 20)
 	offset := (page - 1) * pageSize
 
-	result, err := h.messageService.ListMessages(r.Context(), int32(pageSize), int32(offset))
+	result, err := h.messageService.ListMessages(r.Context(), safeInt32(pageSize), safeInt32(offset))
 	if err != nil {
 		_ = h.renderer.RenderWithStatus(w, "error.html", viewmodel.ErrorPage{
 			StatusCode: http.StatusInternalServerError,

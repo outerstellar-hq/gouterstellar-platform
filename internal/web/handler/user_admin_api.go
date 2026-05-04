@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
@@ -31,7 +32,7 @@ func (h *UserAdminAPI) ListUsers(w http.ResponseWriter, r *http.Request) {
 	pageSize := getIntParam(r, "pageSize", 20)
 	offset := (page - 1) * pageSize
 
-	users, err := h.securityService.ListUsersPaged(r.Context(), int32(pageSize), int32(offset))
+	users, err := h.securityService.ListUsersPaged(r.Context(), safeInt32(pageSize), safeInt32(offset))
 	if err != nil {
 		handleServiceError(w, err)
 		return

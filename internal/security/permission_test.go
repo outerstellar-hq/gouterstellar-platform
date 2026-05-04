@@ -4,8 +4,9 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/rygel/gouterstellar-platform/internal/model"
 )
 
 func TestRoleBasedPermissionResolver(t *testing.T) {

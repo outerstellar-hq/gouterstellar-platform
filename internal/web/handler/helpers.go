@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 
@@ -42,6 +43,16 @@ func getInt64Param(r *http.Request, name string, defaultVal int64) int64 {
 		return defaultVal
 	}
 	return i
+}
+
+func safeInt32(v int) int32 {
+	if v > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if v < 0 {
+		return 0
+	}
+	return int32(v)
 }
 
 func handleServiceError(w http.ResponseWriter, err error) {

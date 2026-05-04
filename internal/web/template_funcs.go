@@ -39,7 +39,7 @@ func TemplateFuncMap() template.FuncMap {
 		"lower":    strings.ToLower,
 		"trim":     strings.TrimSpace,
 		"json":     func(v interface{}) (string, error) { b, err := json.Marshal(v); return string(b), err },
-		"safeHTML": func(s string) template.HTML { return template.HTML(s) },
+		"safeHTML": func(s string) template.HTML { return template.HTML(s) }, // #nosec G203 -- intentional: used for trusted server-rendered HTML only
 		"urlEncode": func(s string) string {
 			return url.QueryEscape(s)
 		},

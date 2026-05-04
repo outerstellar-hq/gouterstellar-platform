@@ -13,7 +13,8 @@ func (n *NoOpEmailService) Send(to, subject, body string) {}
 type ConsoleEmailService struct{}
 
 func (c *ConsoleEmailService) Send(to, subject, body string) {
-	slog.Info("Sending email",
+	slog.Info(
+		"Sending email",
 		"to", to,
 		"subject", subject,
 		"body", body,

@@ -30,7 +30,8 @@ func (h *ErrorHandler) NotFound(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ErrorHandler) InternalError(w http.ResponseWriter, r *http.Request, err error) {
-	slog.Error("Internal server error",
+	slog.Error(
+		"Internal server error",
 		"error", err,
 		"path", r.URL.Path,
 		"method", r.Method,

@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
 )
@@ -36,7 +37,7 @@ func (h *NotificationAPI) List(w http.ResponseWriter, r *http.Request) {
 	pageSize := getIntParam(r, "pageSize", 20)
 	offset := (page - 1) * pageSize
 
-	notifications, err := h.notificationService.ListForUser(r.Context(), user.ID, int32(pageSize), int32(offset))
+	notifications, err := h.notificationService.ListForUser(r.Context(), user.ID, safeInt32(pageSize), safeInt32(offset))
 	if err != nil {
 		handleServiceError(w, err)
 		return

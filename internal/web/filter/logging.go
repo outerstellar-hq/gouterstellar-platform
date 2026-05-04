@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/rygel/gouterstellar-platform/internal/web"
 )
 
@@ -34,7 +35,8 @@ func Logging() func(http.Handler) http.Handler {
 
 			duration := time.Since(start)
 
-			slog.Info("request",
+			slog.Info(
+				"request",
 				"requestId", requestID,
 				"method", r.Method,
 				"path", r.URL.Path,

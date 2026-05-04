@@ -15,7 +15,8 @@ type PushNotificationService interface {
 type ConsolePushNotificationService struct{}
 
 func (c *ConsolePushNotificationService) Send(platform, deviceToken string, notification PushNotification) {
-	slog.Info("Push notification",
+	slog.Info(
+		"Push notification",
 		"platform", platform,
 		"deviceToken", deviceToken,
 		"title", notification.Title,

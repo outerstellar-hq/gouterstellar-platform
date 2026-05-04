@@ -5,11 +5,12 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/persistence"
 	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
 type mockMessageRepo struct {
@@ -20,58 +21,72 @@ func (m *mockMessageRepo) ListMessages(ctx context.Context, limit, offset int32)
 	args := m.Called(ctx, limit, offset)
 	return args.Get(0).([]db.PltMessage), args.Error(1)
 }
+
 func (m *mockMessageRepo) CountMessages(ctx context.Context) (int64, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(int64), args.Error(1)
 }
+
 func (m *mockMessageRepo) FindBySyncID(ctx context.Context, syncID string) (db.PltMessage, error) {
 	args := m.Called(ctx, syncID)
 	return args.Get(0).(db.PltMessage), args.Error(1)
 }
+
 func (m *mockMessageRepo) CreateServerMessage(ctx context.Context, syncID, author, content string, updatedAtEpochMs int64) (db.PltMessage, error) {
 	args := m.Called(ctx, syncID, author, content, updatedAtEpochMs)
 	return args.Get(0).(db.PltMessage), args.Error(1)
 }
+
 func (m *mockMessageRepo) CreateLocalMessage(ctx context.Context, syncID, author, content string, updatedAtEpochMs int64) (db.PltMessage, error) {
 	args := m.Called(ctx, syncID, author, content, updatedAtEpochMs)
 	return args.Get(0).(db.PltMessage), args.Error(1)
 }
+
 func (m *mockMessageRepo) UpsertSyncedMessage(ctx context.Context, syncID, author, content string, updatedAtEpochMs int64, deleted bool) (db.PltMessage, error) {
 	args := m.Called(ctx, syncID, author, content, updatedAtEpochMs, deleted)
 	return args.Get(0).(db.PltMessage), args.Error(1)
 }
+
 func (m *mockMessageRepo) FindChangesSince(ctx context.Context, since int64) ([]db.PltMessage, error) {
 	args := m.Called(ctx, since)
 	return args.Get(0).([]db.PltMessage), args.Error(1)
 }
+
 func (m *mockMessageRepo) ListDirtyMessages(ctx context.Context) ([]db.PltMessage, error) {
 	args := m.Called(ctx)
 	return args.Get(0).([]db.PltMessage), args.Error(1)
 }
+
 func (m *mockMessageRepo) CountDirtyMessages(ctx context.Context) (int64, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(int64), args.Error(1)
 }
+
 func (m *mockMessageRepo) SoftDeleteMessage(ctx context.Context, syncID string) (db.PltMessage, error) {
 	args := m.Called(ctx, syncID)
 	return args.Get(0).(db.PltMessage), args.Error(1)
 }
+
 func (m *mockMessageRepo) RestoreMessage(ctx context.Context, syncID string) (db.PltMessage, error) {
 	args := m.Called(ctx, syncID)
 	return args.Get(0).(db.PltMessage), args.Error(1)
 }
+
 func (m *mockMessageRepo) UpdateMessage(ctx context.Context, syncID, author, content string, updatedAtEpochMs int64, dirty bool, version int64) (db.PltMessage, error) {
 	args := m.Called(ctx, syncID, author, content, updatedAtEpochMs, dirty, version)
 	return args.Get(0).(db.PltMessage), args.Error(1)
 }
+
 func (m *mockMessageRepo) MarkConflictMessage(ctx context.Context, syncID string, conflict string) (db.PltMessage, error) {
 	args := m.Called(ctx, syncID, conflict)
 	return args.Get(0).(db.PltMessage), args.Error(1)
 }
+
 func (m *mockMessageRepo) ResolveConflictMessage(ctx context.Context, syncID string) (db.PltMessage, error) {
 	args := m.Called(ctx, syncID)
 	return args.Get(0).(db.PltMessage), args.Error(1)
 }
+
 func (m *mockMessageRepo) MarkCleanMessages(ctx context.Context) error {
 	args := m.Called(ctx)
 	return args.Error(0)

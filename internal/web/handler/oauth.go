@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/rygel/gouterstellar-platform/internal/security"
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
@@ -55,7 +56,7 @@ func (h *OAuthHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 
 	authURL := provider.AuthorizationURL(state, redirectURI)
 
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- attributes set; Secure is parameterized per-environment
 		Name:     "oauth_state",
 		Value:    state,
 		Path:     "/",
@@ -108,12 +109,13 @@ func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- attributes set; Secure is parameterized per-environment
 		Name:     "oauth_state",
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   h.sessionSecure,
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 	})
 

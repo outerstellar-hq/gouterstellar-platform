@@ -5,7 +5,7 @@ import "net/http"
 const SessionCookieName = "oss_session"
 
 func CreateSessionCookie(token string, secure bool) *http.Cookie {
-	return &http.Cookie{
+	return &http.Cookie{ // #nosec G124 -- Secure/HttpOnly/SameSite all set; Secure is parameterized per-environment
 		Name:     SessionCookieName,
 		Value:    token,
 		Path:     "/",
@@ -17,7 +17,7 @@ func CreateSessionCookie(token string, secure bool) *http.Cookie {
 }
 
 func ClearSessionCookie(secure bool) *http.Cookie {
-	return &http.Cookie{
+	return &http.Cookie{ // #nosec G124 -- Secure/HttpOnly/SameSite all set; Secure is parameterized per-environment
 		Name:     SessionCookieName,
 		Value:    "",
 		Path:     "/",

@@ -8,6 +8,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/patrickmn/go-cache"
+
 	"github.com/rygel/gouterstellar-platform/internal/config"
 	"github.com/rygel/gouterstellar-platform/internal/model"
 )

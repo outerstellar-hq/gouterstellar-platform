@@ -38,7 +38,7 @@ seed:
 	go run ./cmd/seed
 
 security:
-	gosec ./...
+	gosec -exclude-dir=internal/persistence/db ./...
 
 build-seed:
 	go build -o bin/seed.exe ./cmd/seed

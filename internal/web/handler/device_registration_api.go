@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/rygel/gouterstellar-platform/internal/persistence"
 	"github.com/rygel/gouterstellar-platform/internal/web"
 )

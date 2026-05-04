@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
 )
 

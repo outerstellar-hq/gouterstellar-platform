@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
@@ -35,7 +36,7 @@ func (h *UserAdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	pageSize := getIntParam(r, "pageSize", 20)
 	offset := (page - 1) * pageSize
 
-	users, err := h.securityService.ListUsersPaged(r.Context(), int32(pageSize), int32(offset))
+	users, err := h.securityService.ListUsersPaged(r.Context(), safeInt32(pageSize), safeInt32(offset))
 	if err != nil {
 		h.renderError(w, "Failed to load users", http.StatusInternalServerError)
 		return
@@ -140,7 +141,7 @@ func (h *UserAdminHandler) ShowAudit(w http.ResponseWriter, r *http.Request) {
 	pageSize := getIntParam(r, "pageSize", 50)
 	offset := (page - 1) * pageSize
 
-	entries, err := h.securityService.GetAuditLogPaged(r.Context(), int32(pageSize), int32(offset))
+	entries, err := h.securityService.GetAuditLogPaged(r.Context(), safeInt32(pageSize), safeInt32(offset))
 	if err != nil {
 		h.renderError(w, "Failed to load audit log", http.StatusInternalServerError)
 		return

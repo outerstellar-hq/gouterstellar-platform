@@ -4,17 +4,18 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
 	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
 )
 
 type HomeHandler struct {
-	messageService *service.MessageService
-	contactService *service.ContactService
+	messageService  *service.MessageService
+	contactService  *service.ContactService
 	securityService *service.SecurityService
-	renderer       *web.Renderer
-	version        string
+	renderer        *web.Renderer
+	version         string
 }
 
 func NewHomeHandler(

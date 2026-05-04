@@ -5,13 +5,16 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+
 	"github.com/rygel/gouterstellar-platform/internal/model"
 )
 
 type ContextKey string
 
-const userContextKey ContextKey = "user"
-const csrfContextKey ContextKey = "csrfToken"
+const (
+	userContextKey ContextKey = "user"
+	csrfContextKey ContextKey = "csrfToken"
+)
 
 func WithUser(r *http.Request, user *model.User) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), userContextKey, user))

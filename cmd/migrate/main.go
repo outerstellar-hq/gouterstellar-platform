@@ -12,9 +12,13 @@ import (
 )
 
 func main() {
-	dbURL := "postgres://outerstellar:outerstellar@localhost:5432/outerstellar?sslmode=disable"
+	dbURL := os.Getenv("DATABASE_URL")
 	if len(os.Args) > 1 {
 		dbURL = os.Args[1]
+	}
+	if dbURL == "" {
+		slog.Error("DATABASE_URL env var or CLI argument required")
+		os.Exit(1)
 	}
 
 	ctx := context.Background()
@@ -23,7 +27,7 @@ func main() {
 		slog.Error("parse config failed", "error", err)
 		os.Exit(1)
 	}
-	config.ConnConfig.Password = "outerstellar"
+	config.ConnConfig.Password = os.Getenv("DATABASE_PASSWORD")
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		slog.Error("connect failed", "error", err)

@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+
 	"github.com/rygel/gouterstellar-platform/internal/persistence"
 )
 

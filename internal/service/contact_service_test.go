@@ -5,10 +5,11 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/rygel/gouterstellar-platform/internal/model"
+	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
 )
 
 type mockContactRepo struct {
@@ -19,58 +20,72 @@ func (m *mockContactRepo) ListContacts(ctx context.Context, limit, offset int32)
 	args := m.Called(ctx, limit, offset)
 	return args.Get(0).([]db.PltContact), args.Error(1)
 }
+
 func (m *mockContactRepo) CountContacts(ctx context.Context) (int64, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(int64), args.Error(1)
 }
+
 func (m *mockContactRepo) ListDirtyContacts(ctx context.Context) ([]db.PltContact, error) {
 	args := m.Called(ctx)
 	return args.Get(0).([]db.PltContact), args.Error(1)
 }
+
 func (m *mockContactRepo) FindBySyncID(ctx context.Context, syncID string) (db.PltContact, error) {
 	args := m.Called(ctx, syncID)
 	return args.Get(0).(db.PltContact), args.Error(1)
 }
+
 func (m *mockContactRepo) FindChangesSince(ctx context.Context, since int64) ([]db.PltContact, error) {
 	args := m.Called(ctx, since)
 	return args.Get(0).([]db.PltContact), args.Error(1)
 }
+
 func (m *mockContactRepo) CreateServerContact(ctx context.Context, contact *model.StoredContact) (db.PltContact, error) {
 	args := m.Called(ctx, contact)
 	return args.Get(0).(db.PltContact), args.Error(1)
 }
+
 func (m *mockContactRepo) CreateLocalContact(ctx context.Context, contact *model.StoredContact) (db.PltContact, error) {
 	args := m.Called(ctx, contact)
 	return args.Get(0).(db.PltContact), args.Error(1)
 }
+
 func (m *mockContactRepo) UpsertSyncedContact(ctx context.Context, contact *model.SyncContact) (db.PltContact, error) {
 	args := m.Called(ctx, contact)
 	return args.Get(0).(db.PltContact), args.Error(1)
 }
+
 func (m *mockContactRepo) SoftDeleteContact(ctx context.Context, syncID string) (db.PltContact, error) {
 	args := m.Called(ctx, syncID)
 	return args.Get(0).(db.PltContact), args.Error(1)
 }
+
 func (m *mockContactRepo) RestoreContact(ctx context.Context, syncID string) (db.PltContact, error) {
 	args := m.Called(ctx, syncID)
 	return args.Get(0).(db.PltContact), args.Error(1)
 }
+
 func (m *mockContactRepo) UpdateContact(ctx context.Context, syncID string, contact *model.StoredContact, version int64) (db.PltContact, error) {
 	args := m.Called(ctx, syncID, contact, version)
 	return args.Get(0).(db.PltContact), args.Error(1)
 }
+
 func (m *mockContactRepo) MarkConflictContact(ctx context.Context, syncID string, conflict string) (db.PltContact, error) {
 	args := m.Called(ctx, syncID, conflict)
 	return args.Get(0).(db.PltContact), args.Error(1)
 }
+
 func (m *mockContactRepo) ResolveConflictContact(ctx context.Context, syncID string) (db.PltContact, error) {
 	args := m.Called(ctx, syncID)
 	return args.Get(0).(db.PltContact), args.Error(1)
 }
+
 func (m *mockContactRepo) MarkCleanContacts(ctx context.Context) error {
 	args := m.Called(ctx)
 	return args.Error(0)
 }
+
 func (m *mockContactRepo) ListContactEmails(ctx context.Context, contactID int64) ([]string, error) {
 	args := m.Called(ctx, contactID)
 	if args.Get(0) == nil {
@@ -78,10 +93,12 @@ func (m *mockContactRepo) ListContactEmails(ctx context.Context, contactID int64
 	}
 	return args.Get(0).([]string), args.Error(1)
 }
+
 func (m *mockContactRepo) SetContactEmails(ctx context.Context, contactID int64, emails []string) error {
 	args := m.Called(ctx, contactID, emails)
 	return args.Error(0)
 }
+
 func (m *mockContactRepo) ListContactPhones(ctx context.Context, contactID int64) ([]string, error) {
 	args := m.Called(ctx, contactID)
 	if args.Get(0) == nil {
@@ -89,10 +106,12 @@ func (m *mockContactRepo) ListContactPhones(ctx context.Context, contactID int64
 	}
 	return args.Get(0).([]string), args.Error(1)
 }
+
 func (m *mockContactRepo) SetContactPhones(ctx context.Context, contactID int64, phones []string) error {
 	args := m.Called(ctx, contactID, phones)
 	return args.Error(0)
 }
+
 func (m *mockContactRepo) ListContactSocials(ctx context.Context, contactID int64) ([]string, error) {
 	args := m.Called(ctx, contactID)
 	if args.Get(0) == nil {
@@ -100,6 +119,7 @@ func (m *mockContactRepo) ListContactSocials(ctx context.Context, contactID int6
 	}
 	return args.Get(0).([]string), args.Error(1)
 }
+
 func (m *mockContactRepo) SetContactSocials(ctx context.Context, contactID int64, socials []string) error {
 	args := m.Called(ctx, contactID, socials)
 	return args.Error(0)
@@ -113,22 +133,27 @@ func (m *mockContactOutboxRepo) SaveOutbox(ctx context.Context, id uuid.UUID, pa
 	args := m.Called(ctx, id, payloadType, payload, status)
 	return args.Error(0)
 }
+
 func (m *mockContactOutboxRepo) ListPending(ctx context.Context, limit int32) ([]db.ListPendingOutboxRow, error) {
 	args := m.Called(ctx, limit)
 	return args.Get(0).([]db.ListPendingOutboxRow), args.Error(1)
 }
+
 func (m *mockContactOutboxRepo) MarkProcessed(ctx context.Context, id uuid.UUID) (db.MarkOutboxProcessedRow, error) {
 	args := m.Called(ctx, id)
 	return args.Get(0).(db.MarkOutboxProcessedRow), args.Error(1)
 }
+
 func (m *mockContactOutboxRepo) MarkFailed(ctx context.Context, id uuid.UUID, lastError *string) (db.MarkOutboxFailedRow, error) {
 	args := m.Called(ctx, id, lastError)
 	return args.Get(0).(db.MarkOutboxFailedRow), args.Error(1)
 }
+
 func (m *mockContactOutboxRepo) GetStats(ctx context.Context) (db.GetOutboxStatsRow, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(db.GetOutboxStatsRow), args.Error(1)
 }
+
 func (m *mockContactOutboxRepo) ListFailed(ctx context.Context, limit int32) ([]db.ListFailedOutboxRow, error) {
 	args := m.Called(ctx, limit)
 	return args.Get(0).([]db.ListFailedOutboxRow), args.Error(1)

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/service"
 )
@@ -40,8 +41,8 @@ func (h *SyncAPI) PullMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.analytics.Track(r.Context(), "sync_pull", map[string]interface{}{
-		"since":  since,
-		"count":  len(result.Messages),
+		"since": since,
+		"count": len(result.Messages),
 	})
 
 	writeJSON(w, http.StatusOK, result)
@@ -61,7 +62,7 @@ func (h *SyncAPI) PushMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.analytics.Track(r.Context(), "sync_push", map[string]interface{}{
-		"applied": result.AppliedCount,
+		"applied":   result.AppliedCount,
 		"conflicts": len(result.Conflicts),
 	})
 
@@ -78,8 +79,8 @@ func (h *SyncAPI) PullContacts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.analytics.Track(r.Context(), "sync_pull_contacts", map[string]interface{}{
-		"since":  since,
-		"count":  len(result.Contacts),
+		"since": since,
+		"count": len(result.Contacts),
 	})
 
 	writeJSON(w, http.StatusOK, result)
@@ -99,7 +100,7 @@ func (h *SyncAPI) PushContacts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.analytics.Track(r.Context(), "sync_push_contacts", map[string]interface{}{
-		"applied": result.AppliedCount,
+		"applied":   result.AppliedCount,
 		"conflicts": len(result.Conflicts),
 	})
 

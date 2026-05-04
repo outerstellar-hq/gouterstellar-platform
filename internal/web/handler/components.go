@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
 	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
@@ -37,7 +38,7 @@ func (h *ComponentsHandler) MessageList(w http.ResponseWriter, r *http.Request) 
 	pageSize := getIntParam(r, "pageSize", 20)
 	offset := (page - 1) * pageSize
 
-	result, err := h.messageService.ListMessages(r.Context(), int32(pageSize), int32(offset))
+	result, err := h.messageService.ListMessages(r.Context(), safeInt32(pageSize), safeInt32(offset))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to load messages")
 		return
@@ -79,7 +80,7 @@ func (h *ComponentsHandler) ContactList(w http.ResponseWriter, r *http.Request) 
 	pageSize := getIntParam(r, "pageSize", 20)
 	offset := (page - 1) * pageSize
 
-	contacts, err := h.contactService.ListContacts(r.Context(), int32(pageSize), int32(offset))
+	contacts, err := h.contactService.ListContacts(r.Context(), safeInt32(pageSize), safeInt32(offset))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to load contacts")
 		return

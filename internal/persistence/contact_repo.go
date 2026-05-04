@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
 )
@@ -230,4 +231,3 @@ func strToPtr(s string) *string {
 	}
 	return &s
 }
-

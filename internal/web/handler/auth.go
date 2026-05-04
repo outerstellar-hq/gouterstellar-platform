@@ -2,8 +2,10 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
 	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
@@ -83,10 +85,10 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	})
 
 	returnTo := r.FormValue("returnTo")
-	if returnTo == "" {
+	if returnTo == "" || !isSafeRedirect(returnTo) {
 		returnTo = "/"
 	}
-	http.Redirect(w, r, returnTo, http.StatusSeeOther)
+	http.Redirect(w, r, returnTo, http.StatusSeeOther) // #nosec G710 -- returnTo validated by isSafeRedirect above
 }
 
 func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
@@ -183,6 +185,22 @@ func (h *AuthHandler) HandleResetPassword(w http.ResponseWriter, r *http.Request
 	_ = h.renderer.Render(w, "auth_reset_sent.html", viewmodel.AuthPage{
 		CSRFToken: web.CSRFTokenFromRequest(r),
 	})
+}
+
+func isSafeRedirect(url string) bool {
+	if url == "" {
+		return false
+	}
+	if !strings.HasPrefix(url, "/") {
+		return false
+	}
+	if strings.HasPrefix(url, "//") {
+		return false
+	}
+	if strings.Contains(url, "://") {
+		return false
+	}
+	return true
 }
 
 func (h *AuthHandler) renderAuthError(w http.ResponseWriter, r *http.Request, errMsg string) {
