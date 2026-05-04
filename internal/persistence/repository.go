@@ -1,0 +1,134 @@
+package persistence
+
+import (
+	"context"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/rygel/gouterstellar-platform/internal/model"
+	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
+)
+
+type MessageRepository interface {
+	ListMessages(ctx context.Context, limit, offset int32) ([]db.PltMessage, error)
+	CountMessages(ctx context.Context) (int64, error)
+	FindBySyncID(ctx context.Context, syncID string) (db.PltMessage, error)
+	CreateServerMessage(ctx context.Context, syncID, author, content string, updatedAtEpochMs int64) (db.PltMessage, error)
+	CreateLocalMessage(ctx context.Context, syncID, author, content string, updatedAtEpochMs int64) (db.PltMessage, error)
+	UpsertSyncedMessage(ctx context.Context, syncID, author, content string, updatedAtEpochMs int64, deleted bool) (db.PltMessage, error)
+	FindChangesSince(ctx context.Context, since int64) ([]db.PltMessage, error)
+	ListDirtyMessages(ctx context.Context) ([]db.PltMessage, error)
+	CountDirtyMessages(ctx context.Context) (int64, error)
+	SoftDeleteMessage(ctx context.Context, syncID string) (db.PltMessage, error)
+	RestoreMessage(ctx context.Context, syncID string) (db.PltMessage, error)
+	UpdateMessage(ctx context.Context, syncID, author, content string, updatedAtEpochMs int64, dirty bool, version int64) (db.PltMessage, error)
+	MarkConflictMessage(ctx context.Context, syncID string, conflict string) (db.PltMessage, error)
+	ResolveConflictMessage(ctx context.Context, syncID string) (db.PltMessage, error)
+	MarkCleanMessages(ctx context.Context) error
+}
+
+type ContactRepository interface {
+	ListContacts(ctx context.Context, limit, offset int32) ([]db.PltContact, error)
+	CountContacts(ctx context.Context) (int64, error)
+	ListDirtyContacts(ctx context.Context) ([]db.PltContact, error)
+	FindBySyncID(ctx context.Context, syncID string) (db.PltContact, error)
+	FindChangesSince(ctx context.Context, since int64) ([]db.PltContact, error)
+	CreateServerContact(ctx context.Context, contact *model.StoredContact) (db.PltContact, error)
+	CreateLocalContact(ctx context.Context, contact *model.StoredContact) (db.PltContact, error)
+	UpsertSyncedContact(ctx context.Context, contact *model.SyncContact) (db.PltContact, error)
+	SoftDeleteContact(ctx context.Context, syncID string) (db.PltContact, error)
+	RestoreContact(ctx context.Context, syncID string) (db.PltContact, error)
+	UpdateContact(ctx context.Context, syncID string, contact *model.StoredContact, version int64) (db.PltContact, error)
+	MarkConflictContact(ctx context.Context, syncID string, conflict string) (db.PltContact, error)
+	ResolveConflictContact(ctx context.Context, syncID string) (db.PltContact, error)
+	MarkCleanContacts(ctx context.Context) error
+	ListContactEmails(ctx context.Context, contactID int64) ([]string, error)
+	SetContactEmails(ctx context.Context, contactID int64, emails []string) error
+	ListContactPhones(ctx context.Context, contactID int64) ([]string, error)
+	SetContactPhones(ctx context.Context, contactID int64, phones []string) error
+	ListContactSocials(ctx context.Context, contactID int64) ([]string, error)
+	SetContactSocials(ctx context.Context, contactID int64, socials []string) error
+}
+
+type UserRepository interface {
+	FindByID(ctx context.Context, id uuid.UUID) (db.PltUser, error)
+	FindByUsername(ctx context.Context, username string) (db.PltUser, error)
+	FindByEmail(ctx context.Context, email string) (db.PltUser, error)
+	CreateUser(ctx context.Context, id uuid.UUID, username, email, passwordHash string, role string, enabled bool) (db.PltUser, error)
+	FindAll(ctx context.Context) ([]db.PltUser, error)
+	FindPage(ctx context.Context, limit, offset int32) ([]db.PltUser, error)
+	CountAll(ctx context.Context) (int64, error)
+	CountByRole(ctx context.Context, role string) (int64, error)
+	UpdateRole(ctx context.Context, id uuid.UUID, role string) (db.PltUser, error)
+	UpdateEnabled(ctx context.Context, id uuid.UUID, enabled bool) (db.PltUser, error)
+	UpdateLastActivity(ctx context.Context, id uuid.UUID) error
+	DeleteByID(ctx context.Context, id uuid.UUID) error
+	UpdateUsername(ctx context.Context, id uuid.UUID, username string) (db.PltUser, error)
+	UpdateAvatarURL(ctx context.Context, id uuid.UUID, avatarURL *string) (db.PltUser, error)
+	UpdateNotificationPreferences(ctx context.Context, id uuid.UUID, emailEnabled, pushEnabled bool) (db.PltUser, error)
+	UpdatePreferences(ctx context.Context, id uuid.UUID, language, theme, layout *string) (db.PltUser, error)
+	SeedAdminUser(ctx context.Context, id uuid.UUID, username, email, passwordHash string) (db.PltUser, error)
+}
+
+type SessionRepository interface {
+	CreateSession(ctx context.Context, tokenHash string, userID uuid.UUID, expiresAt time.Time) (db.PltSession, error)
+	FindByTokenHash(ctx context.Context, tokenHash string) (db.PltSession, error)
+	FindByTokenHashIncludingExpired(ctx context.Context, tokenHash string) (db.PltSession, error)
+	UpdateExpiresAt(ctx context.Context, tokenHash string, expiresAt time.Time) (db.PltSession, error)
+	DeleteByTokenHash(ctx context.Context, tokenHash string) error
+	DeleteByUserID(ctx context.Context, userID uuid.UUID) error
+	DeleteExpired(ctx context.Context) (int64, error)
+}
+
+type ApiKeyRepository interface {
+	CreateApiKey(ctx context.Context, userID uuid.UUID, keyHash, keyPrefix, name string) (db.PltApiKey, error)
+	FindByKeyHash(ctx context.Context, keyHash string) (db.PltApiKey, error)
+	FindByUserID(ctx context.Context, userID uuid.UUID) ([]db.PltApiKey, error)
+	DeleteApiKey(ctx context.Context, id int64, userID uuid.UUID) (int64, error)
+	UpdateLastUsed(ctx context.Context, id int64) error
+}
+
+type OutboxRepository interface {
+	SaveOutbox(ctx context.Context, id uuid.UUID, payloadType, payload, status string) error
+	ListPending(ctx context.Context, limit int32) ([]db.ListPendingOutboxRow, error)
+	MarkProcessed(ctx context.Context, id uuid.UUID) (db.MarkOutboxProcessedRow, error)
+	MarkFailed(ctx context.Context, id uuid.UUID, lastError *string) (db.MarkOutboxFailedRow, error)
+	GetStats(ctx context.Context) (db.GetOutboxStatsRow, error)
+	ListFailed(ctx context.Context, limit int32) ([]db.ListFailedOutboxRow, error)
+}
+
+type AuditRepository interface {
+	LogAudit(ctx context.Context, actorID *uuid.UUID, actorUsername *string, targetID *uuid.UUID, targetUsername *string, action, detail string) (db.PltAuditLog, error)
+	FindRecent(ctx context.Context, limit int32) ([]db.PltAuditLog, error)
+	FindPage(ctx context.Context, limit, offset int32) ([]db.PltAuditLog, error)
+	CountAll(ctx context.Context) (int64, error)
+}
+
+type NotificationRepository interface {
+	SaveNotification(ctx context.Context, id, userID uuid.UUID, title, body, notificationType string) (db.PltNotification, error)
+	FindByUserID(ctx context.Context, userID uuid.UUID, limit, offset int32) ([]db.PltNotification, error)
+	CountUnread(ctx context.Context, userID uuid.UUID) (int64, error)
+	MarkRead(ctx context.Context, id, userID uuid.UUID) (db.PltNotification, error)
+	MarkAllRead(ctx context.Context, userID uuid.UUID) (int64, error)
+	DeleteNotification(ctx context.Context, id, userID uuid.UUID) (int64, error)
+}
+
+type DeviceTokenRepository interface {
+	UpsertDeviceToken(ctx context.Context, userID uuid.UUID, platform, token string, appBundle *string) (db.PltDeviceToken, error)
+	DeleteDeviceToken(ctx context.Context, id int64, userID uuid.UUID) (int64, error)
+	FindByUserID(ctx context.Context, userID uuid.UUID) ([]db.PltDeviceToken, error)
+	DeleteAllForUser(ctx context.Context, userID uuid.UUID) (int64, error)
+}
+
+type OAuthRepository interface {
+	FindByProviderSubject(ctx context.Context, provider, subject string) (db.PltOauthConnection, error)
+	SaveOAuthConnection(ctx context.Context, userID uuid.UUID, provider, subject string, email *string) (db.PltOauthConnection, error)
+	FindByUserID(ctx context.Context, userID uuid.UUID) ([]db.PltOauthConnection, error)
+	DeleteOAuthConnection(ctx context.Context, id int64, userID uuid.UUID) (int64, error)
+}
+
+type PasswordResetRepository interface {
+	SavePasswordResetToken(ctx context.Context, userID uuid.UUID, token string, expiresAt time.Time) (db.PltPasswordResetToken, error)
+	FindByToken(ctx context.Context, token string) (db.PltPasswordResetToken, error)
+	MarkUsed(ctx context.Context, token string) (db.PltPasswordResetToken, error)
+}

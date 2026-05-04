@@ -1,0 +1,17 @@
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.prof
+target/
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+.env

@@ -1,0 +1,30 @@
+version: "dev"
+port: 8080
+database_url: "postgres://outerstellar:outerstellar@localhost:5432/outerstellar?sslmode=disable"
+dev_dashboard_enabled: false
+dev_mode: false
+session_cookie_secure: false
+session_timeout_minutes: 30
+cors_origins: "*"
+csrf_enabled: true
+app_base_url: "http://localhost:8080"
+csp_policy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data:;"
+
+jwt:
+  enabled: false
+  secret: ""
+  issuer: "outerstellar"
+  expiry_seconds: 86400
+
+email:
+  enabled: false
+  host: "localhost"
+  port: 587
+  username: ""
+  password: ""
+  from: "noreply@example.com"
+  starttls: true
+
+segment:
+  write_key: ""
+  enabled: false
