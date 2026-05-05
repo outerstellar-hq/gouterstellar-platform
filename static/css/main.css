@@ -783,3 +783,71 @@ footer {
         margin: 0 16px;
     }
 }
+
+.layout-sidebar .app-shell {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    grid-template-rows: var(--nav-height) 1fr var(--footer-height);
+    min-height: 100vh;
+}
+
+.layout-sidebar .app-nav {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    flex-direction: column;
+    height: auto;
+    border-right: 1px solid var(--border-color);
+    border-bottom: none;
+}
+
+.layout-sidebar .app-main {
+    grid-column: 2;
+    grid-row: 2;
+}
+
+.layout-sidebar .app-footer {
+    grid-column: 1 / -1;
+    grid-row: 3;
+}
+
+.layout-topbar .app-shell {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.layout-topbar .app-nav {
+    flex-direction: row;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.density-compact {
+    --spacing-unit: 0.25rem;
+    font-size: 0.875rem;
+}
+
+.density-compact .form-group {
+    margin-bottom: 0.5rem;
+}
+
+.density-compact .data-table td,
+.density-compact .data-table th {
+    padding: 0.25rem 0.5rem;
+}
+
+.density-cozy {
+    --spacing-unit: 0.5rem;
+}
+
+.density-spacious {
+    --spacing-unit: 1rem;
+}
+
+.density-spacious .form-group {
+    margin-bottom: 1.5rem;
+}
+
+.density-spacious .data-table td,
+.density-spacious .data-table th {
+    padding: 0.75rem 1rem;
+}

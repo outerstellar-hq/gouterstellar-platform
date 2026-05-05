@@ -8,6 +8,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/google/uuid"
+
 	"github.com/rygel/gouterstellar-platform/internal/config"
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/persistence"
@@ -15,6 +17,7 @@ import (
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
 	"github.com/rygel/gouterstellar-platform/internal/web/handler"
+	"github.com/rygel/gouterstellar-platform/pkg/plugin"
 )
 
 type App struct {
@@ -41,6 +44,7 @@ type App struct {
 	ErrorHandler          *handler.ErrorHandler
 	DevDashboardHandler   *handler.DevDashboardHandler
 	ComponentsHandler     *handler.ComponentsHandler
+	SyncWebSocket         *handler.SyncWebSocket
 	Realms                []security.AuthRealm
 	Registry              *prometheus.Registry
 	EmailService          service.EmailService
@@ -48,6 +52,7 @@ type App struct {
 	ActivityUpdater       *security.AsyncActivityUpdater
 	JwtService            *security.JwtService
 	PermissionResolver    security.PermissionResolver
+	PluginManager         *plugin.PluginManager
 }
 
 func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
@@ -67,7 +72,7 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 
 	txMgr := persistence.NewTransactionManager(pool)
 	messageCache := persistence.NewMessageCache(5 * time.Minute)
-	eventPub := &service.NoOpEventPublisher{}
+	wsPublisher := service.NewWsEventPublisher()
 
 	passwordEncoder := security.NewBCryptPasswordEncoder(12)
 	jwtSvc := security.NewJwtService(cfg.JWT)
@@ -113,7 +118,19 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 		return user
 	})
 
-	realms := []security.AuthRealm{sessionRealm, apiKeyRealm}
+	jwtRealm := security.NewJwtRealm(jwtSvc, func(userID uuid.UUID) *model.User {
+		u, err := userRepo.FindByID(context.Background(), userID)
+		if err != nil {
+			return nil
+		}
+		user := security.PltUserToModel(u)
+		if !user.Enabled {
+			return nil
+		}
+		return user
+	})
+
+	realms := []security.AuthRealm{sessionRealm, apiKeyRealm, jwtRealm}
 
 	var emailSvc service.EmailService
 	if cfg.Email.Enabled {
@@ -133,8 +150,8 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 
 	analytics := &service.NoOpAnalyticsService{}
 
-	messageSvc := service.NewMessageService(messageRepo, outboxRepo, txMgr, messageCache, eventPub, auditRepo)
-	contactSvc := service.NewContactService(contactRepo, outboxRepo, eventPub)
+	messageSvc := service.NewMessageService(messageRepo, outboxRepo, txMgr, messageCache, wsPublisher, auditRepo)
+	contactSvc := service.NewContactService(contactRepo, outboxRepo, wsPublisher)
 	notificationSvc := service.NewNotificationService(notificationRepo)
 	outboxProcessor := service.NewOutboxProcessor(outboxRepo, txMgr)
 	passwordResetSvc := service.NewPasswordResetService(userRepo, passwordEncoder, passwordResetRepo, emailSvc, auditRepo)
@@ -145,7 +162,7 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 	}
 
 	syncAPI := handler.NewSyncAPI(messageSvc, contactSvc, analytics)
-	authAPI := handler.NewAuthAPI(securitySvc, apiKeySvc, passwordResetSvc, cfg.SessionCookieSecure, analytics)
+	authAPI := handler.NewAuthAPI(securitySvc, apiKeySvc, passwordResetSvc, cfg.SessionCookieSecure, analytics, jwtSvc)
 	authHandler := handler.NewAuthHandler(securitySvc, passwordResetSvc, renderer, cfg.SessionCookieSecure, analytics)
 	homeHandler := handler.NewHomeHandler(messageSvc, contactSvc, securitySvc, renderer, cfg.Version)
 	contactsHandler := handler.NewContactsHandler(contactSvc, renderer)
@@ -160,6 +177,8 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 	errorHandler := handler.NewErrorHandler(renderer, cfg.Version)
 	devDashboardHandler := handler.NewDevDashboardHandler(outboxProcessor, securitySvc, messageSvc, renderer, cfg.DevDashboardEnabled)
 	componentsHandler := handler.NewComponentsHandler(messageSvc, contactSvc, renderer)
+	syncWebSocket := handler.NewSyncWebSocket(wsPublisher, sessionRepo, userRepo, cfg.SessionCookieSecure)
+	pluginManager := plugin.NewPluginManager()
 
 	return &App{
 		Config:                cfg,
@@ -185,6 +204,7 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 		ErrorHandler:          errorHandler,
 		DevDashboardHandler:   devDashboardHandler,
 		ComponentsHandler:     componentsHandler,
+		SyncWebSocket:         syncWebSocket,
 		Realms:                realms,
 		Registry:              registry,
 		EmailService:          emailSvc,
@@ -192,5 +212,6 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 		ActivityUpdater:       activityUpdater,
 		JwtService:            jwtSvc,
 		PermissionResolver:    permissionResolver,
+		PluginManager:         pluginManager,
 	}
 }

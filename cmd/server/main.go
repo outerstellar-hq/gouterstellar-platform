@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
@@ -59,14 +60,25 @@ func main() {
 		MaxAge:           300,
 	}))
 	r.Use(filter.SecurityHeaders(cfg.CSPPolicy, cfg.SessionCookieSecure))
+	r.Use(filter.DevAutoLogin(func() uuid.UUID {
+		return app.SecurityService.DevAdminID(ctx)
+	}, app.SecurityService, cfg.DevMode))
 	r.Use(filter.RateLimiter(10, 20))
 	r.Use(filter.CSRF(cfg.CSRFEnabled))
 	r.Use(filter.Session(app.SecurityService, cfg.SessionCookieSecure))
 	r.Use(filter.Logging())
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		w.Header().Set("Content-Type", "application/json")
+		if err := pool.Ping(ctx); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = fmt.Fprintf(w, `{"status":"unhealthy","database":"down","error":%q}`, err.Error())
+			return
+		}
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
+		_, _ = fmt.Fprintf(w, `{"status":"healthy","database":"up"}`)
 	})
 	r.Handle("/metrics", promhttp.HandlerFor(app.Registry, promhttp.HandlerOpts{}))
 
@@ -89,6 +101,7 @@ func main() {
 	app.OAuthHandler.RegisterRoutes(r)
 	app.NotificationsHandler.RegisterRoutes(r)
 	app.ComponentsHandler.RegisterRoutes(r)
+	app.SyncWebSocket.RegisterRoutes(r)
 
 	r.Route("/admin", func(r chi.Router) {
 		app.UserAdminHandler.RegisterRoutes(r)

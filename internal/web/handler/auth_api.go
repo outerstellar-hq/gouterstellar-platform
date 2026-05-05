@@ -19,6 +19,7 @@ type AuthAPI struct {
 	passwordResetSvc *service.PasswordResetService
 	sessionSecure    bool
 	analytics        service.AnalyticsService
+	jwtService       *security.JwtService
 }
 
 func NewAuthAPI(
@@ -27,6 +28,7 @@ func NewAuthAPI(
 	passwordResetSvc *service.PasswordResetService,
 	sessionSecure bool,
 	analytics service.AnalyticsService,
+	jwtSvc *security.JwtService,
 ) *AuthAPI {
 	return &AuthAPI{
 		securityService:  secSvc,
@@ -34,11 +36,13 @@ func NewAuthAPI(
 		passwordResetSvc: passwordResetSvc,
 		sessionSecure:    sessionSecure,
 		analytics:        analytics,
+		jwtService:       jwtSvc,
 	}
 }
 
 func (h *AuthAPI) RegisterRoutes(r chi.Router) {
 	r.Post("/api/v1/auth/login", h.Login)
+	r.Post("/api/v1/auth/token", h.IssueToken)
 	r.Post("/api/v1/auth/register", h.Register)
 	r.Post("/api/v1/auth/change-password", h.ChangePassword)
 	r.Post("/api/v1/auth/reset-password", h.RequestPasswordReset)
@@ -82,6 +86,38 @@ func (h *AuthAPI) Login(w http.ResponseWriter, r *http.Request) {
 		Token:    token,
 		Username: user.Username,
 		Role:     string(user.Role),
+	})
+}
+
+func (h *AuthAPI) IssueToken(w http.ResponseWriter, r *http.Request) {
+	if !h.jwtService.IsEnabled() {
+		writeError(w, http.StatusNotImplemented, "JWT authentication is not enabled")
+		return
+	}
+
+	var req model.LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	user, err := h.securityService.Authenticate(r.Context(), req.Username, req.Password)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "Invalid credentials")
+		return
+	}
+
+	token, err := h.jwtService.GenerateToken(user)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to generate token")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"token":      token,
+		"expires_in": 3600,
+		"username":   user.Username,
+		"role":       string(user.Role),
 	})
 }
 
@@ -187,10 +223,16 @@ func (h *AuthAPI) GetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	avatarURL := user.AvatarURL
+	if avatarURL == nil && user.Email != "" {
+		gravatar := web.GravatarURL(user.Email, 80)
+		avatarURL = &gravatar
+	}
+
 	writeJSON(w, http.StatusOK, model.UserProfileResponse{
 		Username:                  user.Username,
 		Email:                     user.Email,
-		AvatarURL:                 user.AvatarURL,
+		AvatarURL:                 avatarURL,
 		EmailNotificationsEnabled: user.EmailNotificationsEnabled,
 		PushNotificationsEnabled:  user.PushNotificationsEnabled,
 	})

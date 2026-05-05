@@ -2,7 +2,16 @@
 <div class="settings-page">
     <h1>Settings</h1>
 
-    <div class="settings-section">
+    <nav class="settings-tabs">
+        <a href="/settings?tab=profile" {{ if eq .ActiveTab "profile" }}class="active"{{ end }}>Profile</a>
+        <a href="/settings?tab=password" {{ if eq .ActiveTab "password" }}class="active"{{ end }}>Password</a>
+        <a href="/settings?tab=api-keys" {{ if eq .ActiveTab "api-keys" }}class="active"{{ end }}>API Keys</a>
+        <a href="/settings?tab=notifications" {{ if eq .ActiveTab "notifications" }}class="active"{{ end }}>Notifications</a>
+        <a href="/settings?tab=appearance" {{ if eq .ActiveTab "appearance" }}class="active"{{ end }}>Appearance</a>
+    </nav>
+
+    {{ if eq .ActiveTab "profile" }}
+    <div class="settings-tab-content active">
         <h2>Profile</h2>
         <form method="POST" action="/settings/profile">
             <div class="form-group">
@@ -14,42 +23,44 @@
                 <input type="email" id="email" name="email" value="{{ .Profile.Email }}">
             </div>
             <div class="form-group">
-                <label>
-                    <input type="checkbox" name="email_notifications" {{ if .Profile.EmailNotificationsEnabled }}checked{{ end }}>
-                    Email notifications
-                </label>
-            </div>
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" name="push_notifications" {{ if .Profile.PushNotificationsEnabled }}checked{{ end }}>
-                    Push notifications
-                </label>
+                <label for="avatarUrl">Avatar URL</label>
+                <input type="url" id="avatarUrl" name="avatarUrl" value="{{ .Profile.AvatarURL }}">
             </div>
             <button type="submit" class="btn btn-primary">Save Profile</button>
         </form>
     </div>
+    {{ end }}
 
-    <div class="settings-section">
-        <h2>Preferences</h2>
-        <form method="POST" action="/settings/preferences">
+    {{ if eq .ActiveTab "password" }}
+    <div class="settings-tab-content active">
+        <h2>Change Password</h2>
+        <form method="POST" action="/settings/password">
             <div class="form-group">
-                <label for="theme">Theme</label>
-                <select id="theme" name="theme">
-                    <option value="light" {{ if eq .Theme "light" }}selected{{ end }}>Light</option>
-                    <option value="dark" {{ if eq .Theme "dark" }}selected{{ end }}>Dark</option>
-                    <option value="auto" {{ if eq .Theme "auto" }}selected{{ end }}>Auto</option>
-                </select>
+                <label for="currentPassword">Current Password</label>
+                <input type="password" id="currentPassword" name="currentPassword" required>
             </div>
             <div class="form-group">
-                <label for="language">Language</label>
-                <input type="text" id="language" name="language" value="{{ .Language }}">
+                <label for="newPassword">New Password</label>
+                <input type="password" id="newPassword" name="newPassword" required>
             </div>
-            <button type="submit" class="btn btn-primary">Save Preferences</button>
+            <div class="form-group">
+                <label for="confirmPassword">Confirm Password</label>
+                <input type="password" id="confirmPassword" name="confirmPassword" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Change Password</button>
         </form>
     </div>
+    {{ end }}
 
-    <div class="settings-section">
+    {{ if eq .ActiveTab "api-keys" }}
+    <div class="settings-tab-content active">
         <h2>API Keys</h2>
+        {{ if .NewApiKey }}
+        <div class="alert alert-warning">
+            <strong>New API key created.</strong> Copy it now — it won't be shown again:<br>
+            <code>{{ .NewApiKey }}</code>
+        </div>
+        {{ end }}
         <table class="data-table">
             <thead>
                 <tr>
@@ -68,8 +79,8 @@
                     <td>{{ .CreatedAt }}</td>
                     <td>{{ .LastUsed }}</td>
                     <td>
-                        <form method="POST" action="/settings/api-keys/{{ .ID }}/revoke">
-                            <button type="submit" class="btn btn-sm btn-danger">Revoke</button>
+                        <form method="POST" action="/settings/api-keys/{{ .ID }}/delete">
+                            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                         </form>
                     </td>
                 </tr>
@@ -83,5 +94,55 @@
             <button type="submit" class="btn btn-primary">Create API Key</button>
         </form>
     </div>
+    {{ end }}
+
+    {{ if eq .ActiveTab "notifications" }}
+    <div class="settings-tab-content active">
+        <h2>Notification Preferences</h2>
+        <form method="POST" action="/settings/notifications">
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="email_notifications" value="on" {{ if .Profile.EmailNotificationsEnabled }}checked{{ end }}>
+                    Email notifications
+                </label>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="push_notifications" value="on" {{ if .Profile.PushNotificationsEnabled }}checked{{ end }}>
+                    Push notifications
+                </label>
+            </div>
+            <button type="submit" class="btn btn-primary">Save Notifications</button>
+        </form>
+    </div>
+    {{ end }}
+
+    {{ if eq .ActiveTab "appearance" }}
+    <div class="settings-tab-content active">
+        <h2>Appearance</h2>
+        <form method="POST" action="/settings/preferences">
+            <div class="form-group">
+                <label for="theme">Theme</label>
+                <select id="theme" name="theme">
+                    <option value="light" {{ if eq .Theme "light" }}selected{{ end }}>Light</option>
+                    <option value="dark" {{ if eq .Theme "dark" }}selected{{ end }}>Dark</option>
+                    <option value="auto" {{ if eq .Theme "auto" }}selected{{ end }}>Auto</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="language">Language</label>
+                <input type="text" id="language" name="language" value="{{ .Language }}">
+            </div>
+            <div class="form-group">
+                <label for="layout">Layout</label>
+                <select id="layout" name="layout">
+                    <option value="sidebar" {{ if eq .Layout "sidebar" }}selected{{ end }}>Sidebar</option>
+                    <option value="topbar" {{ if eq .Layout "topbar" }}selected{{ end }}>Topbar</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Save Preferences</button>
+        </form>
+    </div>
+    {{ end }}
 </div>
 {{ end }}

@@ -123,6 +123,18 @@ func (m *PluginManager) WithPlugin(name string, fn func(Plugin) error) error {
 	return fn(p)
 }
 
+func (m *PluginManager) AllNavItems() []PluginNavItem {
+	var items []PluginNavItem
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, p := range m.plugins {
+		if sp, ok := p.(ServerPlugin); ok {
+			items = append(items, sp.NavItems()...)
+		}
+	}
+	return items
+}
+
 func (m *PluginManager) WithEachPlugin(fn func(Plugin) error) []error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

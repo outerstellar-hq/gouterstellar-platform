@@ -86,10 +86,13 @@ type NotificationItem struct {
 }
 
 type SettingsPage struct {
-	Profile  ProfileData
-	ApiKeys  []ApiKeyItem
-	Theme    string
-	Language string
+	ActiveTab string
+	Profile   ProfileData
+	ApiKeys   []ApiKeyItem
+	Theme     string
+	Language  string
+	Layout    string
+	NewApiKey string
 }
 
 type ProfileData struct {

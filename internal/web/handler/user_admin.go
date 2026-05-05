@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -28,7 +29,9 @@ func (h *UserAdminHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/admin/users", h.ListUsers)
 	r.Post("/admin/users/{id}/enabled", h.SetEnabled)
 	r.Post("/admin/users/{id}/role", h.SetRole)
+	r.Get("/admin/users/export", h.ExportUsers)
 	r.Get("/admin/audit", h.ShowAudit)
+	r.Get("/admin/audit/export", h.ExportAudit)
 }
 
 func (h *UserAdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
@@ -193,6 +196,50 @@ func (h *UserAdminHandler) ShowAudit(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
+}
+
+func (h *UserAdminHandler) ExportUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := h.securityService.ListUsersPaged(r.Context(), 10000, 0)
+	if err != nil {
+		h.renderError(w, "Failed to export users", http.StatusInternalServerError)
+		return
+	}
+
+	headers := []string{"Username", "Email", "Role", "Enabled"}
+	rows := make([][]string, len(users))
+	for i, u := range users {
+		rows[i] = []string{u.Username, u.Email, string(u.Role), strconv.FormatBool(u.Enabled)}
+	}
+
+	writeCSV(w, "users.csv", headers, rows)
+}
+
+func (h *UserAdminHandler) ExportAudit(w http.ResponseWriter, r *http.Request) {
+	entries, err := h.securityService.GetAuditLogPaged(r.Context(), 10000, 0)
+	if err != nil {
+		h.renderError(w, "Failed to export audit log", http.StatusInternalServerError)
+		return
+	}
+
+	headers := []string{"Actor", "Target", "Action", "Detail", "Created At"}
+	rows := make([][]string, len(entries))
+	for i, e := range entries {
+		actor := ""
+		if e.ActorUsername != nil {
+			actor = *e.ActorUsername
+		}
+		target := ""
+		if e.TargetUsername != nil {
+			target = *e.TargetUsername
+		}
+		detail := ""
+		if e.Detail != nil {
+			detail = *e.Detail
+		}
+		rows[i] = []string{actor, target, e.Action, detail, e.CreatedAt.Format("2006-01-02 15:04:05")}
+	}
+
+	writeCSV(w, "audit_log.csv", headers, rows)
 }
 
 func (h *UserAdminHandler) renderError(w http.ResponseWriter, message string, status int) {

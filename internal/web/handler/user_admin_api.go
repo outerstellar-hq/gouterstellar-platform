@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -25,6 +26,8 @@ func (h *UserAdminAPI) RegisterRoutes(r chi.Router) {
 	r.Get("/api/v1/users/count", h.CountUsers)
 	r.Put("/api/v1/users/{id}/enabled", h.SetEnabled)
 	r.Put("/api/v1/users/{id}/role", h.SetRole)
+	r.Get("/api/v1/admin/users/export", h.ExportUsersCSV)
+	r.Get("/api/v1/admin/audit/export", h.ExportAuditCSV)
 }
 
 func (h *UserAdminAPI) ListUsers(w http.ResponseWriter, r *http.Request) {
@@ -107,4 +110,48 @@ func (h *UserAdminAPI) SetRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "User role updated"})
+}
+
+func (h *UserAdminAPI) ExportUsersCSV(w http.ResponseWriter, r *http.Request) {
+	users, err := h.securityService.ListUsersPaged(r.Context(), 10000, 0)
+	if err != nil {
+		handleServiceError(w, err)
+		return
+	}
+
+	headers := []string{"Username", "Email", "Role", "Enabled"}
+	rows := make([][]string, len(users))
+	for i, u := range users {
+		rows[i] = []string{u.Username, u.Email, string(u.Role), strconv.FormatBool(u.Enabled)}
+	}
+
+	writeCSV(w, "users.csv", headers, rows)
+}
+
+func (h *UserAdminAPI) ExportAuditCSV(w http.ResponseWriter, r *http.Request) {
+	entries, err := h.securityService.GetAuditLogPaged(r.Context(), 10000, 0)
+	if err != nil {
+		handleServiceError(w, err)
+		return
+	}
+
+	headers := []string{"Actor", "Target", "Action", "Detail", "Created At"}
+	rows := make([][]string, len(entries))
+	for i, e := range entries {
+		actor := ""
+		if e.ActorUsername != nil {
+			actor = *e.ActorUsername
+		}
+		target := ""
+		if e.TargetUsername != nil {
+			target = *e.TargetUsername
+		}
+		detail := ""
+		if e.Detail != nil {
+			detail = *e.Detail
+		}
+		rows[i] = []string{actor, target, e.Action, detail, e.CreatedAt.Format("2006-01-02 15:04:05")}
+	}
+
+	writeCSV(w, "audit_log.csv", headers, rows)
 }

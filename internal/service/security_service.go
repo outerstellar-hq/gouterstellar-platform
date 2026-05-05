@@ -239,6 +239,23 @@ func (s *SecurityService) SetUserRole(ctx context.Context, adminID, targetID uui
 	return nil
 }
 
+func (s *SecurityService) DevAdminID(ctx context.Context) uuid.UUID {
+	users, err := s.ListUsersPaged(ctx, 1, 0)
+	if err != nil {
+		return uuid.Nil
+	}
+	for _, u := range users {
+		if u.Role == string(model.RoleAdmin) {
+			id, err := uuid.Parse(u.ID)
+			if err != nil {
+				return uuid.Nil
+			}
+			return id
+		}
+	}
+	return uuid.Nil
+}
+
 func (s *SecurityService) CountAuditEntries(ctx context.Context) (int64, error) {
 	return s.auditRepo.CountAll(ctx)
 }
