@@ -370,3 +370,8 @@ func pltMessageToSyncMessage(m db.PltMessage) model.SyncMessage {
 		Deleted:          m.Deleted,
 	}
 }
+
+// CountMessages returns the total number of non-deleted messages.
+func (s *MessageService) CountMessages(ctx context.Context) (int64, error) {
+	return s.repo.CountMessages(ctx)
+}
