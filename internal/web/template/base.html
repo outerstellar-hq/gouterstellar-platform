@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ .CSRFToken }}">
     <title>{{ .Title }} - Outerstellar Platform</title>
     <link rel="stylesheet" href="/static/css/main.css">
     {{ if .CustomCSS }}<style>{{ .CustomCSS }}</style>{{ end }}
@@ -38,6 +39,7 @@
         <span>v{{ .Version }}</span>
         <span>Request: {{ .RequestID }}</span>
     </footer>
+    <script src="/static/js/platform.js"></script>
 </body>
 </html>
 {{ end }}
