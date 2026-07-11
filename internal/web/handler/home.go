@@ -49,7 +49,7 @@ func (h *HomeHandler) Show(w http.ResponseWriter, r *http.Request) {
 		UserCount:    userCount,
 	}
 
-	if err := h.renderer.Render(w, "home.html", page); err != nil {
+	if err := h.renderer.RenderPage(w, r, "home", page); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
 }

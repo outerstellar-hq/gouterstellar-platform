@@ -41,7 +41,7 @@ func (h *UserAdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	users, err := h.securityService.ListUsersPaged(r.Context(), safeInt32(pageSize), safeInt32(offset))
 	if err != nil {
-		h.renderError(w, "Failed to load users", http.StatusInternalServerError)
+		h.renderError(w, r, "Failed to load users", http.StatusInternalServerError)
 		return
 	}
 
@@ -71,7 +71,7 @@ func (h *UserAdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		PageSize:    pageSize,
 	}
 
-	if err := h.renderer.Render(w, "admin_users.html", viewmodel.AdminUsersPage{
+	if err := h.renderer.RenderPage(w, r, "admin_users", viewmodel.AdminUsersPage{
 		Users:      userItems,
 		Pagination: pagination,
 	}); err != nil {
@@ -146,7 +146,7 @@ func (h *UserAdminHandler) ShowAudit(w http.ResponseWriter, r *http.Request) {
 
 	entries, err := h.securityService.GetAuditLogPaged(r.Context(), safeInt32(pageSize), safeInt32(offset))
 	if err != nil {
-		h.renderError(w, "Failed to load audit log", http.StatusInternalServerError)
+		h.renderError(w, r, "Failed to load audit log", http.StatusInternalServerError)
 		return
 	}
 
@@ -190,7 +190,7 @@ func (h *UserAdminHandler) ShowAudit(w http.ResponseWriter, r *http.Request) {
 		PageSize:    pageSize,
 	}
 
-	if err := h.renderer.Render(w, "admin_audit.html", viewmodel.AdminAuditPage{
+	if err := h.renderer.RenderPage(w, r, "admin_audit", viewmodel.AdminAuditPage{
 		Entries:    auditItems,
 		Pagination: pagination,
 	}); err != nil {
@@ -201,7 +201,7 @@ func (h *UserAdminHandler) ShowAudit(w http.ResponseWriter, r *http.Request) {
 func (h *UserAdminHandler) ExportUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := h.securityService.ListUsersPaged(r.Context(), 10000, 0)
 	if err != nil {
-		h.renderError(w, "Failed to export users", http.StatusInternalServerError)
+		h.renderError(w, r, "Failed to export users", http.StatusInternalServerError)
 		return
 	}
 
@@ -217,7 +217,7 @@ func (h *UserAdminHandler) ExportUsers(w http.ResponseWriter, r *http.Request) {
 func (h *UserAdminHandler) ExportAudit(w http.ResponseWriter, r *http.Request) {
 	entries, err := h.securityService.GetAuditLogPaged(r.Context(), 10000, 0)
 	if err != nil {
-		h.renderError(w, "Failed to export audit log", http.StatusInternalServerError)
+		h.renderError(w, r, "Failed to export audit log", http.StatusInternalServerError)
 		return
 	}
 
@@ -242,8 +242,8 @@ func (h *UserAdminHandler) ExportAudit(w http.ResponseWriter, r *http.Request) {
 	writeCSV(w, "audit_log.csv", headers, rows)
 }
 
-func (h *UserAdminHandler) renderError(w http.ResponseWriter, message string, status int) {
-	_ = h.renderer.RenderWithStatus(w, "error.html", viewmodel.ErrorPage{
+func (h *UserAdminHandler) renderError(w http.ResponseWriter, r *http.Request, message string, status int) {
+	_ = h.renderer.RenderWithStatus(w, r, "error", viewmodel.ErrorPage{
 		StatusCode: status,
 		Title:      "Error",
 		Message:    message,

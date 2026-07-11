@@ -43,7 +43,7 @@ func (h *NotificationsHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	notifications, err := h.notificationService.ListForUser(r.Context(), user.ID, safeInt32(pageSize), safeInt32(offset))
 	if err != nil {
-		_ = h.renderer.RenderWithStatus(w, "error.html", viewmodel.ErrorPage{
+		_ = h.renderer.RenderWithStatus(w, r, "error", viewmodel.ErrorPage{
 			StatusCode: http.StatusInternalServerError,
 			Title:      "Error",
 			Message:    "Failed to load notifications",
@@ -65,7 +65,7 @@ func (h *NotificationsHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := h.renderer.Render(w, "notifications.html", viewmodel.NotificationsPage{
+	if err := h.renderer.RenderPage(w, r, "notifications", viewmodel.NotificationsPage{
 		Notifications: items,
 		UnreadCount:   int(unreadCount),
 	}); err != nil {

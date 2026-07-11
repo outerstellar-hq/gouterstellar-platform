@@ -52,7 +52,7 @@ func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 		ReturnTo:  returnTo,
 		CSRFToken: web.CSRFTokenFromRequest(r),
 	}
-	if err := h.renderer.Render(w, "auth_login.html", page); err != nil {
+	if err := h.renderer.RenderPage(w, r, "auth_login", page); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
 }
@@ -130,7 +130,7 @@ func (h *AuthHandler) ShowChangePassword(w http.ResponseWriter, r *http.Request)
 	page := viewmodel.AuthPage{
 		CSRFToken: web.CSRFTokenFromRequest(r),
 	}
-	if err := h.renderer.Render(w, "auth_change_password.html", page); err != nil {
+	if err := h.renderer.RenderPage(w, r, "auth_change_password", page); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
 }
@@ -163,7 +163,7 @@ func (h *AuthHandler) ShowResetPassword(w http.ResponseWriter, r *http.Request) 
 	page := viewmodel.AuthPage{
 		CSRFToken: web.CSRFTokenFromRequest(r),
 	}
-	if err := h.renderer.Render(w, "auth_reset_password.html", page); err != nil {
+	if err := h.renderer.RenderPage(w, r, "auth_reset_password", page); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
 }
@@ -182,7 +182,7 @@ func (h *AuthHandler) HandleResetPassword(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	_ = h.renderer.Render(w, "auth_reset_sent.html", viewmodel.AuthPage{
+	_ = h.renderer.RenderPage(w, r, "auth_reset_sent", viewmodel.AuthPage{
 		CSRFToken: web.CSRFTokenFromRequest(r),
 	})
 }
@@ -208,7 +208,7 @@ func (h *AuthHandler) renderAuthError(w http.ResponseWriter, r *http.Request, er
 		Error:     errMsg,
 		CSRFToken: web.CSRFTokenFromRequest(r),
 	}
-	_ = h.renderer.RenderWithStatus(w, "auth_login.html", page, http.StatusBadRequest)
+	_ = h.renderer.RenderWithStatus(w, r, "auth_login", page, http.StatusBadRequest)
 }
 
 func (h *AuthHandler) renderChangePasswordError(w http.ResponseWriter, r *http.Request, errMsg string) {
@@ -216,7 +216,7 @@ func (h *AuthHandler) renderChangePasswordError(w http.ResponseWriter, r *http.R
 		Error:     errMsg,
 		CSRFToken: web.CSRFTokenFromRequest(r),
 	}
-	_ = h.renderer.RenderWithStatus(w, "auth_change_password.html", page, http.StatusBadRequest)
+	_ = h.renderer.RenderWithStatus(w, r, "auth_change_password", page, http.StatusBadRequest)
 }
 
 func (h *AuthHandler) renderResetPasswordError(w http.ResponseWriter, r *http.Request, errMsg string) {
@@ -224,5 +224,5 @@ func (h *AuthHandler) renderResetPasswordError(w http.ResponseWriter, r *http.Re
 		Error:     errMsg,
 		CSRFToken: web.CSRFTokenFromRequest(r),
 	}
-	_ = h.renderer.RenderWithStatus(w, "auth_reset_password.html", page, http.StatusBadRequest)
+	_ = h.renderer.RenderWithStatus(w, r, "auth_reset_password", page, http.StatusBadRequest)
 }

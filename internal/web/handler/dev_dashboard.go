@@ -44,7 +44,7 @@ func (h *DevDashboardHandler) RegisterRoutes(r chi.Router) {
 }
 
 func (h *DevDashboardHandler) Show(w http.ResponseWriter, r *http.Request) {
-	if err := h.renderer.Render(w, "dev_dashboard.html", nil); err != nil {
+	if err := h.renderer.RenderPage(w, r, "dev_dashboard", nil); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
 }

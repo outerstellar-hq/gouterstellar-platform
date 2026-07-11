@@ -35,7 +35,7 @@ func (h *SearchHandler) RegisterRoutes(r chi.Router) {
 func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
 	if query == "" {
-		if err := h.renderer.Render(w, "search.html", viewmodel.MessagesPage{
+		if err := h.renderer.RenderPage(w, r, "search", viewmodel.MessagesPage{
 			Query: query,
 		}); err != nil {
 			http.Error(w, "Template error", http.StatusInternalServerError)
@@ -49,7 +49,7 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.messageService.ListMessages(r.Context(), safeInt32(pageSize), safeInt32(offset))
 	if err != nil {
-		_ = h.renderer.RenderWithStatus(w, "error.html", viewmodel.ErrorPage{
+		_ = h.renderer.RenderWithStatus(w, r, "error", viewmodel.ErrorPage{
 			StatusCode: http.StatusInternalServerError,
 			Title:      "Error",
 			Message:    "Search failed",
@@ -80,7 +80,7 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 		PageSize:    result.Metadata.PageSize,
 	}
 
-	if err := h.renderer.Render(w, "search.html", viewmodel.MessagesPage{
+	if err := h.renderer.RenderPage(w, r, "search", viewmodel.MessagesPage{
 		Messages:   messageItems,
 		Pagination: pagination,
 		Query:      query,
