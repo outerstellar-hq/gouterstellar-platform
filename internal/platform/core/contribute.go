@@ -26,6 +26,12 @@ func (e *Extension) Contribute(ctx *extplatform.ContributionContext) error {
 	ctx.Routes.Public(http.MethodGet, "/auth/oauth/{provider}/callback", "OAuth callback", http.HandlerFunc(b.OAuthCallback))
 	ctx.Routes.Public(http.MethodPost, "/auth/oauth/{provider}/callback", "OAuth callback POST", http.HandlerFunc(b.OAuthCallbackPost))
 
+	// --- Health / metrics / static assets ---
+	// /health is public and unauthenticated so orchestrators can probe it.
+	ctx.Routes.Public(http.MethodGet, "/health", "Health check", http.HandlerFunc(b.Health))
+	ctx.Routes.API(http.MethodGet, "/metrics", "Prometheus metrics", b.Metrics)
+	ctx.Routes.Assets("/static/*", b.Static)
+
 	// --- Protected UI (auth required) ---
 	ctx.Routes.Protected(http.MethodGet, "/", "Home dashboard", http.HandlerFunc(b.HomeShow))
 	ctx.Routes.Protected(http.MethodGet, "/contacts", "Contacts list", http.HandlerFunc(b.ContactsList))

@@ -13,11 +13,13 @@ import (
 	"github.com/rygel/gouterstellar-platform/internal/config"
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/persistence"
+	"github.com/rygel/gouterstellar-platform/internal/platform"
+	"github.com/rygel/gouterstellar-platform/internal/platform/core"
 	"github.com/rygel/gouterstellar-platform/internal/security"
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
 	"github.com/rygel/gouterstellar-platform/internal/web/handler"
-	"github.com/rygel/gouterstellar-platform/pkg/plugin"
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
 )
 
 type App struct {
@@ -52,7 +54,7 @@ type App struct {
 	ActivityUpdater       *security.AsyncActivityUpdater
 	JwtService            *security.JwtService
 	PermissionResolver    security.PermissionResolver
-	PluginManager         *plugin.PluginManager
+	ServiceBag            extplatform.ServiceBag
 }
 
 func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
@@ -178,7 +180,8 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 	devDashboardHandler := handler.NewDevDashboardHandler(outboxProcessor, securitySvc, messageSvc, renderer, cfg.DevDashboardEnabled)
 	componentsHandler := handler.NewComponentsHandler(messageSvc, contactSvc, renderer)
 	syncWebSocket := handler.NewSyncWebSocket(wsPublisher, sessionRepo, userRepo, cfg.SessionCookieSecure)
-	pluginManager := plugin.NewPluginManager()
+
+	svcBag := platform.BuildServiceBag(messageSvc, contactSvc, securitySvc)
 
 	return &App{
 		Config:                cfg,
@@ -212,6 +215,100 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 		ActivityUpdater:       activityUpdater,
 		JwtService:            jwtSvc,
 		PermissionResolver:    permissionResolver,
-		PluginManager:         pluginManager,
+		ServiceBag:            svcBag,
+	}
+}
+
+// BuildCoreBundle constructs a core.Bundle from the assembled application's
+// handlers. Each Bundle field maps to a method on the corresponding handler
+// struct; Go auto-promotes the methods to http.HandlerFunc values.
+//
+// The Health/Metrics/Static fields are intentionally left zero here because
+// they depend on the connection pool and static asset directory that the wire
+// root does not own. The caller (main) populates them after construction.
+func BuildCoreBundle(app *App, cfg *config.Config) core.Bundle {
+	return core.Bundle{
+		// PublicUI
+		AuthShowLogin:       app.AuthHandler.ShowLogin,
+		AuthHandleLogin:     app.AuthHandler.HandleLogin,
+		AuthHandleRegister:  app.AuthHandler.HandleRegister,
+		AuthHandleLogout:    app.AuthHandler.HandleLogout,
+		AuthShowChangePwd:   app.AuthHandler.ShowChangePassword,
+		AuthHandleChangePwd: app.AuthHandler.HandleChangePassword,
+		AuthShowReset:       app.AuthHandler.ShowResetPassword,
+		AuthHandleReset:     app.AuthHandler.HandleResetPassword,
+		OAuthRedirect:       app.OAuthHandler.Redirect,
+		OAuthCallback:       app.OAuthHandler.Callback,
+		OAuthCallbackPost:   app.OAuthHandler.CallbackPost,
+
+		// ProtectedUI
+		HomeShow:              app.HomeHandler.Show,
+		ContactsList:          app.ContactsHandler.List,
+		ContactsDetail:        app.ContactsHandler.Detail,
+		ContactsCreate:        app.ContactsHandler.Create,
+		ContactsUpdate:        app.ContactsHandler.Update,
+		ContactsDelete:        app.ContactsHandler.Delete,
+		SearchSearch:          app.SearchHandler.Search,
+		SettingsShow:          app.SettingsHandler.Show,
+		SettingsProfile:       app.SettingsHandler.UpdateProfile,
+		SettingsPassword:      app.SettingsHandler.ChangePassword,
+		SettingsPreferences:   app.SettingsHandler.UpdatePreferences,
+		SettingsCreateAPIKey:  app.SettingsHandler.CreateApiKey,
+		SettingsDeleteAPIKey:  app.SettingsHandler.DeleteApiKey,
+		SettingsNotifPrefs:    app.SettingsHandler.UpdateNotificationPrefs,
+		NotifsList:            app.NotificationsHandler.List,
+		NotifsMarkRead:        app.NotificationsHandler.MarkRead,
+		NotifsMarkAllRead:     app.NotificationsHandler.MarkAllRead,
+		NotifsDelete:          app.NotificationsHandler.Delete,
+		ComponentsMsgList:     app.ComponentsHandler.MessageList,
+		ComponentsContactList: app.ComponentsHandler.ContactList,
+		SyncWebSocket:         app.SyncWebSocket.Handle,
+
+		// API
+		SyncPullMessages:     app.SyncAPI.PullMessages,
+		SyncPushMessages:     app.SyncAPI.PushMessages,
+		SyncPullContacts:     app.SyncAPI.PullContacts,
+		SyncPushContacts:     app.SyncAPI.PushContacts,
+		AuthAPILogin:         app.AuthAPI.Login,
+		AuthAPIToken:         app.AuthAPI.IssueToken,
+		AuthAPIRegister:      app.AuthAPI.Register,
+		AuthAPIChangePwd:     app.AuthAPI.ChangePassword,
+		AuthAPIResetReq:      app.AuthAPI.RequestPasswordReset,
+		AuthAPIConfirmReset:  app.AuthAPI.ConfirmPasswordReset,
+		AuthAPILogout:        app.AuthAPI.Logout,
+		AuthAPIGetProfile:    app.AuthAPI.GetProfile,
+		AuthAPIUpdateProfile: app.AuthAPI.UpdateProfile,
+		AuthAPINotifPrefs:    app.AuthAPI.UpdateNotificationPreferences,
+		AuthAPIDeleteAccount: app.AuthAPI.DeleteAccount,
+		AuthAPICreateAPIKey:  app.AuthAPI.CreateApiKey,
+		AuthAPIListAPIKeys:   app.AuthAPI.ListApiKeys,
+		AuthAPIDeleteAPIKey:  app.AuthAPI.DeleteApiKey,
+		UserAPIListUsers:     app.UserAdminAPI.ListUsers,
+		UserAPICountUsers:    app.UserAdminAPI.CountUsers,
+		UserAPISetEnabled:    app.UserAdminAPI.SetEnabled,
+		UserAPISetRole:       app.UserAdminAPI.SetRole,
+		UserAPIExportUsers:   app.UserAdminAPI.ExportUsersCSV,
+		UserAPIExportAudit:   app.UserAdminAPI.ExportAuditCSV,
+		NotifAPIList:         app.NotificationAPI.List,
+		NotifAPIUnreadCount:  app.NotificationAPI.UnreadCount,
+		NotifAPIMarkRead:     app.NotificationAPI.MarkRead,
+		NotifAPIMarkAllRead:  app.NotificationAPI.MarkAllRead,
+		NotifAPIDelete:       app.NotificationAPI.Delete,
+		DeviceAPIRegister:    app.DeviceRegistrationAPI.Register,
+		DeviceAPIUnregister:  app.DeviceRegistrationAPI.Unregister,
+
+		// Admin
+		AdminListUsers:     app.UserAdminHandler.ListUsers,
+		AdminSetEnabled:    app.UserAdminHandler.SetEnabled,
+		AdminSetRole:       app.UserAdminHandler.SetRole,
+		AdminExportUsers:   app.UserAdminHandler.ExportUsers,
+		AdminShowAudit:     app.UserAdminHandler.ShowAudit,
+		AdminExportAudit:   app.UserAdminHandler.ExportAudit,
+		DevDashboard:       app.DevDashboardHandler.Show,
+		DevProcessOutbox:   app.DevDashboardHandler.ProcessOutbox,
+		DevCleanupSessions: app.DevDashboardHandler.CleanupSessions,
+		DevInvalidateCache: app.DevDashboardHandler.InvalidateCache,
+
+		DevDashboardEnabled: cfg.DevDashboardEnabled,
 	}
 }

@@ -100,7 +100,9 @@ type Bundle struct {
 	DevInvalidateCache http.HandlerFunc
 
 	// Health/metrics/static
-	Health http.HandlerFunc
+	Health  http.HandlerFunc
+	Metrics http.Handler
+	Static  http.Handler
 
 	// DevMode flag gates the dev dashboard routes.
 	DevDashboardEnabled bool
@@ -131,7 +133,7 @@ func (e *Extension) Manifest() extplatform.Manifest {
 				"/", "/auth", "/contacts", "/search", "/settings",
 				"/notifications", "/components", "/ws",
 			},
-			API:    []string{"/api/v1"},
+			API:    []string{"/api/v1", "/metrics"},
 			Admin:  []string{"/admin", "/dev"},
 			Assets: []string{"/static"},
 		},
