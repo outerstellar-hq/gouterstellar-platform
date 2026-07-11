@@ -64,6 +64,7 @@ func main() {
 		chimw.RequestID,
 		chimw.RealIP,
 		chimw.Recoverer,
+		filter.Metrics(app.Registry),
 		chimw.Timeout(60 * time.Second),
 		cors.Handler(cors.Options{
 			AllowedOrigins:   strings.Split(cfg.CORSOrigins, ","),
