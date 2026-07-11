@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/persistence"
@@ -146,6 +147,16 @@ func (s *MessageService) CreateServerMessage(ctx context.Context, author, conten
 
 	stored := pltMessageToStored(m)
 
+	// TODO(outbox-tx): The domain write above and the outbox insert below are
+	// NOT yet in the same transaction — the repo write auto-commits on the pool.
+	// Truly transactional writes require the message repo to accept a pgx.Tx
+	// (or DBTX) so both operations run inside txMgr.InTransaction. The
+	// saveOutboxEntryTx helper + outbox.SaveOutboxTx / WithTx are already in
+	// place; once MessageRepository gains WithTx, replace the pair with:
+	//   err = s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
+	//       if _, err := s.msgRepo.WithTx(tx).CreateServerMessage(...); err != nil { return err }
+	//       return s.saveOutboxEntryTx(ctx, tx, syncID, m)
+	//   })
 	s.saveOutboxEntry(ctx, syncID, m)
 	s.cache.InvalidateByPrefix("messages:")
 	s.eventPub.PublishRefresh("messages")
@@ -334,6 +345,18 @@ func (s *MessageService) saveOutboxEntry(ctx context.Context, syncID string, m d
 	if err := s.outbox.SaveOutbox(ctx, uuid.New(), "MESSAGE_SYNC", payload, "PENDING"); err != nil {
 		slog.Error("Failed to save outbox entry", "syncID", syncID, "error", err)
 	}
+}
+
+// saveOutboxEntryTx serializes and inserts an outbox entry within a caller-
+// supplied transaction. It is the transactional counterpart of saveOutboxEntry
+// and is intended for the TODO: transactional outbox write below.
+func (s *MessageService) saveOutboxEntryTx(ctx context.Context, tx pgx.Tx, syncID string, m db.PltMessage) error {
+	syncMsg := pltMessageToSyncMessage(m)
+	payload, err := model.SyncMessageToJSON(syncMsg)
+	if err != nil {
+		return fmt.Errorf("serialize outbox payload: %w", err)
+	}
+	return s.outbox.SaveOutboxTx(ctx, tx, uuid.New(), "MESSAGE_SYNC", payload, "PENDING")
 }
 
 func pltMessageToStored(m db.PltMessage) *model.StoredMessage {

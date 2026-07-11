@@ -5,10 +5,12 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/rygel/gouterstellar-platform/internal/model"
+	"github.com/rygel/gouterstellar-platform/internal/persistence"
 	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
 )
 
@@ -172,6 +174,19 @@ func (m *mockContactOutboxRepo) UpdateStatus(ctx context.Context, id uuid.UUID, 
 func (m *mockContactOutboxRepo) ListDeadLetter(ctx context.Context, limit int32) ([]db.ListDeadLetterOutboxRow, error) {
 	args := m.Called(ctx, limit)
 	return args.Get(0).([]db.ListDeadLetterOutboxRow), args.Error(1)
+}
+
+func (m *mockContactOutboxRepo) WithTx(tx pgx.Tx) persistence.OutboxRepository {
+	args := m.Called(tx)
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(persistence.OutboxRepository)
+}
+
+func (m *mockContactOutboxRepo) SaveOutboxTx(ctx context.Context, tx pgx.Tx, id uuid.UUID, payloadType, payload, status string) error {
+	args := m.Called(ctx, tx, id, payloadType, payload, status)
+	return args.Error(0)
 }
 
 func TestCreateContact_BlankName(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/persistence"
@@ -93,6 +94,14 @@ func (s *ContactService) CreateContact(ctx context.Context, name string, emails,
 
 	stored := pltContactToStored(c, emails, phones, socials)
 
+	// TODO(outbox-tx): The domain write above and the outbox insert below are
+	// NOT yet in the same transaction — the repo write auto-commits on the pool.
+	// Truly transactional writes require the contact repo to accept a pgx.Tx
+	// (or DBTX) so both operations run inside InTransaction. The
+	// saveContactOutboxEntryTx helper + outbox.SaveOutboxTx / WithTx are already
+	// in place; once ContactRepository gains WithTx, replace the pair with a
+	// single txMgr.InTransaction call. (ContactService does not currently hold
+	// a *TransactionManager — it will need one when this is wired up.)
 	s.saveContactOutboxEntry(ctx, c)
 	s.eventPub.PublishRefresh("contacts")
 
@@ -218,6 +227,22 @@ func (s *ContactService) saveContactOutboxEntry(ctx context.Context, c db.PltCon
 	if err := s.outbox.SaveOutbox(ctx, uuid.New(), "CONTACT_SYNC", payload, "PENDING"); err != nil {
 		slog.Error("Failed to save contact outbox entry", "syncID", c.SyncID, "error", err)
 	}
+}
+
+// saveContactOutboxEntryTx serializes and inserts a contact outbox entry within
+// a caller-supplied transaction. It is the transactional counterpart of
+// saveContactOutboxEntry and is intended for the TODO: transactional outbox
+// write below.
+func (s *ContactService) saveContactOutboxEntryTx(ctx context.Context, tx pgx.Tx, c db.PltContact) error {
+	emails, _ := s.repo.ListContactEmails(ctx, c.ID)
+	phones, _ := s.repo.ListContactPhones(ctx, c.ID)
+	socials, _ := s.repo.ListContactSocials(ctx, c.ID)
+	syncContact := pltContactToSyncContact(c, emails, phones, socials)
+	payload, err := model.SyncContactToJSON(syncContact)
+	if err != nil {
+		return fmt.Errorf("serialize contact outbox payload: %w", err)
+	}
+	return s.outbox.SaveOutboxTx(ctx, tx, uuid.New(), "CONTACT_SYNC", payload, "PENDING")
 }
 
 func ptrToString(p *string) string {

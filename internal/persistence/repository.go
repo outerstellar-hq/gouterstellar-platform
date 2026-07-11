@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
@@ -99,6 +100,14 @@ type OutboxRepository interface {
 	ClaimPending(ctx context.Context, limit int32) ([]db.ClaimPendingOutboxRow, error)
 	UpdateStatus(ctx context.Context, id uuid.UUID, status string, lastError *string) (db.UpdateOutboxStatusRow, error)
 	ListDeadLetter(ctx context.Context, limit int32) ([]db.ListDeadLetterOutboxRow, error)
+	// WithTx returns a copy of this repository bound to the given transaction.
+	// Calls on the returned repository participate in the transaction and only
+	// commit when the transaction is committed by TransactionManager.InTransaction.
+	WithTx(tx pgx.Tx) OutboxRepository
+	// SaveOutboxTx inserts an outbox entry using an existing transaction so the
+	// insert participates in the caller's transaction. This is the transactional
+	// counterpart of SaveOutbox.
+	SaveOutboxTx(ctx context.Context, tx pgx.Tx, id uuid.UUID, payloadType, payload, status string) error
 }
 
 type AuditRepository interface {
