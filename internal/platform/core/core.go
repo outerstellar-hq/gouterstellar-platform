@@ -33,6 +33,7 @@ type Bundle struct {
 
 	// ProtectedUI handlers
 	HomeShow              http.HandlerFunc
+	MessagesShow          http.HandlerFunc
 	ContactsList          http.HandlerFunc
 	ContactsDetail        http.HandlerFunc
 	ContactsCreate        http.HandlerFunc
@@ -130,7 +131,7 @@ func (e *Extension) Manifest() extplatform.Manifest {
 		Mode:  extplatform.FullPlatform,
 		Ownership: extplatform.RouteOwnership{
 			UI: []string{
-				"/", "/auth", "/contacts", "/search", "/settings",
+				"/", "/auth", "/contacts", "/messages", "/search", "/settings",
 				"/notifications", "/components", "/ws",
 			},
 			API:    []string{"/api/v1", "/metrics"},

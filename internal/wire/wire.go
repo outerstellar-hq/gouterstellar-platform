@@ -34,6 +34,7 @@ type App struct {
 	AuthAPI               *handler.AuthAPI
 	AuthHandler           *handler.AuthHandler
 	HomeHandler           *handler.HomeHandler
+	MessagesHandler       *handler.MessagesHandler
 	ContactsHandler       *handler.ContactsHandler
 	UserAdminHandler      *handler.UserAdminHandler
 	UserAdminAPI          *handler.UserAdminAPI
@@ -167,6 +168,7 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 	authAPI := handler.NewAuthAPI(securitySvc, apiKeySvc, passwordResetSvc, cfg.SessionCookieSecure, analytics, jwtSvc)
 	authHandler := handler.NewAuthHandler(securitySvc, passwordResetSvc, renderer, cfg.SessionCookieSecure, analytics)
 	homeHandler := handler.NewHomeHandler(messageSvc, contactSvc, securitySvc, renderer, cfg.Version)
+	messagesHandler := handler.NewMessagesHandler(messageSvc, renderer)
 	contactsHandler := handler.NewContactsHandler(contactSvc, renderer)
 	userAdminHandler := handler.NewUserAdminHandler(securitySvc, renderer)
 	userAdminAPI := handler.NewUserAdminAPI(securitySvc)
@@ -195,6 +197,7 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 		AuthAPI:               authAPI,
 		AuthHandler:           authHandler,
 		HomeHandler:           homeHandler,
+		MessagesHandler:       messagesHandler,
 		ContactsHandler:       contactsHandler,
 		UserAdminHandler:      userAdminHandler,
 		UserAdminAPI:          userAdminAPI,
@@ -243,6 +246,7 @@ func BuildCoreBundle(app *App, cfg *config.Config) core.Bundle {
 
 		// ProtectedUI
 		HomeShow:              app.HomeHandler.Show,
+		MessagesShow:          app.MessagesHandler.Show,
 		ContactsList:          app.ContactsHandler.List,
 		ContactsDetail:        app.ContactsHandler.Detail,
 		ContactsCreate:        app.ContactsHandler.Create,

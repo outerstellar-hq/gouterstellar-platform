@@ -34,6 +34,7 @@ func (e *Extension) Contribute(ctx *extplatform.ContributionContext) error {
 
 	// --- Protected UI (auth required) ---
 	ctx.Routes.Protected(http.MethodGet, "/", "Home dashboard", http.HandlerFunc(b.HomeShow))
+	ctx.Routes.Protected(http.MethodGet, "/messages", "Messages", http.HandlerFunc(b.MessagesShow))
 	ctx.Routes.Protected(http.MethodGet, "/contacts", "Contacts list", http.HandlerFunc(b.ContactsList))
 	ctx.Routes.Protected(http.MethodGet, "/contacts/{syncId}", "Contact detail", http.HandlerFunc(b.ContactsDetail))
 	ctx.Routes.Protected(http.MethodPost, "/contacts/create", "Create contact", http.HandlerFunc(b.ContactsCreate))
@@ -109,6 +110,7 @@ func (e *Extension) Contribute(ctx *extplatform.ContributionContext) error {
 
 	// --- Navigation ---
 	ctx.Navigation.Add("Home", "/", "house")
+	ctx.Navigation.Add("Messages", "/messages", "message-square")
 	ctx.Navigation.Add("Contacts", "/contacts", "users")
 	ctx.Navigation.Add("Search", "/search", "search")
 	ctx.Navigation.Add("Settings", "/settings", "gear")
