@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -217,10 +218,14 @@ func (h *AuthAPI) Logout(w http.ResponseWriter, r *http.Request) {
 		if user != nil {
 			uid := user.ID
 			username := user.Username
-			h.securityService.Logout(r.Context(), token)
+			if err := h.securityService.Logout(r.Context(), token); err != nil {
+				slog.Warn("Failed to delete session on logout", "error", err)
+			}
 			h.securityService.AuditLogout(r.Context(), &uid, &username)
 		} else {
-			h.securityService.Logout(r.Context(), token)
+			if err := h.securityService.Logout(r.Context(), token); err != nil {
+				slog.Warn("Failed to delete session on logout", "error", err)
+			}
 		}
 	}
 	http.SetCookie(w, web.ClearSessionCookie(h.sessionSecure))

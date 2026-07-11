@@ -54,22 +54,30 @@ func NewSecurityService(
 func (s *SecurityService) Authenticate(ctx context.Context, username, password string) (*model.User, error) {
 	pltUser, err := s.userRepo.FindByUsername(ctx, username)
 	if err != nil {
+		attempted := username
+		s.AuditLoginFailed(ctx, &attempted)
 		return nil, fmt.Errorf("invalid credentials")
 	}
 
 	user := security.PltUserToModel(pltUser)
 
 	if !user.Enabled {
+		attempted := username
+		s.AuditLoginFailed(ctx, &attempted)
 		return nil, fmt.Errorf("account is disabled")
 	}
 
 	if !s.passwordEncoder.Matches(password, user.PasswordHash) {
+		attempted := username
+		s.AuditLoginFailed(ctx, &attempted)
 		return nil, fmt.Errorf("invalid credentials")
 	}
 
 	if err := s.userRepo.UpdateLastActivity(ctx, user.ID); err != nil {
 		slog.Warn("Failed to update last activity", "userID", user.ID, "error", err)
 	}
+
+	s.AuditLogin(ctx, &user.ID, &user.Username)
 
 	return user, nil
 }

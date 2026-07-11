@@ -180,6 +180,7 @@ func TestAuthenticate_Success(t *testing.T) {
 	userRepo.On("FindByUsername", mock.Anything, "alice").Return(testUser, nil)
 	encoder.On("Matches", "password123", "hashedpassword").Return(true)
 	userRepo.On("UpdateLastActivity", mock.Anything, testUser.ID).Return(nil)
+	auditRepo.On("LogAudit", mock.Anything, mock.AnythingOfType("*uuid.UUID"), mock.AnythingOfType("*string"), (*uuid.UUID)(nil), (*string)(nil), "USER_LOGIN", "Login successful").Return(db.PltAuditLog{}, nil)
 
 	user, err := svc.Authenticate(context.Background(), "alice", "password123")
 
@@ -198,6 +199,7 @@ func TestAuthenticate_UserNotFound(t *testing.T) {
 	svc := NewSecurityService(userRepo, encoder, sessionRepo, auditRepo, 3600)
 
 	userRepo.On("FindByUsername", mock.Anything, "nonexistent").Return(db.PltUser{}, fmt.Errorf("not found"))
+	auditRepo.On("LogAudit", mock.Anything, (*uuid.UUID)(nil), mock.AnythingOfType("*string"), (*uuid.UUID)(nil), (*string)(nil), "USER_LOGIN_FAILED", "Login failed").Return(db.PltAuditLog{}, nil)
 
 	_, err := svc.Authenticate(context.Background(), "nonexistent", "password")
 
@@ -214,6 +216,7 @@ func TestAuthenticate_AccountDisabled(t *testing.T) {
 
 	testUser := makeTestUser("bob", "USER", false)
 	userRepo.On("FindByUsername", mock.Anything, "bob").Return(testUser, nil)
+	auditRepo.On("LogAudit", mock.Anything, (*uuid.UUID)(nil), mock.AnythingOfType("*string"), (*uuid.UUID)(nil), (*string)(nil), "USER_LOGIN_FAILED", "Login failed").Return(db.PltAuditLog{}, nil)
 
 	_, err := svc.Authenticate(context.Background(), "bob", "password")
 
