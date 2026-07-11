@@ -122,6 +122,17 @@ func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
+	if token := web.GetSessionToken(r); token != "" {
+		user := web.UserFromRequest(r)
+		if user != nil {
+			uid := user.ID
+			username := user.Username
+			h.securityService.Logout(r.Context(), token)
+			h.securityService.AuditLogout(r.Context(), &uid, &username)
+		} else {
+			h.securityService.Logout(r.Context(), token)
+		}
+	}
 	http.SetCookie(w, web.ClearSessionCookie(h.sessionSecure))
 	http.Redirect(w, r, "/auth", http.StatusSeeOther)
 }

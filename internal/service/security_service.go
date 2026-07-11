@@ -293,8 +293,7 @@ func (s *SecurityService) CreateSession(ctx context.Context, userID uuid.UUID) (
 	}
 	rawToken := "oss_" + hex.EncodeToString(rawBytes)
 
-	hash := sha256.Sum256([]byte(rawToken))
-	tokenHash := hex.EncodeToString(hash[:])
+	tokenHash := hashToken(rawToken)
 
 	expiresAt := time.Now().Add(time.Duration(s.sessionTimeoutSeconds) * time.Second)
 
@@ -307,8 +306,7 @@ func (s *SecurityService) CreateSession(ctx context.Context, userID uuid.UUID) (
 }
 
 func (s *SecurityService) LookupSession(ctx context.Context, rawToken string) model.SessionLookup {
-	hash := sha256.Sum256([]byte(rawToken))
-	tokenHash := hex.EncodeToString(hash[:])
+	tokenHash := hashToken(rawToken)
 
 	session, err := s.sessionRepo.FindByTokenHash(ctx, tokenHash)
 	if err != nil {
@@ -343,6 +341,19 @@ func (s *SecurityService) LookupSession(ctx context.Context, rawToken string) mo
 	}
 
 	return model.SessionActive{User: user}
+}
+
+// Logout invalidates a session by its raw token. It is a no-op for an empty
+// token so it is safe to call unconditionally from logout handlers.
+func (s *SecurityService) Logout(ctx context.Context, rawToken string) error {
+	if rawToken == "" {
+		return nil
+	}
+	tokenHash := hashToken(rawToken)
+	if err := s.sessionRepo.DeleteByTokenHash(ctx, tokenHash); err != nil {
+		return fmt.Errorf("delete session: %w", err)
+	}
+	return nil
 }
 
 func (s *SecurityService) DeleteExpiredSessions(ctx context.Context) error {
@@ -444,6 +455,28 @@ func (s *SecurityService) auditLog(ctx context.Context, actorID *uuid.UUID, acto
 	if err != nil {
 		slog.Error("Failed to log audit entry", "action", action, "error", err)
 	}
+}
+
+// AuditLogin records a successful login audit event.
+func (s *SecurityService) AuditLogin(ctx context.Context, userID *uuid.UUID, username *string) {
+	s.auditLog(ctx, userID, username, nil, nil, "USER_LOGIN", "Login successful")
+}
+
+// AuditLoginFailed records a failed login attempt for the given username.
+func (s *SecurityService) AuditLoginFailed(ctx context.Context, username *string) {
+	s.auditLog(ctx, nil, username, nil, nil, "USER_LOGIN_FAILED", "Login failed")
+}
+
+// AuditLogout records a logout audit event.
+func (s *SecurityService) AuditLogout(ctx context.Context, userID *uuid.UUID, username *string) {
+	s.auditLog(ctx, userID, username, nil, nil, "USER_LOGOUT", "Logout")
+}
+
+// hashToken returns the SHA-256 hash of a raw session token, hex-encoded.
+// This is the stored form of session tokens; the raw token is never persisted.
+func hashToken(raw string) string {
+	h := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(h[:])
 }
 
 func userToAuditParams(u *model.User) (*uuid.UUID, *string) {

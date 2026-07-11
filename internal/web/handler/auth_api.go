@@ -212,6 +212,17 @@ func (h *AuthAPI) ConfirmPasswordReset(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthAPI) Logout(w http.ResponseWriter, r *http.Request) {
+	if token := web.GetSessionToken(r); token != "" {
+		user := web.UserFromRequest(r)
+		if user != nil {
+			uid := user.ID
+			username := user.Username
+			h.securityService.Logout(r.Context(), token)
+			h.securityService.AuditLogout(r.Context(), &uid, &username)
+		} else {
+			h.securityService.Logout(r.Context(), token)
+		}
+	}
 	http.SetCookie(w, web.ClearSessionCookie(h.sessionSecure))
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Logged out"})
 }
