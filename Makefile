@@ -1,10 +1,13 @@
-.PHONY: build test lint lint-full vet fmt check generate clean migrate-up migrate-down dev seed security
+.PHONY: build test test-integration lint lint-full vet fmt check generate clean migrate-up migrate-down dev seed security
 
 build:
 	go build -o bin/server.exe ./cmd/server
 
 test:
 	go test ./... -timeout 120s -count=1
+
+test-integration: ## Run integration tests (requires Docker/Podman for Testcontainers)
+	go test ./... -timeout 300s -count=1 -run "DB|EndToEnd|Isolat"
 
 lint:
 	golangci-lint run ./...
