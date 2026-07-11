@@ -65,7 +65,3 @@ func (m Manifest) Validate() error {
 	}
 	return nil
 }
-
-// ContributionContext is defined in contribution.go (Task 3).
-// Minimal placeholder so the Extension interface compiles.
-type ContributionContext struct{}
