@@ -47,6 +47,7 @@ type App struct {
 	ErrorHandler          *handler.ErrorHandler
 	DevDashboardHandler   *handler.DevDashboardHandler
 	ComponentsHandler     *handler.ComponentsHandler
+	OpenAPIHandler        *handler.OpenAPIHandler
 	SyncWebSocket         *handler.SyncWebSocket
 	Realms                []security.AuthRealm
 	Registry              *prometheus.Registry
@@ -181,6 +182,7 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 	errorHandler := handler.NewErrorHandler(renderer, cfg.Version)
 	devDashboardHandler := handler.NewDevDashboardHandler(outboxProcessor, securitySvc, messageSvc, renderer, cfg.DevDashboardEnabled)
 	componentsHandler := handler.NewComponentsHandler(messageSvc, contactSvc, renderer)
+	openAPIHandler := handler.NewOpenAPIHandler()
 	syncWebSocket := handler.NewSyncWebSocket(wsPublisher, sessionRepo, userRepo, cfg.SessionCookieSecure)
 
 	svcBag := platform.BuildServiceBag(messageSvc, contactSvc, securitySvc)
@@ -210,6 +212,7 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 		ErrorHandler:          errorHandler,
 		DevDashboardHandler:   devDashboardHandler,
 		ComponentsHandler:     componentsHandler,
+		OpenAPIHandler:        openAPIHandler,
 		SyncWebSocket:         syncWebSocket,
 		Realms:                realms,
 		Registry:              registry,
@@ -312,6 +315,9 @@ func BuildCoreBundle(app *App, cfg *config.Config) core.Bundle {
 		DevProcessOutbox:   app.DevDashboardHandler.ProcessOutbox,
 		DevCleanupSessions: app.DevDashboardHandler.CleanupSessions,
 		DevInvalidateCache: app.DevDashboardHandler.InvalidateCache,
+
+		// API docs
+		OpenAPISpec: app.OpenAPIHandler.Spec,
 
 		DevDashboardEnabled: cfg.DevDashboardEnabled,
 	}

@@ -30,6 +30,7 @@ func (e *Extension) Contribute(ctx *extplatform.ContributionContext) error {
 	// /health is public and unauthenticated so orchestrators can probe it.
 	ctx.Routes.Public(http.MethodGet, "/health", "Health check", http.HandlerFunc(b.Health))
 	ctx.Routes.API(http.MethodGet, "/metrics", "Prometheus metrics", b.Metrics)
+	ctx.Routes.API(http.MethodGet, "/openapi.json", "OpenAPI spec", http.HandlerFunc(b.OpenAPISpec))
 	ctx.Routes.Assets("/static/*", b.Static)
 
 	// --- Protected UI (auth required) ---
