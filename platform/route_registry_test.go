@@ -124,7 +124,7 @@ func TestBuildMountsRoutes(t *testing.T) {
 	}
 
 	r := chi.NewRouter()
-	mounted := buildRoutes(r, reg.All(), FullPlatform, ownership)
+	mounted := buildRoutes(r, reg.All(), FullPlatform, ownership, nil)
 	require.Len(t, mounted, 1)
 
 	req := httptest.NewRequest(http.MethodGet, "/reports", nil)
@@ -145,7 +145,7 @@ func TestBuildHeadlessDropsHTMLRoutes(t *testing.T) {
 	}
 
 	r := chi.NewRouter()
-	mounted := buildRoutes(r, reg.All(), Headless, ownership)
+	mounted := buildRoutes(r, reg.All(), Headless, ownership, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/reports", nil)
 	rec := httptest.NewRecorder()
@@ -158,4 +158,49 @@ func TestBuildHeadlessDropsHTMLRoutes(t *testing.T) {
 	assert.NotEqual(t, http.StatusNotFound, rec.Code, "API route should be mounted in headless mode")
 
 	_ = mounted
+}
+
+func TestBuildAppliesGroupMiddleware(t *testing.T) {
+	reg := newRouteRegistry("reports")
+	apiCalled := false
+	reg.API(http.MethodGet, "/api/v1/reports/x", "", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	reg.Protected(http.MethodGet, "/reports", "", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	ownership := map[string]RouteOwnership{
+		"reports": {UI: []string{"/reports"}, API: []string{"/api/v1"}},
+	}
+
+	mwCalled := false
+	groupMW := map[RouteGroup][]func(http.Handler) http.Handler{
+		GroupAPI: {
+			func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					mwCalled = true
+					next.ServeHTTP(w, r)
+				})
+			},
+		},
+	}
+
+	r := chi.NewRouter()
+	buildRoutes(r, reg.All(), FullPlatform, ownership, groupMW)
+
+	// API route should trigger the group middleware
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/x", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assert.True(t, mwCalled, "API group middleware should have been called")
+	assert.True(t, apiCalled, "API handler should have been called")
+
+	// Protected route should NOT trigger the API group middleware
+	mwCalled = false
+	req = httptest.NewRequest(http.MethodGet, "/reports", nil)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assert.False(t, mwCalled, "API group middleware should NOT fire for protected UI route")
 }

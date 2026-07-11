@@ -15,6 +15,11 @@ type Options struct {
 	Extensions      []Extension
 	Services        ServiceBag
 	MiddlewareChain []func(http.Handler) http.Handler
+	// GroupMiddleware applies middleware to specific route groups after
+	// the global MiddlewareChain. Keys are RouteGroup values
+	// (GroupAPI, GroupAdmin, etc.). The middleware is applied via Chi
+	// route groups, so it only affects routes in that group.
+	GroupMiddleware map[RouteGroup][]func(http.Handler) http.Handler
 }
 
 // NewHandler assembles the complete web application as an http.Handler.
@@ -54,7 +59,7 @@ func NewHandler(opts Options) (http.Handler, error) {
 	for _, mw := range opts.MiddlewareChain {
 		r.Use(mw)
 	}
-	mounted := buildRoutes(r, allRoutes, opts.Mode, ownershipMap)
+	mounted := buildRoutes(r, allRoutes, opts.Mode, ownershipMap, opts.GroupMiddleware)
 
 	// 5. Log the route table (observability).
 	logRouteTable(mounted, allNav)

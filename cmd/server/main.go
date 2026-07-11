@@ -87,6 +87,10 @@ func main() {
 		},
 		Services:        app.ServiceBag,
 		MiddlewareChain: middlewareChain,
+		GroupMiddleware: map[extplatform.RouteGroup][]func(http.Handler) http.Handler{
+			// Bearer token auth (API key / JWT) for JSON API routes.
+			extplatform.GroupAPI: {filter.BearerAuth(app.Realms...)},
+		},
 	})
 	if err != nil {
 		slog.Error("Platform assembly failed", "error", err)
