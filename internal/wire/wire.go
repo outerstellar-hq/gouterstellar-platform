@@ -159,7 +159,7 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 	outboxProcessor := service.NewOutboxProcessor(outboxRepo, txMgr)
 	passwordResetSvc := service.NewPasswordResetService(userRepo, passwordEncoder, passwordResetRepo, emailSvc, auditRepo)
 
-	renderer, err := web.NewRenderer(templateFS, web.TemplateFuncMap())
+	renderer, err := web.NewRenderer(templateFS, web.TemplateFuncMap(), cfg.Version)
 	if err != nil {
 		panic("failed to parse templates: " + err.Error())
 	}
