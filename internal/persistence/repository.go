@@ -96,6 +96,9 @@ type OutboxRepository interface {
 	MarkFailed(ctx context.Context, id uuid.UUID, lastError *string) (db.MarkOutboxFailedRow, error)
 	GetStats(ctx context.Context) (db.GetOutboxStatsRow, error)
 	ListFailed(ctx context.Context, limit int32) ([]db.ListFailedOutboxRow, error)
+	ClaimPending(ctx context.Context, limit int32) ([]db.ClaimPendingOutboxRow, error)
+	UpdateStatus(ctx context.Context, id uuid.UUID, status string, lastError *string) (db.UpdateOutboxStatusRow, error)
+	ListDeadLetter(ctx context.Context, limit int32) ([]db.ListDeadLetterOutboxRow, error)
 }
 
 type AuditRepository interface {

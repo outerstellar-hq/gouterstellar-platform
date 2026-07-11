@@ -49,3 +49,19 @@ func (r *outboxRepo) GetStats(ctx context.Context) (db.GetOutboxStatsRow, error)
 func (r *outboxRepo) ListFailed(ctx context.Context, limit int32) ([]db.ListFailedOutboxRow, error) {
 	return r.q.ListFailedOutbox(ctx, limit)
 }
+
+func (r *outboxRepo) ClaimPending(ctx context.Context, limit int32) ([]db.ClaimPendingOutboxRow, error) {
+	return r.q.ClaimPendingOutbox(ctx, limit)
+}
+
+func (r *outboxRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status string, lastError *string) (db.UpdateOutboxStatusRow, error) {
+	return r.q.UpdateOutboxStatus(ctx, db.UpdateOutboxStatusParams{
+		ID:        id,
+		Status:    status,
+		LastError: lastError,
+	})
+}
+
+func (r *outboxRepo) ListDeadLetter(ctx context.Context, limit int32) ([]db.ListDeadLetterOutboxRow, error) {
+	return r.q.ListDeadLetterOutbox(ctx, limit)
+}

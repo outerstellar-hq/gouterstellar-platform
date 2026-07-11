@@ -126,6 +126,21 @@ func (m *mockOutboxRepo) ListFailed(ctx context.Context, limit int32) ([]db.List
 	return args.Get(0).([]db.ListFailedOutboxRow), args.Error(1)
 }
 
+func (m *mockOutboxRepo) ClaimPending(ctx context.Context, limit int32) ([]db.ClaimPendingOutboxRow, error) {
+	args := m.Called(ctx, limit)
+	return args.Get(0).([]db.ClaimPendingOutboxRow), args.Error(1)
+}
+
+func (m *mockOutboxRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status string, lastError *string) (db.UpdateOutboxStatusRow, error) {
+	args := m.Called(ctx, id, status, lastError)
+	return args.Get(0).(db.UpdateOutboxStatusRow), args.Error(1)
+}
+
+func (m *mockOutboxRepo) ListDeadLetter(ctx context.Context, limit int32) ([]db.ListDeadLetterOutboxRow, error) {
+	args := m.Called(ctx, limit)
+	return args.Get(0).([]db.ListDeadLetterOutboxRow), args.Error(1)
+}
+
 type mockAuditRepo struct {
 	mock.Mock
 }

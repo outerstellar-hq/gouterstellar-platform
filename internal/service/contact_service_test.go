@@ -159,6 +159,21 @@ func (m *mockContactOutboxRepo) ListFailed(ctx context.Context, limit int32) ([]
 	return args.Get(0).([]db.ListFailedOutboxRow), args.Error(1)
 }
 
+func (m *mockContactOutboxRepo) ClaimPending(ctx context.Context, limit int32) ([]db.ClaimPendingOutboxRow, error) {
+	args := m.Called(ctx, limit)
+	return args.Get(0).([]db.ClaimPendingOutboxRow), args.Error(1)
+}
+
+func (m *mockContactOutboxRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status string, lastError *string) (db.UpdateOutboxStatusRow, error) {
+	args := m.Called(ctx, id, status, lastError)
+	return args.Get(0).(db.UpdateOutboxStatusRow), args.Error(1)
+}
+
+func (m *mockContactOutboxRepo) ListDeadLetter(ctx context.Context, limit int32) ([]db.ListDeadLetterOutboxRow, error) {
+	args := m.Called(ctx, limit)
+	return args.Get(0).([]db.ListDeadLetterOutboxRow), args.Error(1)
+}
+
 func TestCreateContact_BlankName(t *testing.T) {
 	repo := new(mockContactRepo)
 	outbox := new(mockContactOutboxRepo)

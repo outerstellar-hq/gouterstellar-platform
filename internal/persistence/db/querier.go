@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	ClaimPendingOutbox(ctx context.Context, limit int32) ([]ClaimPendingOutboxRow, error)
 	CountAllAudit(ctx context.Context) (int64, error)
 	CountAllUsers(ctx context.Context) (int64, error)
 	CountContacts(ctx context.Context) (int64, error)
@@ -63,6 +64,7 @@ type Querier interface {
 	ListContactPhones(ctx context.Context, contactID int64) ([]string, error)
 	ListContactSocials(ctx context.Context, contactID int64) ([]string, error)
 	ListContacts(ctx context.Context, arg ListContactsParams) ([]PltContact, error)
+	ListDeadLetterOutbox(ctx context.Context, limit int32) ([]ListDeadLetterOutboxRow, error)
 	ListDirtyContacts(ctx context.Context) ([]PltContact, error)
 	ListDirtyMessages(ctx context.Context) ([]PltMessage, error)
 	ListFailedOutbox(ctx context.Context, limit int32) ([]ListFailedOutboxRow, error)
@@ -99,6 +101,7 @@ type Querier interface {
 	UpdateLastActivity(ctx context.Context, id uuid.UUID) error
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) (PltMessage, error)
 	UpdateNotificationPreferences(ctx context.Context, arg UpdateNotificationPreferencesParams) (PltUser, error)
+	UpdateOutboxStatus(ctx context.Context, arg UpdateOutboxStatusParams) (UpdateOutboxStatusRow, error)
 	UpdatePreferences(ctx context.Context, arg UpdatePreferencesParams) (PltUser, error)
 	UpdateSessionExpiresAt(ctx context.Context, arg UpdateSessionExpiresAtParams) (PltSession, error)
 	UpdateUserEnabled(ctx context.Context, arg UpdateUserEnabledParams) (PltUser, error)
