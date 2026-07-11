@@ -78,6 +78,7 @@ func main() {
 			return app.SecurityService.DevAdminID(ctx)
 		}, app.SecurityService, cfg.DevMode),
 		filter.RateLimiter(10, 20),
+		filter.AuthRateLimiter(3, 5),
 		filter.CSRF(cfg.CSRFEnabled),
 		filter.Session(app.SecurityService, cfg.SessionCookieSecure),
 		filter.Logging(),
