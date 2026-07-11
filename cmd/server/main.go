@@ -17,9 +17,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"github.com/rygel/gouterstellar-platform/extensions/reports"
 	"github.com/rygel/gouterstellar-platform/internal/config"
+	"github.com/rygel/gouterstellar-platform/internal/observability"
 	"github.com/rygel/gouterstellar-platform/internal/platform/core"
 	"github.com/rygel/gouterstellar-platform/internal/web"
 	"github.com/rygel/gouterstellar-platform/internal/web/filter"
@@ -32,6 +34,23 @@ func main() {
 	slog.Info("Starting Outerstellar Platform", "version", cfg.Version, "port", cfg.Port)
 
 	ctx := context.Background()
+
+	// Initialise OpenTelemetry tracing as early as possible so spans are
+	// captured for every subsequent operation. The shutdown function flushes
+	// pending spans on exit.
+	tracingShutdown, err := observability.SetupTracing(ctx, "outerstellar-platform")
+	if err != nil {
+		slog.Error("Failed to initialise tracing", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := tracingShutdown(shutdownCtx); err != nil {
+			slog.Error("Tracing shutdown error", "error", err)
+		}
+	}()
+
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		slog.Error("Failed to connect to database", "error", err)
@@ -61,6 +80,10 @@ func main() {
 	// The middleware chain is applied to every route in the same order as
 	// the previous Chi-based wire root.
 	middlewareChain := []func(http.Handler) http.Handler{
+		// otelhttp is first so it wraps the entire chain, creating a root
+		// span for every request regardless of which downstream middleware
+		// short-circuits.
+		otelhttp.NewMiddleware("outerstellar-platform"),
 		chimw.RequestID,
 		chimw.RealIP,
 		chimw.Recoverer,
