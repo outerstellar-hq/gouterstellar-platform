@@ -151,7 +151,9 @@ func (r *RouteRegistry) Assets(pattern string, h http.Handler)
 | 2 | Route inside owner's declared prefixes | `route GET /settings is outside ownership of reports (allowed: /reports, /extension/reports)` |
 | 3 | No duplicate method+path across owners | `route conflict: GET /settings is owned by both platform-core and reports` |
 | 4 | Headless mode rejects HTML groups | `headless mode rejects HTML route GET / owned by platform-core` |
-| 5 | Extension routes don't conflict with enabled platform pages | `route GET / conflicts with enabled platform page owned by platform-core` |
+| 5 | Extension routes don't conflict with enabled platform pages | `route GET / conflicts with platform page owned by platform-core` |
+
+**"Enabled platform pages"** (rule 5) are the UI routes that core contributes in `FullPlatform` and `ExtensionHost` modes — `/`, `/auth`, `/settings`, etc. These are determined *after* core contributes, by reading core's registrations with `GroupProtectedUI` or `GroupPublicUI`. In `ExtensionHost` mode, core may suppress its root `/` page (configurable), freeing it for another extension to own. Rule 5 then checks that no two extensions claim the same platform page route. In `Headless` mode, platform pages aren't contributed at all, so rule 5 is moot.
 | 6 | Asset paths inside declared asset ownership | `asset path /static/reports/x.css is outside asset ownership of reports` |
 
 The validator collects **all** conflicts before failing — it does not abort on the first one. Rich conflict diagnostics carry context so you don't have to re-run:
@@ -163,10 +165,19 @@ route conflict: GET /settings
   suggestion: reports should declare /settings in its RouteOwnership.UI, or remove the duplicate route
 ```
 
+### Two mode concepts — clarified
+
+There are two mode fields that must not be confused:
+
+- **`Options.Mode`** (platform-wide) — the operating mode the *application* runs in. Set once at startup. Determines which route groups are eligible and what UI the platform mounts.
+- **`Manifest.Mode`** (per-extension) — declares which mode the extension is *designed for*. An informational tag the builder uses to decide permission grants. An extension declaring `ExtensionHost` is signaling that it expects to own root UI routes; the builder grants that privilege only when the platform is also running in `ExtensionHost` mode.
+
+An extension whose `Manifest.Mode` doesn't match the running `Options.Mode` isn't rejected outright — its API and non-root routes still contribute. But the builder won't grant the root-UI ownership privilege unless both modes agree on `ExtensionHost`.
+
 ### Mode behavior in the builder
 
-- **FullPlatform:** the core extension contributes default platform pages (`/`, `/auth`, `/settings`, etc.). All groups mount.
-- **ExtensionHost:** core still contributes auth + API (the platform backbone), but root UI routes (`/`) can be owned by a non-core extension. The builder allows one non-core owner for a root UI prefix when the extension's manifest declares `Mode: ExtensionHost`.
+- **FullPlatform:** the core extension contributes default platform pages (`/`, `/auth`, `/settings`, etc.). All groups mount. Root UI routes (`/`) are owned by core only.
+- **ExtensionHost:** core still contributes auth + API (the platform backbone), but root UI routes (`/`) can be owned by a non-core extension. The builder allows one non-core owner for a root UI prefix only when both `Options.Mode` and the extension's `Manifest.Mode` are `ExtensionHost`. Core may optionally suppress its own root UI contribution in this mode (configurable).
 - **Headless:** the builder drops every registration whose `Group` is `GroupPublicUI`, `GroupProtectedUI`, or `GroupAdmin`. Only `GroupAPI` and `GroupAssets` survive. Rule 4 enforces this at validate time.
 
 ### Build phase
