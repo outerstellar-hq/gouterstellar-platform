@@ -1,0 +1,28 @@
+{{ define "content" }}
+<div class="page-header">
+    <h1>Dev Dashboard</h1>
+</div>
+<div class="card-grid">
+    <div class="card">
+        <h2>Outbox</h2>
+        <form method="POST" action="/dev/outbox/process">
+            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+            <button type="submit" class="btn btn-primary">Process Pending</button>
+        </form>
+    </div>
+    <div class="card">
+        <h2>Sessions</h2>
+        <form method="POST" action="/dev/sessions/cleanup">
+            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+            <button type="submit" class="btn btn-primary">Cleanup Expired</button>
+        </form>
+    </div>
+    <div class="card">
+        <h2>Cache</h2>
+        <form method="POST" action="/dev/cache/invalidate">
+            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+            <button type="submit" class="btn btn-primary">Invalidate Cache</button>
+        </form>
+    </div>
+</div>
+{{ end }}
