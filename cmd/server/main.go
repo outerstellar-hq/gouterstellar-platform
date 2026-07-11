@@ -94,6 +94,8 @@ func main() {
 		GroupMiddleware: map[extplatform.RouteGroup][]func(http.Handler) http.Handler{
 			// Bearer token auth (API key / JWT) for JSON API routes.
 			extplatform.GroupAPI: {filter.BearerAuth(app.Realms...)},
+			// Admin routes require the wildcard admin permission.
+			extplatform.GroupAdmin: {filter.RequirePermission(app.PermissionResolver, "*", "*")},
 		},
 	})
 	if err != nil {
