@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/rygel/gouterstellar-platform/extensions/reports"
 	"github.com/rygel/gouterstellar-platform/internal/config"
 	"github.com/rygel/gouterstellar-platform/internal/platform/core"
 	"github.com/rygel/gouterstellar-platform/internal/web"
@@ -55,6 +56,8 @@ func main() {
 	coreBundle.Static = http.StripPrefix("/static/", http.FileServer(http.Dir("static")))
 	coreExt := core.NewExtension(coreBundle)
 
+	reportsExt := reports.New(app.ServiceBag.MessageCounter)
+
 	// The middleware chain is applied to every route in the same order as
 	// the previous Chi-based wire root.
 	middlewareChain := []func(http.Handler) http.Handler{
@@ -84,6 +87,7 @@ func main() {
 		Mode: extplatform.FullPlatform,
 		Extensions: []extplatform.Extension{
 			coreExt,
+			reportsExt,
 		},
 		Services:        app.ServiceBag,
 		MiddlewareChain: middlewareChain,
