@@ -155,7 +155,7 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 	analytics := &service.NoOpAnalyticsService{}
 
 	messageSvc := service.NewMessageService(messageRepo, outboxRepo, txMgr, messageCache, wsPublisher, auditRepo)
-	contactSvc := service.NewContactService(contactRepo, outboxRepo, wsPublisher)
+	contactSvc := service.NewContactService(contactRepo, outboxRepo, txMgr, wsPublisher)
 	notificationSvc := service.NewNotificationService(notificationRepo)
 	outboxProcessor := service.NewOutboxProcessor(outboxRepo, txMgr)
 	passwordResetSvc := service.NewPasswordResetService(userRepo, passwordEncoder, passwordResetRepo, emailSvc, auditRepo)

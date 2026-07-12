@@ -19,17 +19,20 @@ import (
 type ContactService struct {
 	repo     persistence.ContactRepository
 	outbox   persistence.OutboxRepository
+	txMgr    TransactionRunner
 	eventPub EventPublisher
 }
 
 func NewContactService(
 	repo persistence.ContactRepository,
 	outbox persistence.OutboxRepository,
+	txMgr TransactionRunner,
 	eventPub EventPublisher,
 ) *ContactService {
 	return &ContactService{
 		repo:     repo,
 		outbox:   outbox,
+		txMgr:    txMgr,
 		eventPub: eventPub,
 	}
 }
@@ -87,22 +90,23 @@ func (s *ContactService) CreateContact(ctx context.Context, name string, emails,
 		UpdatedAtEpochMs: now,
 	}
 
-	c, err := s.repo.CreateServerContact(ctx, contact)
+	var stored *model.StoredContact
+	err := s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
+		txRepo := s.repo.WithTx(tx)
+		created, err := txRepo.CreateServerContact(ctx, contact)
+		if err != nil {
+			return fmt.Errorf("create contact: %w", err)
+		}
+		if err := s.saveContactOutboxEntryTx(ctx, tx, txRepo, created); err != nil {
+			return err
+		}
+		stored = pltContactToStored(created, emails, phones, socials)
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("create contact: %w", err)
+		return nil, err
 	}
 
-	stored := pltContactToStored(c, emails, phones, socials)
-
-	// TODO(outbox-tx): The domain write above and the outbox insert below are
-	// NOT yet in the same transaction — the repo write auto-commits on the pool.
-	// Truly transactional writes require the contact repo to accept a pgx.Tx
-	// (or DBTX) so both operations run inside InTransaction. The
-	// saveContactOutboxEntryTx helper + outbox.SaveOutboxTx / WithTx are already
-	// in place; once ContactRepository gains WithTx, replace the pair with a
-	// single txMgr.InTransaction call. (ContactService does not currently hold
-	// a *TransactionManager — it will need one when this is wired up.)
-	s.saveContactOutboxEntry(ctx, c)
 	s.eventPub.PublishRefresh("contacts")
 
 	return stored, nil
@@ -114,14 +118,23 @@ func (s *ContactService) UpdateContact(ctx context.Context, contact *model.Store
 		return nil, &model.ContactNotFoundError{SyncID: contact.SyncID}
 	}
 
-	c, err := s.repo.UpdateContact(ctx, contact.SyncID, contact, existing.Version)
+	var stored *model.StoredContact
+	err = s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
+		txRepo := s.repo.WithTx(tx)
+		c, err := txRepo.UpdateContact(ctx, contact.SyncID, contact, existing.Version)
+		if err != nil {
+			return fmt.Errorf("update contact: %w", err)
+		}
+		if err := s.saveContactOutboxEntryTx(ctx, tx, txRepo, c); err != nil {
+			return err
+		}
+		stored = pltContactToStored(c, contact.Emails, contact.Phones, contact.SocialMedia)
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("update contact: %w", err)
+		return nil, err
 	}
 
-	stored := pltContactToStored(c, contact.Emails, contact.Phones, contact.SocialMedia)
-
-	s.saveContactOutboxEntry(ctx, c)
 	s.eventPub.PublishRefresh("contacts")
 
 	return stored, nil
@@ -230,13 +243,13 @@ func (s *ContactService) saveContactOutboxEntry(ctx context.Context, c db.PltCon
 }
 
 // saveContactOutboxEntryTx serializes and inserts a contact outbox entry within
-// a caller-supplied transaction. It is the transactional counterpart of
-// saveContactOutboxEntry and is intended for the TODO: transactional outbox
-// write below.
-func (s *ContactService) saveContactOutboxEntryTx(ctx context.Context, tx pgx.Tx, c db.PltContact) error {
-	emails, _ := s.repo.ListContactEmails(ctx, c.ID)
-	phones, _ := s.repo.ListContactPhones(ctx, c.ID)
-	socials, _ := s.repo.ListContactSocials(ctx, c.ID)
+// a caller-supplied transaction. The tx-bound repo is used for the sub-table
+// reads so the reads also participate in the transaction. It is the
+// transactional counterpart of saveContactOutboxEntry.
+func (s *ContactService) saveContactOutboxEntryTx(ctx context.Context, tx pgx.Tx, repo persistence.ContactRepository, c db.PltContact) error {
+	emails, _ := repo.ListContactEmails(ctx, c.ID)
+	phones, _ := repo.ListContactPhones(ctx, c.ID)
+	socials, _ := repo.ListContactSocials(ctx, c.ID)
 	syncContact := pltContactToSyncContact(c, emails, phones, socials)
 	payload, err := model.SyncContactToJSON(syncContact)
 	if err != nil {

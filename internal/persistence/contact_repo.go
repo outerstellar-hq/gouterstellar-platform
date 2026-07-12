@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/rygel/gouterstellar-platform/internal/model"
@@ -16,6 +17,13 @@ type contactRepo struct {
 
 func NewContactRepository(pool *pgxpool.Pool) ContactRepository {
 	return &contactRepo{q: db.New(pool), pool: pool}
+}
+
+// WithTx returns a copy of this repository whose underlying sqlc Queries is
+// bound to the given transaction. Operations on the returned repository
+// participate in the transaction and only persist when the transaction commits.
+func (r *contactRepo) WithTx(tx pgx.Tx) ContactRepository {
+	return &contactRepo{q: r.q.WithTx(tx), pool: nil}
 }
 
 func (r *contactRepo) ListContacts(ctx context.Context, limit, offset int32) ([]db.PltContact, error) {

@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
@@ -15,6 +16,13 @@ type messageRepo struct {
 
 func NewMessageRepository(pool *pgxpool.Pool) MessageRepository {
 	return &messageRepo{q: db.New(pool), pool: pool}
+}
+
+// WithTx returns a copy of this repository whose underlying sqlc Queries is
+// bound to the given transaction. Operations on the returned repository
+// participate in the transaction and only persist when the transaction commits.
+func (r *messageRepo) WithTx(tx pgx.Tx) MessageRepository {
+	return &messageRepo{q: r.q.WithTx(tx), pool: nil}
 }
 
 func (r *messageRepo) ListMessages(ctx context.Context, limit, offset int32) ([]db.PltMessage, error) {

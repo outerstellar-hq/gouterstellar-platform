@@ -88,6 +88,14 @@ func (m *mockContactRepo) MarkCleanContacts(ctx context.Context) error {
 	return args.Error(0)
 }
 
+func (m *mockContactRepo) WithTx(tx pgx.Tx) persistence.ContactRepository {
+	args := m.Called(tx)
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(persistence.ContactRepository)
+}
+
 func (m *mockContactRepo) ListContactEmails(ctx context.Context, contactID int64) ([]string, error) {
 	args := m.Called(ctx, contactID)
 	if args.Get(0) == nil {
@@ -192,7 +200,7 @@ func (m *mockContactOutboxRepo) SaveOutboxTx(ctx context.Context, tx pgx.Tx, id 
 func TestCreateContact_BlankName(t *testing.T) {
 	repo := new(mockContactRepo)
 	outbox := new(mockContactOutboxRepo)
-	svc := NewContactService(repo, outbox, &NoOpEventPublisher{})
+	svc := NewContactService(repo, outbox, &FakeTxRunner{}, &NoOpEventPublisher{})
 
 	_, err := svc.CreateContact(context.Background(), "", nil, nil, nil, "", "", "")
 	assert.Error(t, err)
@@ -202,8 +210,10 @@ func TestCreateContact_BlankName(t *testing.T) {
 func TestCreateContact_Success(t *testing.T) {
 	repo := new(mockContactRepo)
 	outbox := new(mockContactOutboxRepo)
-	svc := NewContactService(repo, outbox, &NoOpEventPublisher{})
+	svc := NewContactService(repo, outbox, &FakeTxRunner{}, &NoOpEventPublisher{})
 
+	// WithTx returns the same mock so the tx-bound write uses the same stubs.
+	repo.On("WithTx", mock.Anything).Return(repo)
 	repo.On("CreateServerContact", mock.Anything, mock.AnythingOfType("*model.StoredContact")).Return(db.PltContact{
 		ID:               1,
 		SyncID:           "srv_test",
@@ -215,7 +225,7 @@ func TestCreateContact_Success(t *testing.T) {
 	repo.On("ListContactEmails", mock.Anything, int64(1)).Return([]string{"alice@example.com"}, nil)
 	repo.On("ListContactPhones", mock.Anything, int64(1)).Return([]string{}, nil)
 	repo.On("ListContactSocials", mock.Anything, int64(1)).Return([]string{}, nil)
-	outbox.On("SaveOutbox", mock.Anything, mock.AnythingOfType("uuid.UUID"), "CONTACT_SYNC", mock.AnythingOfType("string"), "PENDING").Return(nil)
+	outbox.On("SaveOutboxTx", mock.Anything, mock.Anything, mock.AnythingOfType("uuid.UUID"), "CONTACT_SYNC", mock.AnythingOfType("string"), "PENDING").Return(nil)
 
 	contact, err := svc.CreateContact(context.Background(), "Alice", []string{"alice@example.com"}, nil, nil, "Acme", "", "")
 
@@ -224,6 +234,7 @@ func TestCreateContact_Success(t *testing.T) {
 	assert.Equal(t, []string{"alice@example.com"}, contact.Emails)
 	assert.Equal(t, "Acme", contact.Company)
 	repo.AssertExpectations(t)
+	outbox.AssertExpectations(t)
 }
 
 func strPtr(s string) *string {

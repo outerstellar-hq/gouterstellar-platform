@@ -27,6 +27,10 @@ type MessageRepository interface {
 	MarkConflictMessage(ctx context.Context, syncID string, conflict string) (db.PltMessage, error)
 	ResolveConflictMessage(ctx context.Context, syncID string) (db.PltMessage, error)
 	MarkCleanMessages(ctx context.Context) error
+	// WithTx returns a copy of this repository bound to the given transaction.
+	// Calls on the returned repository participate in the transaction and only
+	// commit when the transaction commits.
+	WithTx(tx pgx.Tx) MessageRepository
 }
 
 type ContactRepository interface {
@@ -44,6 +48,10 @@ type ContactRepository interface {
 	MarkConflictContact(ctx context.Context, syncID string, conflict string) (db.PltContact, error)
 	ResolveConflictContact(ctx context.Context, syncID string) (db.PltContact, error)
 	MarkCleanContacts(ctx context.Context) error
+	// WithTx returns a copy of this repository bound to the given transaction.
+	// Calls on the returned repository participate in the transaction and only
+	// commit when the transaction commits.
+	WithTx(tx pgx.Tx) ContactRepository
 	ListContactEmails(ctx context.Context, contactID int64) ([]string, error)
 	SetContactEmails(ctx context.Context, contactID int64, emails []string) error
 	ListContactPhones(ctx context.Context, contactID int64) ([]string, error)

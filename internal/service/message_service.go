@@ -19,7 +19,7 @@ import (
 type MessageService struct {
 	repo      persistence.MessageRepository
 	outbox    persistence.OutboxRepository
-	txMgr     *persistence.TransactionManager
+	txMgr     TransactionRunner
 	cache     *persistence.MessageCache
 	eventPub  EventPublisher
 	auditRepo persistence.AuditRepository
@@ -28,7 +28,7 @@ type MessageService struct {
 func NewMessageService(
 	repo persistence.MessageRepository,
 	outbox persistence.OutboxRepository,
-	txMgr *persistence.TransactionManager,
+	txMgr TransactionRunner,
 	cache *persistence.MessageCache,
 	eventPub EventPublisher,
 	auditRepo persistence.AuditRepository,
@@ -140,24 +140,23 @@ func (s *MessageService) CreateServerMessage(ctx context.Context, author, conten
 	syncID := "srv_" + uuid.New().String()
 	now := time.Now().UnixMilli()
 
-	m, err := s.repo.CreateServerMessage(ctx, syncID, author, content, now)
+	var m db.PltMessage
+	err := s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
+		created, err := s.repo.WithTx(tx).CreateServerMessage(ctx, syncID, author, content, now)
+		if err != nil {
+			return fmt.Errorf("create server message: %w", err)
+		}
+		if err := s.saveOutboxEntryTx(ctx, tx, syncID, created); err != nil {
+			return err
+		}
+		m = created
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("create server message: %w", err)
+		return nil, err
 	}
 
 	stored := pltMessageToStored(m)
-
-	// TODO(outbox-tx): The domain write above and the outbox insert below are
-	// NOT yet in the same transaction — the repo write auto-commits on the pool.
-	// Truly transactional writes require the message repo to accept a pgx.Tx
-	// (or DBTX) so both operations run inside txMgr.InTransaction. The
-	// saveOutboxEntryTx helper + outbox.SaveOutboxTx / WithTx are already in
-	// place; once MessageRepository gains WithTx, replace the pair with:
-	//   err = s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
-	//       if _, err := s.msgRepo.WithTx(tx).CreateServerMessage(...); err != nil { return err }
-	//       return s.saveOutboxEntryTx(ctx, tx, syncID, m)
-	//   })
-	s.saveOutboxEntry(ctx, syncID, m)
 	s.cache.InvalidateByPrefix("messages:")
 	s.eventPub.PublishRefresh("messages")
 
@@ -172,14 +171,23 @@ func (s *MessageService) CreateLocalMessage(ctx context.Context, author, content
 	syncID := "loc_" + uuid.New().String()
 	now := time.Now().UnixMilli()
 
-	m, err := s.repo.CreateLocalMessage(ctx, syncID, author, content, now)
+	var m db.PltMessage
+	err := s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
+		created, err := s.repo.WithTx(tx).CreateLocalMessage(ctx, syncID, author, content, now)
+		if err != nil {
+			return fmt.Errorf("create local message: %w", err)
+		}
+		if err := s.saveOutboxEntryTx(ctx, tx, syncID, created); err != nil {
+			return err
+		}
+		m = created
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("create local message: %w", err)
+		return nil, err
 	}
 
 	stored := pltMessageToStored(m)
-
-	s.saveOutboxEntry(ctx, syncID, m)
 	s.cache.InvalidateByPrefix("messages:")
 	s.eventPub.PublishRefresh("messages")
 
@@ -270,12 +278,17 @@ func (s *MessageService) Restore(ctx context.Context, syncID string) error {
 }
 
 func (s *MessageService) DeleteMessage(ctx context.Context, syncID string) error {
-	m, err := s.repo.SoftDeleteMessage(ctx, syncID)
+	err := s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
+		deleted, err := s.repo.WithTx(tx).SoftDeleteMessage(ctx, syncID)
+		if err != nil {
+			return fmt.Errorf("delete message: %w", err)
+		}
+		return s.saveOutboxEntryTx(ctx, tx, syncID, deleted)
+	})
 	if err != nil {
-		return fmt.Errorf("delete message: %w", err)
+		return err
 	}
 
-	s.saveOutboxEntry(ctx, syncID, m)
 	s.cache.Invalidate("message:" + syncID)
 	s.cache.InvalidateByPrefix("messages:")
 	s.eventPub.PublishRefresh("messages")
@@ -283,13 +296,23 @@ func (s *MessageService) DeleteMessage(ctx context.Context, syncID string) error
 }
 
 func (s *MessageService) UpdateMessage(ctx context.Context, msg *model.StoredMessage) (*model.StoredMessage, error) {
-	updated, err := s.repo.UpdateMessage(ctx, msg.SyncID, msg.Author, msg.Content, msg.UpdatedAtEpochMs, msg.Dirty, msg.Version)
+	var updated db.PltMessage
+	err := s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
+		u, err := s.repo.WithTx(tx).UpdateMessage(ctx, msg.SyncID, msg.Author, msg.Content, msg.UpdatedAtEpochMs, msg.Dirty, msg.Version)
+		if err != nil {
+			return fmt.Errorf("update message: %w", err)
+		}
+		if err := s.saveOutboxEntryTx(ctx, tx, msg.SyncID, u); err != nil {
+			return err
+		}
+		updated = u
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("update message: %w", err)
+		return nil, err
 	}
 
 	stored := pltMessageToStored(updated)
-	s.saveOutboxEntry(ctx, msg.SyncID, updated)
 	s.cache.Invalidate("message:" + msg.SyncID)
 	s.cache.InvalidateByPrefix("messages:")
 	s.eventPub.PublishRefresh("messages")

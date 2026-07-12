@@ -93,6 +93,14 @@ func (m *mockMessageRepo) MarkCleanMessages(ctx context.Context) error {
 	return args.Error(0)
 }
 
+func (m *mockMessageRepo) WithTx(tx pgx.Tx) persistence.MessageRepository {
+	args := m.Called(tx)
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(persistence.MessageRepository)
+}
+
 type mockOutboxRepo struct {
 	mock.Mock
 }
@@ -184,7 +192,7 @@ func TestCreateServerMessage_BlankValidation(t *testing.T) {
 	outbox := new(mockOutboxRepo)
 	audit := new(mockAuditRepo)
 	cache := persistence.NewMessageCache(60)
-	svc := NewMessageService(repo, outbox, nil, cache, &NoOpEventPublisher{}, audit)
+	svc := NewMessageService(repo, outbox, &FakeTxRunner{}, cache, &NoOpEventPublisher{}, audit)
 
 	_, err := svc.CreateServerMessage(context.Background(), "", "hello")
 	assert.Error(t, err)
@@ -196,8 +204,10 @@ func TestCreateServerMessage_Success(t *testing.T) {
 	outbox := new(mockOutboxRepo)
 	audit := new(mockAuditRepo)
 	cache := persistence.NewMessageCache(60)
-	svc := NewMessageService(repo, outbox, nil, cache, &NoOpEventPublisher{}, audit)
+	svc := NewMessageService(repo, outbox, &FakeTxRunner{}, cache, &NoOpEventPublisher{}, audit)
 
+	// WithTx returns the same mock so the tx-bound write uses the same stubs.
+	repo.On("WithTx", mock.Anything).Return(repo)
 	repo.On("CreateServerMessage", mock.Anything, mock.MatchedBy(func(s string) bool {
 		return len(s) > 4 && s[:4] == "srv_"
 	}), "alice", "hello world", mock.AnythingOfType("int64")).Return(db.PltMessage{
@@ -208,7 +218,7 @@ func TestCreateServerMessage_Success(t *testing.T) {
 		Version:          1,
 	}, nil)
 
-	outbox.On("SaveOutbox", mock.Anything, mock.AnythingOfType("uuid.UUID"), "MESSAGE_SYNC", mock.AnythingOfType("string"), "PENDING").Return(nil)
+	outbox.On("SaveOutboxTx", mock.Anything, mock.Anything, mock.AnythingOfType("uuid.UUID"), "MESSAGE_SYNC", mock.AnythingOfType("string"), "PENDING").Return(nil)
 
 	msg, err := svc.CreateServerMessage(context.Background(), "alice", "hello world")
 
@@ -217,4 +227,5 @@ func TestCreateServerMessage_Success(t *testing.T) {
 	assert.Equal(t, "alice", msg.Author)
 	assert.Equal(t, "hello world", msg.Content)
 	repo.AssertExpectations(t)
+	outbox.AssertExpectations(t)
 }
