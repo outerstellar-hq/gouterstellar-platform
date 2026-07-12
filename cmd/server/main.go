@@ -22,6 +22,7 @@ import (
 	"github.com/rygel/gouterstellar-platform/extensions/reports"
 	"github.com/rygel/gouterstellar-platform/internal/config"
 	"github.com/rygel/gouterstellar-platform/internal/observability"
+	"github.com/rygel/gouterstellar-platform/internal/persistence"
 	"github.com/rygel/gouterstellar-platform/internal/platform/core"
 	"github.com/rygel/gouterstellar-platform/internal/web"
 	"github.com/rygel/gouterstellar-platform/internal/web/filter"
@@ -55,7 +56,13 @@ func main() {
 		}
 	}()
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+	if err != nil {
+		slog.Error("Failed to parse database config", "error", err)
+		os.Exit(1)
+	}
+	poolConfig.ConnConfig.Tracer = persistence.NewTracingTracer()
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		slog.Error("Failed to connect to database", "error", err)
 		os.Exit(1)
