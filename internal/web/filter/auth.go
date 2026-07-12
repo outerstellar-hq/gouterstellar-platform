@@ -54,7 +54,7 @@ func BearerAuth(metrics *AuthMetrics, realms ...security.AuthRealm) func(http.Ha
 			token := parts[1]
 
 			for _, realm := range realms {
-				result := realm.Authenticate(token)
+				result := realm.Authenticate(r.Context(), token)
 				switch v := result.(type) {
 				case security.AuthenticatedResult:
 					metrics.Attempts.WithLabelValues(realm.Name(), "authenticated").Inc()

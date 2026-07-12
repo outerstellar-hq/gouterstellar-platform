@@ -1,6 +1,7 @@
 package security
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 
@@ -25,13 +26,13 @@ func (SkippedResult) authResult() {}
 
 type AuthRealm interface {
 	Name() string
-	Authenticate(token string) AuthResult
+	Authenticate(ctx context.Context, token string) AuthResult
 }
 
 type (
-	SessionLookupFunc func(token string) model.SessionLookup
-	ApiKeyLookupFunc  func(rawKey string) *model.User
-	JwtLookupFunc     func(userID uuid.UUID) *model.User
+	SessionLookupFunc func(ctx context.Context, token string) model.SessionLookup
+	ApiKeyLookupFunc  func(ctx context.Context, rawKey string) *model.User
+	JwtLookupFunc     func(ctx context.Context, userID uuid.UUID) *model.User
 )
 
 type sessionRealm struct {
@@ -44,11 +45,11 @@ func NewSessionRealm(lookup SessionLookupFunc) AuthRealm {
 
 func (r *sessionRealm) Name() string { return "session" }
 
-func (r *sessionRealm) Authenticate(token string) AuthResult {
+func (r *sessionRealm) Authenticate(ctx context.Context, token string) AuthResult {
 	hash := sha256.Sum256([]byte(token))
 	tokenHash := hex.EncodeToString(hash[:])
 
-	result := r.lookup(tokenHash)
+	result := r.lookup(ctx, tokenHash)
 
 	switch v := result.(type) {
 	case model.SessionActive:
@@ -70,8 +71,8 @@ func NewApiKeyRealm(lookup ApiKeyLookupFunc) AuthRealm {
 
 func (r *apiKeyRealm) Name() string { return "apikey" }
 
-func (r *apiKeyRealm) Authenticate(rawKey string) AuthResult {
-	user := r.lookup(rawKey)
+func (r *apiKeyRealm) Authenticate(ctx context.Context, rawKey string) AuthResult {
+	user := r.lookup(ctx, rawKey)
 	if user != nil {
 		return AuthenticatedResult{User: user}
 	}
@@ -89,7 +90,7 @@ func NewJwtRealm(jwtSvc *JwtService, lookup JwtLookupFunc) AuthRealm {
 
 func (r *jwtRealm) Name() string { return "jwt" }
 
-func (r *jwtRealm) Authenticate(token string) AuthResult {
+func (r *jwtRealm) Authenticate(ctx context.Context, token string) AuthResult {
 	if !r.jwtSvc.IsEnabled() {
 		return SkippedResult{}
 	}
@@ -99,7 +100,7 @@ func (r *jwtRealm) Authenticate(token string) AuthResult {
 		return SkippedResult{}
 	}
 
-	user := r.lookup(userID)
+	user := r.lookup(ctx, userID)
 	if user != nil {
 		return AuthenticatedResult{User: user}
 	}

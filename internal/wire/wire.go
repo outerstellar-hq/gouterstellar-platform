@@ -98,15 +98,15 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 	oauthSvc := security.NewOAuthService(userRepo, oauthRepo, passwordEncoder)
 	appleProvider := security.NewAppleOAuthProvider()
 
-	sessionRealm := security.NewSessionRealm(func(tokenHash string) model.SessionLookup {
-		session, err := sessionRepo.FindByTokenHash(context.Background(), tokenHash)
+	sessionRealm := security.NewSessionRealm(func(ctx context.Context, tokenHash string) model.SessionLookup {
+		session, err := sessionRepo.FindByTokenHash(ctx, tokenHash)
 		if err != nil {
 			return model.SessionNotFound{}
 		}
 		if session.ExpiresAt.Time.Before(time.Now()) {
 			return model.SessionExpired{}
 		}
-		pltUser, err := userRepo.FindByID(context.Background(), session.UserID)
+		pltUser, err := userRepo.FindByID(ctx, session.UserID)
 		if err != nil {
 			return model.SessionNotFound{}
 		}
@@ -117,16 +117,16 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 		return model.SessionActive{User: user}
 	})
 
-	apiKeyRealm := security.NewApiKeyRealm(func(rawKey string) *model.User {
-		user, err := apiKeySvc.AuthenticateApiKey(context.Background(), rawKey)
+	apiKeyRealm := security.NewApiKeyRealm(func(ctx context.Context, rawKey string) *model.User {
+		user, err := apiKeySvc.AuthenticateApiKey(ctx, rawKey)
 		if err != nil {
 			return nil
 		}
 		return user
 	})
 
-	jwtRealm := security.NewJwtRealm(jwtSvc, func(userID uuid.UUID) *model.User {
-		u, err := userRepo.FindByID(context.Background(), userID)
+	jwtRealm := security.NewJwtRealm(jwtSvc, func(ctx context.Context, userID uuid.UUID) *model.User {
+		u, err := userRepo.FindByID(ctx, userID)
 		if err != nil {
 			return nil
 		}
