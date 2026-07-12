@@ -18,6 +18,7 @@ import (
 	"github.com/rygel/gouterstellar-platform/internal/security"
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
+	"github.com/rygel/gouterstellar-platform/internal/web/filter"
 	"github.com/rygel/gouterstellar-platform/internal/web/handler"
 	extplatform "github.com/rygel/gouterstellar-platform/platform"
 )
@@ -51,6 +52,7 @@ type App struct {
 	SyncWebSocket         *handler.SyncWebSocket
 	Realms                []security.AuthRealm
 	Registry              *prometheus.Registry
+	AuthMetrics           *filter.AuthMetrics
 	EmailService          service.EmailService
 	Analytics             service.AnalyticsService
 	ActivityUpdater       *security.AsyncActivityUpdater
@@ -61,6 +63,7 @@ type App struct {
 
 func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 	registry := prometheus.NewRegistry()
+	authMetrics := filter.NewAuthMetrics(registry)
 
 	messageRepo := persistence.NewMessageRepository(pool)
 	userRepo := persistence.NewUserRepository(pool)
@@ -216,6 +219,7 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 		SyncWebSocket:         syncWebSocket,
 		Realms:                realms,
 		Registry:              registry,
+		AuthMetrics:           authMetrics,
 		EmailService:          emailSvc,
 		Analytics:             analytics,
 		ActivityUpdater:       activityUpdater,
