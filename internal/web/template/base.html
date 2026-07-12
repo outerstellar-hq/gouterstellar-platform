@@ -14,14 +14,21 @@
     <nav>
         <div class="nav-brand">Outerstellar</div>
         <div class="nav-links">
-            <a href="/" class="nav-link{{ if eq .Body "home" }} active{{ end }}">Home</a>
-            <a href="/messages" class="nav-link{{ if eq .Body "messages" }} active{{ end }}">Messages</a>
-            <a href="/contacts" class="nav-link{{ if eq .Body "contacts" }} active{{ end }}">Contacts</a>
-            <a href="/notifications" class="nav-link{{ if eq .Body "notifications" }} active{{ end }}">Notifications</a>
+            {{ range .NavItems }}
+            <a href="{{ .URL }}" class="nav-link{{ if .Active }} active{{ end }}">{{ .Label }}</a>
+            {{ else }}
+            <a href="/" class="nav-link{{ if eq $.Body "home" }} active{{ end }}">Home</a>
+            <a href="/messages" class="nav-link{{ if eq $.Body "messages" }} active{{ end }}">Messages</a>
+            <a href="/contacts" class="nav-link{{ if eq $.Body "contacts" }} active{{ end }}">Contacts</a>
+            <a href="/notifications" class="nav-link{{ if eq $.Body "notifications" }} active{{ end }}">Notifications</a>
+            {{ if $.User.IsAdmin }}
+            <a href="/admin/users" class="nav-link{{ if eq $.Body "admin_users" }} active{{ end }}">Admin</a>
+            {{ end }}
+            <a href="/settings" class="nav-link{{ if eq $.Body "settings" }} active{{ end }}">Settings</a>
+            {{ end }}
             {{ if .User.IsAdmin }}
             <a href="/admin/users" class="nav-link{{ if eq .Body "admin_users" }} active{{ end }}">Admin</a>
             {{ end }}
-            <a href="/settings" class="nav-link{{ if eq .Body "settings" }} active{{ end }}">Settings</a>
         </div>
         <div class="nav-user">
             <span>{{ .User.Username }}</span>

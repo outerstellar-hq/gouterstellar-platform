@@ -158,7 +158,33 @@ func (r *Renderer) buildShell(req *http.Request) *viewmodel.ShellViewModel {
 		}
 	}
 
+	// Resolve extension-contributed nav items from context and flag the one
+	// matching the current request path. The root URL ("/") only matches
+	// exactly so it isn't flagged active on every page; deeper URLs match by
+	// prefix so detail routes (e.g. /contacts/{id}) light up their parent.
+	if items := NavItemsFromContext(req.Context()); len(items) > 0 {
+		path := req.URL.Path
+		resolved := make([]viewmodel.NavItem, len(items))
+		for i, item := range items {
+			item.Active = navIsActive(item.URL, path)
+			resolved[i] = item
+		}
+		shell.NavItems = resolved
+	}
+
 	return shell
+}
+
+// navIsActive decides whether a nav entry should be highlighted for the given
+// request path. The root entry is active only on an exact "/" match.
+func navIsActive(navURL, reqPath string) bool {
+	if navURL == "/" {
+		return reqPath == "/"
+	}
+	if reqPath == navURL {
+		return true
+	}
+	return strings.HasPrefix(reqPath, navURL+"/")
 }
 
 // pageTitle returns a human-readable title for a page name.

@@ -7,6 +7,9 @@ import (
 	"sort"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/rygel/gouterstellar-platform/internal/web"
+	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
 )
 
 // Options configures the platform handler assembly.
@@ -59,6 +62,18 @@ func NewHandler(opts Options) (http.Handler, error) {
 	for _, mw := range opts.MiddlewareChain {
 		r.Use(mw)
 	}
+
+	// Inject extension-contributed nav items into each request's context so
+	// the renderer can read them at render time without middleware plumbing
+	// through the handler layer. The items are static after assembly, so we
+	// convert once here and reuse the slice for every request.
+	navVM := convertNavItems(allNav)
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			next.ServeHTTP(w, web.WithNavItems(req, navVM))
+		})
+	})
+
 	mounted := buildRoutes(r, allRoutes, opts.Mode, ownershipMap, opts.GroupMiddleware)
 
 	// 5. Log the route table (observability).
@@ -107,4 +122,22 @@ func logRouteTable(routes []RouteRegistration, nav []NavigationItem) {
 	if len(nav) > 0 {
 		slog.Info("navigation items contributed", "count", len(nav))
 	}
+}
+
+// convertNavItems maps the platform's contribution-time NavigationItem into the
+// renderer's viewmodel.NavItem. Active state is resolved per-request in the
+// renderer (it depends on the current path), so it is left false here.
+func convertNavItems(items []NavigationItem) []viewmodel.NavItem {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]viewmodel.NavItem, len(items))
+	for i, item := range items {
+		out[i] = viewmodel.NavItem{
+			Label: item.Label,
+			URL:   item.URL,
+			Icon:  item.Icon,
+		}
+	}
+	return out
 }
