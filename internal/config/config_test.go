@@ -42,3 +42,27 @@ func TestEmailConfigDefaults(t *testing.T) {
 	assert.Equal(t, 587, cfg.Email.Port)
 	assert.True(t, cfg.Email.StartTLS)
 }
+
+func TestConfigValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     Config
+		wantErr bool
+	}{
+		{"valid", Config{Port: 8080, DatabaseURL: "postgres://localhost/db", SessionTimeoutMinutes: 30}, false},
+		{"invalid port", Config{Port: 0, DatabaseURL: "x", SessionTimeoutMinutes: 30}, true},
+		{"empty database url", Config{Port: 8080, DatabaseURL: "", SessionTimeoutMinutes: 30}, true},
+		{"jwt enabled no secret", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, JWT: JwtConfig{Enabled: true}}, true},
+		{"email enabled no host", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, Email: EmailConfig{Enabled: true}}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cfg.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

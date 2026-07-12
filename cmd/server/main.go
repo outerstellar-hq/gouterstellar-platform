@@ -31,6 +31,10 @@ import (
 
 func main() {
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		slog.Error("Configuration validation failed", "error", err)
+		os.Exit(1)
+	}
 	slog.Info("Starting Outerstellar Platform", "version", cfg.Version, "port", cfg.Port)
 
 	ctx := context.Background()

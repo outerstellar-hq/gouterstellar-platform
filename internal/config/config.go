@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/spf13/viper"
@@ -93,4 +94,38 @@ func Load() *Config {
 		panic(err)
 	}
 	return &cfg
+}
+
+// Validate checks the configuration for obvious errors.
+// Returns a descriptive error if the config is invalid.
+func (c *Config) Validate() error {
+	if c.Port < 1 || c.Port > 65535 {
+		return fmt.Errorf("invalid port %d (must be 1-65535)", c.Port)
+	}
+	if c.DatabaseURL == "" {
+		return fmt.Errorf("database_url must not be empty")
+	}
+	if c.SessionTimeoutMinutes < 1 {
+		return fmt.Errorf("session_timeout_minutes must be at least 1, got %d", c.SessionTimeoutMinutes)
+	}
+	if c.JWT.Enabled {
+		if c.JWT.Secret == "" {
+			return fmt.Errorf("jwt.enabled is true but jwt.secret is empty")
+		}
+		if c.JWT.ExpirySeconds < 1 {
+			return fmt.Errorf("jwt.expiry_seconds must be positive, got %d", c.JWT.ExpirySeconds)
+		}
+	}
+	if c.Email.Enabled {
+		if c.Email.Host == "" {
+			return fmt.Errorf("email.enabled is true but email.host is empty")
+		}
+		if c.Email.Port < 1 || c.Email.Port > 65535 {
+			return fmt.Errorf("invalid email.port %d", c.Email.Port)
+		}
+		if c.Email.From == "" {
+			return fmt.Errorf("email.enabled is true but email.from is empty")
+		}
+	}
+	return nil
 }
