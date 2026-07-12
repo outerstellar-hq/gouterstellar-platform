@@ -41,6 +41,7 @@ type Config struct {
 	CSRFEnabled           bool          `mapstructure:"csrf_enabled"`
 	AppBaseURL            string        `mapstructure:"app_base_url"`
 	CSPPolicy             string        `mapstructure:"csp_policy"`
+	PlatformMode          string        `mapstructure:"platform_mode"`
 	JWT                   JwtConfig     `mapstructure:"jwt"`
 	Email                 EmailConfig   `mapstructure:"email"`
 	Segment               SegmentConfig `mapstructure:"segment"`
@@ -67,6 +68,7 @@ func Load() *Config {
 	v.SetDefault("cors_origins", "*")
 	v.SetDefault("csrf_enabled", true)
 	v.SetDefault("app_base_url", "http://localhost:8080")
+	v.SetDefault("platform_mode", "full")
 	v.SetDefault("jwt.enabled", false)
 	v.SetDefault("jwt.secret", "")
 	v.SetDefault("jwt.issuer", "outerstellar")
@@ -107,6 +109,12 @@ func (c *Config) Validate() error {
 	}
 	if c.SessionTimeoutMinutes < 1 {
 		return fmt.Errorf("session_timeout_minutes must be at least 1, got %d", c.SessionTimeoutMinutes)
+	}
+	switch c.PlatformMode {
+	case "full", "extension-host", "headless", "":
+		// valid
+	default:
+		return fmt.Errorf("invalid platform_mode %q (want full, extension-host, or headless)", c.PlatformMode)
 	}
 	if c.JWT.Enabled {
 		if c.JWT.Secret == "" {

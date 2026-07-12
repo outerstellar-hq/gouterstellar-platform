@@ -112,8 +112,13 @@ func main() {
 		filter.Logging(),
 	}
 
+	mode := extplatform.PlatformMode(cfg.PlatformMode)
+	if mode == "" {
+		mode = extplatform.FullPlatform
+	}
+
 	handler, err := extplatform.NewHandler(extplatform.Options{
-		Mode: extplatform.FullPlatform,
+		Mode: mode,
 		Extensions: []extplatform.Extension{
 			coreExt,
 			reportsExt,

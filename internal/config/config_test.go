@@ -54,6 +54,10 @@ func TestConfigValidation(t *testing.T) {
 		{"empty database url", Config{Port: 8080, DatabaseURL: "", SessionTimeoutMinutes: 30}, true},
 		{"jwt enabled no secret", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, JWT: JwtConfig{Enabled: true}}, true},
 		{"email enabled no host", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, Email: EmailConfig{Enabled: true}}, true},
+		{"valid platform_mode full", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, PlatformMode: "full"}, false},
+		{"valid platform_mode extension-host", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, PlatformMode: "extension-host"}, false},
+		{"valid platform_mode headless", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, PlatformMode: "headless"}, false},
+		{"invalid platform_mode", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, PlatformMode: "bogus"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

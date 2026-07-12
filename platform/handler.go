@@ -29,6 +29,14 @@ type Options struct {
 // It: validates manifests -> runs contribution -> validates routes -> builds router.
 // Returns an error if any validation fails; the error includes ALL failures.
 func NewHandler(opts Options) (http.Handler, error) {
+	if opts.Mode == ExtensionHost {
+		slog.Info("running in ExtensionHost mode — extensions may own root UI routes")
+	} else if opts.Mode == Headless {
+		slog.Info("running in Headless mode — HTML routes suppressed")
+	} else {
+		slog.Info("running in FullPlatform mode")
+	}
+
 	// 1. Validate all manifests first.
 	ownershipMap := make(map[string]RouteOwnership)
 	for _, ext := range opts.Extensions {
