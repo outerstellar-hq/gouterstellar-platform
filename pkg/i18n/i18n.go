@@ -35,7 +35,19 @@ func NewI18nService(fsys embed.FS, basePath string) *I18nService {
 		fsys:           fsys,
 		basePath:       basePath,
 	}
+	// Preload every supported locale so TranslateForLocale can resolve any
+	// language under the read lock without mutating the service locale. The
+	// default locale is loaded first; others are best-effort (missing files
+	// yield an empty bundle and fall back to "en" at lookup time).
 	svc.translations["en"] = svc.loadLocale("en")
+	for _, lang := range AvailableLanguages() {
+		if lang.Code == "en" {
+			continue
+		}
+		if _, ok := svc.translations[lang.Code]; !ok {
+			svc.translations[lang.Code] = svc.loadLocale(lang.Code)
+		}
+	}
 	return svc
 }
 
@@ -97,6 +109,41 @@ func (s *I18nService) TranslateOrDefault(key, defaultVal string, params ...inter
 	}
 
 	return injectParams(defaultVal, params)
+}
+
+// TranslateForLocale translates a key for the given locale without changing
+// the service's current locale. This is safe under concurrent renders that
+// use different languages: it reads the locale's bundle under the read lock
+// and never mutates the service-wide locale. If the requested locale's
+// bundle is not loaded, it falls back to the default locale ("en"); if the
+// key is absent from the locale's bundle, it also falls back to "en".
+func (s *I18nService) TranslateForLocale(locale, key string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	bundle, ok := s.translations[locale]
+	if !ok {
+		// Fall back to default locale ("en").
+		bundle, ok = s.translations["en"]
+		if !ok {
+			return key
+		}
+	}
+
+	if val, found := bundle[key]; found {
+		return val
+	}
+
+	// Fall back to the default locale's bundle for the key.
+	if locale != "en" {
+		if defaultBundle, ok := s.translations["en"]; ok {
+			if val, found := defaultBundle[key]; found {
+				return val
+			}
+		}
+	}
+
+	return key
 }
 
 func (s *I18nService) HasKey(key string) bool {

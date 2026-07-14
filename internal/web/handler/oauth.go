@@ -58,6 +58,10 @@ func (h *OAuthHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 	redirectURI := h.appBaseURL + "/auth/oauth/" + providerName + "/callback"
 
 	authURL := provider.AuthorizationURL(state, redirectURI)
+	if authURL == "" {
+		writeError(w, http.StatusNotImplemented, "OAuth provider not configured")
+		return
+	}
 
 	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- attributes set; Secure is parameterized per-environment
 		Name:     "oauth_state",

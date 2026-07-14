@@ -14,6 +14,7 @@
     <div class="settings-tab-content active">
         <h2>Profile</h2>
         <form method="POST" action="/settings/profile">
+            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
             <div class="form-group">
                 <label for="username">Username</label>
                 <input type="text" id="username" name="username" value="{{ .BodyData.Profile.Username }}" readonly>
@@ -35,6 +36,7 @@
     <div class="settings-tab-content active">
         <h2>Change Password</h2>
         <form method="POST" action="/settings/password">
+            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
             <div class="form-group">
                 <label for="currentPassword">Current Password</label>
                 <input type="password" id="currentPassword" name="currentPassword" required>
@@ -80,6 +82,7 @@
                     <td>{{ .LastUsed }}</td>
                     <td>
                         <form method="POST" action="/settings/api-keys/{{ .ID }}/delete">
+                            <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
                             <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                         </form>
                     </td>
@@ -90,6 +93,7 @@
             </tbody>
         </table>
         <form method="POST" action="/settings/api-keys" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
             <input type="text" name="name" placeholder="Key name" required>
             <button type="submit" class="btn btn-primary">Create API Key</button>
         </form>
@@ -100,6 +104,7 @@
     <div class="settings-tab-content active">
         <h2>Notification Preferences</h2>
         <form method="POST" action="/settings/notifications">
+            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
             <div class="form-group">
                 <label>
                     <input type="checkbox" name="email_notifications" value="on" {{ if .BodyData.Profile.EmailNotificationsEnabled }}checked{{ end }}>
@@ -121,6 +126,7 @@
     <div class="settings-tab-content active">
         <h2>Appearance</h2>
         <form method="POST" action="/settings/preferences">
+            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
             <div class="form-group">
                 <label for="theme">Theme</label>
                 <select id="theme" name="theme">

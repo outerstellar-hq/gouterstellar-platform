@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -120,6 +121,8 @@ func (s *SegmentAnalyticsService) send(ev segmentEvent) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		slog.Warn("Segment API returned non-success status", "status", resp.StatusCode, "body", string(body))
 		return nil
 	}
 	return nil

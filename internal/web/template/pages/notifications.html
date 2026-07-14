@@ -18,6 +18,7 @@
             <p>{{ .Body }}</p>
             {{ if not .Read }}
             <form method="POST" action="/notifications/{{ .ID }}/read">
+                <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
                 <button type="submit" class="btn btn-sm">Mark as read</button>
             </form>
             {{ end }}

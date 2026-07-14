@@ -31,7 +31,9 @@ func SetGlobalI18nService(svc *i18n.I18nService) {
 
 // TranslateForTemplate resolves a key for the given language code, falling back
 // to English and then to the key itself. It is nil-safe so templates render
-// even when the i18n service has not been wired.
+// even when the i18n service has not been wired. It translates for the given
+// locale WITHOUT mutating the service's process-wide locale, making it safe
+// under concurrent renders that use different languages.
 func TranslateForTemplate(lang, key string) string {
 	i18nMu.RLock()
 	svc := i18nSvc
@@ -39,15 +41,10 @@ func TranslateForTemplate(lang, key string) string {
 	if svc == nil {
 		return key
 	}
-	// Honour the requested locale for this render without mutating the shared
-	// service locale (which is process-global). The service falls back to "en"
-	// internally when a locale bundle has no translation for the key.
-	current := svc.Locale()
-	if lang != "" && lang != current && i18n.IsSupported(lang) {
-		svc.SetLocale(lang)
-		defer svc.SetLocale(current)
+	if lang == "" || !i18n.IsSupported(lang) {
+		return svc.TranslateForLocale("en", key)
 	}
-	return svc.Translate(key)
+	return svc.TranslateForLocale(lang, key)
 }
 
 func TemplateFuncMap() template.FuncMap {

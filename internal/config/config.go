@@ -153,5 +153,11 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("email.enabled is true but email.from is empty")
 		}
 	}
+	if c.OAuth.Google.ClientID != "" && c.OAuth.Google.ClientSecret == "" {
+		return fmt.Errorf("oauth.google.client_id is set but oauth.google.client_secret is empty")
+	}
+	if c.OAuth.Google.ClientID == "" && c.OAuth.Google.ClientSecret != "" {
+		return fmt.Errorf("oauth.google.client_secret is set but oauth.google.client_id is empty")
+	}
 	return nil
 }
