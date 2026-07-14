@@ -210,7 +210,7 @@ func (m *mockContactOutboxRepo) SaveOutboxTx(ctx context.Context, tx pgx.Tx, id 
 func TestCreateContact_BlankName(t *testing.T) {
 	repo := new(mockContactRepo)
 	outbox := new(mockContactOutboxRepo)
-	svc := NewContactService(repo, outbox, &FakeTxRunner{}, &NoOpEventPublisher{})
+	svc := NewContactService(repo, outbox, &FakeTxRunner{}, &NoOpEventPublisher{}, nil)
 
 	_, err := svc.CreateContact(context.Background(), "", nil, nil, nil, "", "", "")
 	assert.Error(t, err)
@@ -220,7 +220,7 @@ func TestCreateContact_BlankName(t *testing.T) {
 func TestCreateContact_Success(t *testing.T) {
 	repo := new(mockContactRepo)
 	outbox := new(mockContactOutboxRepo)
-	svc := NewContactService(repo, outbox, &FakeTxRunner{}, &NoOpEventPublisher{})
+	svc := NewContactService(repo, outbox, &FakeTxRunner{}, &NoOpEventPublisher{}, nil)
 
 	// WithTx returns the same mock so the tx-bound write uses the same stubs.
 	repo.On("WithTx", mock.Anything).Return(repo)
@@ -254,7 +254,7 @@ func strPtr(s string) *string {
 func TestDeleteContact_Success(t *testing.T) {
 	repo := new(mockContactRepo)
 	outbox := new(mockContactOutboxRepo)
-	svc := NewContactService(repo, outbox, &FakeTxRunner{}, &NoOpEventPublisher{})
+	svc := NewContactService(repo, outbox, &FakeTxRunner{}, &NoOpEventPublisher{}, nil)
 
 	// WithTx returns the same mock so the tx-bound reads/writes use the same stubs.
 	repo.On("WithTx", mock.Anything).Return(repo)

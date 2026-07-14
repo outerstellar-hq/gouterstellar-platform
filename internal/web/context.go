@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/rygel/gouterstellar-platform/internal/model"
+	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
 )
 
@@ -19,7 +20,12 @@ const (
 )
 
 func WithUser(r *http.Request, user *model.User) *http.Request {
-	return r.WithContext(context.WithValue(r.Context(), userContextKey, user))
+	// Populate both the web-layer key (for renderer/handler use) and the
+	// service-layer key (so services can derive the actor for side effects such
+	// as notifications without importing the web package).
+	ctx := context.WithValue(r.Context(), userContextKey, user)
+	ctx = service.ContextWithUser(ctx, user)
+	return r.WithContext(ctx)
 }
 
 func UserFromRequest(r *http.Request) *model.User {

@@ -17,10 +17,11 @@ import (
 )
 
 type ContactService struct {
-	repo     persistence.ContactRepository
-	outbox   persistence.OutboxRepository
-	txMgr    TransactionRunner
-	eventPub EventPublisher
+	repo               persistence.ContactRepository
+	outbox             persistence.OutboxRepository
+	txMgr              TransactionRunner
+	eventPub           EventPublisher
+	notificationService *NotificationService
 }
 
 func NewContactService(
@@ -28,12 +29,14 @@ func NewContactService(
 	outbox persistence.OutboxRepository,
 	txMgr TransactionRunner,
 	eventPub EventPublisher,
+	notificationService *NotificationService,
 ) *ContactService {
 	return &ContactService{
-		repo:     repo,
-		outbox:   outbox,
-		txMgr:    txMgr,
-		eventPub: eventPub,
+		repo:               repo,
+		outbox:             outbox,
+		txMgr:              txMgr,
+		eventPub:           eventPub,
+		notificationService: notificationService,
 	}
 }
 
@@ -132,6 +135,8 @@ func (s *ContactService) CreateContact(ctx context.Context, name string, emails,
 	}
 
 	s.eventPub.PublishRefresh("contacts")
+
+	s.notifyActor(ctx, "New Contact", name, "contact")
 
 	return stored, nil
 }
@@ -352,3 +357,20 @@ func pltContactToSyncContact(c db.PltContact, emails, phones, socials []string) 
 
 // Keep json import used - needed for conflict resolution in future
 var _ = json.Marshal
+
+// notifyActor records a best-effort notification for the user acting on the
+// current request. It is nil-safe: if no NotificationService is wired or no
+// authenticated user is present in the context, it does nothing. Notification
+// failures are logged but never propagated.
+func (s *ContactService) notifyActor(ctx context.Context, title, body, nType string) {
+	if s.notificationService == nil {
+		return
+	}
+	user := UserFromContext(ctx)
+	if user == nil {
+		return
+	}
+	if err := s.notificationService.Create(ctx, user.ID, title, body, nType); err != nil {
+		slog.Warn("Failed to create notification", "title", title, "error", err)
+	}
+}

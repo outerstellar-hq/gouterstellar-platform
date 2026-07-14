@@ -86,11 +86,14 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 	activityUpdater := security.NewAsyncActivityUpdater(userRepo)
 	permissionResolver := security.NewRoleBasedPermissionResolver()
 
+	notificationSvc := service.NewNotificationService(notificationRepo)
+
 	securitySvc := service.NewSecurityService(
 		userRepo,
 		passwordEncoder,
 		sessionRepo,
 		auditRepo,
+		notificationSvc,
 		int64(cfg.SessionTimeoutMinutes)*60,
 	)
 
@@ -157,9 +160,8 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 
 	analytics := &service.NoOpAnalyticsService{}
 
-	messageSvc := service.NewMessageService(messageRepo, outboxRepo, txMgr, messageCache, wsPublisher, auditRepo)
-	contactSvc := service.NewContactService(contactRepo, outboxRepo, txMgr, wsPublisher)
-	notificationSvc := service.NewNotificationService(notificationRepo)
+	messageSvc := service.NewMessageService(messageRepo, outboxRepo, txMgr, messageCache, wsPublisher, auditRepo, notificationSvc)
+	contactSvc := service.NewContactService(contactRepo, outboxRepo, txMgr, wsPublisher, notificationSvc)
 	outboxProcessor := service.NewOutboxProcessor(outboxRepo, txMgr)
 	passwordResetSvc := service.NewPasswordResetService(userRepo, passwordEncoder, passwordResetRepo, emailSvc, auditRepo, cfg.AppBaseURL)
 

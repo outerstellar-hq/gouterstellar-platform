@@ -32,6 +32,7 @@ type SecurityService struct {
 	passwordEncoder       security.PasswordEncoder
 	sessionRepo           persistence.SessionRepository
 	auditRepo             persistence.AuditRepository
+	notificationService   *NotificationService
 	sessionTimeoutSeconds int64
 }
 
@@ -40,6 +41,7 @@ func NewSecurityService(
 	passwordEncoder security.PasswordEncoder,
 	sessionRepo persistence.SessionRepository,
 	auditRepo persistence.AuditRepository,
+	notificationService *NotificationService,
 	sessionTimeoutSeconds int64,
 ) *SecurityService {
 	return &SecurityService{
@@ -47,6 +49,7 @@ func NewSecurityService(
 		passwordEncoder:       passwordEncoder,
 		sessionRepo:           sessionRepo,
 		auditRepo:             auditRepo,
+		notificationService:   notificationService,
 		sessionTimeoutSeconds: sessionTimeoutSeconds,
 	}
 }
@@ -217,6 +220,12 @@ func (s *SecurityService) SetUserEnabled(ctx context.Context, adminID, targetID 
 
 	s.auditLog(ctx, actorID, actorName, targetIDPtr, targetName, action, fmt.Sprintf("Set enabled=%v", enabled))
 
+	if !enabled && s.notificationService != nil {
+		if err := s.notificationService.Create(ctx, targetID, "Account Disabled", "Your account has been disabled by an administrator.", "account"); err != nil {
+			slog.Warn("Failed to create account-disabled notification", "userID", targetID, "error", err)
+		}
+	}
+
 	return nil
 }
 
@@ -242,6 +251,13 @@ func (s *SecurityService) SetUserRole(ctx context.Context, adminID, targetID uui
 	actorID, actorName := userToAuditParams(adminModel)
 	targetIDPtr, targetName := userToAuditParams(targetModel)
 	s.auditLog(ctx, actorID, actorName, targetIDPtr, targetName, "ROLE_CHANGE", fmt.Sprintf("Role set to %s", role))
+
+	if s.notificationService != nil {
+		body := fmt.Sprintf("Your role has been changed to %s.", role)
+		if err := s.notificationService.Create(ctx, targetID, "Role Updated", body, "account"); err != nil {
+			slog.Warn("Failed to create role-change notification", "userID", targetID, "error", err)
+		}
+	}
 
 	_ = targetModel
 	return nil

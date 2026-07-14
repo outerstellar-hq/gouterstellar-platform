@@ -17,12 +17,13 @@ import (
 )
 
 type MessageService struct {
-	repo      persistence.MessageRepository
-	outbox    persistence.OutboxRepository
-	txMgr     TransactionRunner
-	cache     *persistence.MessageCache
-	eventPub  EventPublisher
-	auditRepo persistence.AuditRepository
+	repo               persistence.MessageRepository
+	outbox             persistence.OutboxRepository
+	txMgr              TransactionRunner
+	cache              *persistence.MessageCache
+	eventPub           EventPublisher
+	auditRepo          persistence.AuditRepository
+	notificationService *NotificationService
 }
 
 func NewMessageService(
@@ -32,14 +33,16 @@ func NewMessageService(
 	cache *persistence.MessageCache,
 	eventPub EventPublisher,
 	auditRepo persistence.AuditRepository,
+	notificationService *NotificationService,
 ) *MessageService {
 	return &MessageService{
-		repo:      repo,
-		outbox:    outbox,
-		txMgr:     txMgr,
-		cache:     cache,
-		eventPub:  eventPub,
-		auditRepo: auditRepo,
+		repo:               repo,
+		outbox:             outbox,
+		txMgr:              txMgr,
+		cache:              cache,
+		eventPub:           eventPub,
+		auditRepo:          auditRepo,
+		notificationService: notificationService,
 	}
 }
 
@@ -227,6 +230,8 @@ func (s *MessageService) CreateServerMessage(ctx context.Context, author, conten
 	stored := pltMessageToStored(m)
 	s.cache.InvalidateByPrefix("messages:")
 	s.eventPub.PublishRefresh("messages")
+
+	s.notifyActor(ctx, "New Message", truncateContent(content), "message")
 
 	return stored, nil
 }
@@ -488,4 +493,32 @@ func pltMessageToSyncMessage(m db.PltMessage) model.SyncMessage {
 // CountMessages returns the total number of non-deleted messages.
 func (s *MessageService) CountMessages(ctx context.Context) (int64, error) {
 	return s.repo.CountMessages(ctx)
+}
+
+// notifyActor records a best-effort notification for the user acting on the
+// current request. It is nil-safe: if no NotificationService is wired or no
+// authenticated user is present in the context, it does nothing. Notification
+// failures are logged but never propagated, so a notification hiccup cannot
+// fail the originating write.
+func (s *MessageService) notifyActor(ctx context.Context, title, body, nType string) {
+	if s.notificationService == nil {
+		return
+	}
+	user := UserFromContext(ctx)
+	if user == nil {
+		return
+	}
+	if err := s.notificationService.Create(ctx, user.ID, title, body, nType); err != nil {
+		slog.Warn("Failed to create notification", "title", title, "error", err)
+	}
+}
+
+// truncateContent caps a string to maxNotificationBodyLen characters, appending
+// an ellipsis when truncated, so notification bodies stay readable.
+func truncateContent(s string) string {
+	const maxNotificationBodyLen = 100
+	if len(s) <= maxNotificationBodyLen {
+		return s
+	}
+	return s[:maxNotificationBodyLen] + "…"
 }
