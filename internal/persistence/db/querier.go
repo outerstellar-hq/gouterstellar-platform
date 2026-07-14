@@ -17,6 +17,7 @@ type Querier interface {
 	CountContacts(ctx context.Context) (int64, error)
 	CountDirtyMessages(ctx context.Context) (int64, error)
 	CountMessages(ctx context.Context) (int64, error)
+	CountSearchMessages(ctx context.Context, dollar_1 string) (int64, error)
 	CountUnreadNotifications(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountUsersByRole(ctx context.Context, role string) (int64, error)
 	CreateApiKey(ctx context.Context, arg CreateApiKeyParams) (PltApiKey, error)
@@ -88,6 +89,7 @@ type Querier interface {
 	SaveOAuthConnection(ctx context.Context, arg SaveOAuthConnectionParams) (PltOauthConnection, error)
 	SaveOutbox(ctx context.Context, arg SaveOutboxParams) error
 	SavePasswordResetToken(ctx context.Context, arg SavePasswordResetTokenParams) (PltPasswordResetToken, error)
+	SearchMessages(ctx context.Context, arg SearchMessagesParams) ([]PltMessage, error)
 	SeedAdminUser(ctx context.Context, arg SeedAdminUserParams) (PltUser, error)
 	SetContactEmails(ctx context.Context, contactID int64) error
 	SetContactPhones(ctx context.Context, contactID int64) error

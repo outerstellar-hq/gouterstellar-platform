@@ -32,6 +32,18 @@ func (r *messageRepo) ListMessages(ctx context.Context, limit, offset int32) ([]
 	})
 }
 
+func (r *messageRepo) SearchMessages(ctx context.Context, query string, limit, offset int32) ([]db.PltMessage, error) {
+	return r.q.SearchMessages(ctx, db.SearchMessagesParams{
+		Column1: query,
+		Limit:   limit,
+		Offset:  offset,
+	})
+}
+
+func (r *messageRepo) CountSearchMessages(ctx context.Context, query string) (int64, error) {
+	return r.q.CountSearchMessages(ctx, query)
+}
+
 func (r *messageRepo) CountMessages(ctx context.Context) (int64, error) {
 	return r.q.CountMessages(ctx)
 }

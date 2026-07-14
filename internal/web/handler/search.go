@@ -47,7 +47,7 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	pageSize := getIntParam(r, "pageSize", 20)
 	offset := (page - 1) * pageSize
 
-	result, err := h.messageService.ListMessages(r.Context(), safeInt32(pageSize), safeInt32(offset))
+	result, err := h.messageService.SearchMessages(r.Context(), query, safeInt32(pageSize), safeInt32(offset))
 	if err != nil {
 		_ = h.renderer.RenderWithStatus(w, r, "error", viewmodel.ErrorPage{
 			StatusCode: http.StatusInternalServerError,

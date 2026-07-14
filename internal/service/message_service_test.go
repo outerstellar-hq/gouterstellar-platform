@@ -23,6 +23,16 @@ func (m *mockMessageRepo) ListMessages(ctx context.Context, limit, offset int32)
 	return args.Get(0).([]db.PltMessage), args.Error(1)
 }
 
+func (m *mockMessageRepo) SearchMessages(ctx context.Context, query string, limit, offset int32) ([]db.PltMessage, error) {
+	args := m.Called(ctx, query, limit, offset)
+	return args.Get(0).([]db.PltMessage), args.Error(1)
+}
+
+func (m *mockMessageRepo) CountSearchMessages(ctx context.Context, query string) (int64, error) {
+	args := m.Called(ctx, query)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func (m *mockMessageRepo) CountMessages(ctx context.Context) (int64, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(int64), args.Error(1)

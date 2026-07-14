@@ -31,6 +31,19 @@ func (q *Queries) CountMessages(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countSearchMessages = `-- name: CountSearchMessages :one
+SELECT COUNT(*) FROM plt_messages
+WHERE deleted = false
+AND (content ILIKE '%' || $1::text || '%' OR author ILIKE '%' || $1::text || '%')
+`
+
+func (q *Queries) CountSearchMessages(ctx context.Context, dollar_1 string) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchMessages, dollar_1)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createLocalMessage = `-- name: CreateLocalMessage :one
 INSERT INTO plt_messages (sync_id, author, content, updated_at_epoch_ms, dirty, deleted, version)
 VALUES ($1, $2, $3, $4, true, false, 1)
@@ -343,6 +356,53 @@ func (q *Queries) RestoreMessage(ctx context.Context, syncID string) (PltMessage
 		&i.SyncConflict,
 	)
 	return i, err
+}
+
+const searchMessages = `-- name: SearchMessages :many
+SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
+FROM plt_messages
+WHERE deleted = false
+AND (content ILIKE '%' || $1::text || '%' OR author ILIKE '%' || $1::text || '%')
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type SearchMessagesParams struct {
+	Column1 string `json:"column_1"`
+	Limit   int32  `json:"limit"`
+	Offset  int32  `json:"offset"`
+}
+
+func (q *Queries) SearchMessages(ctx context.Context, arg SearchMessagesParams) ([]PltMessage, error) {
+	rows, err := q.db.Query(ctx, searchMessages, arg.Column1, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PltMessage{}
+	for rows.Next() {
+		var i PltMessage
+		if err := rows.Scan(
+			&i.ID,
+			&i.SyncID,
+			&i.Author,
+			&i.Content,
+			&i.CreatedAt,
+			&i.UpdatedAtEpochMs,
+			&i.Deleted,
+			&i.Dirty,
+			&i.DeletedAt,
+			&i.Version,
+			&i.SyncConflict,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const softDeleteMessage = `-- name: SoftDeleteMessage :one

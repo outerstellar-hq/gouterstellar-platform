@@ -78,6 +78,32 @@ func (s *MessageService) ListMessages(ctx context.Context, limit, offset int32) 
 	}, nil
 }
 
+// SearchMessages returns a page of non-deleted messages whose content or author
+// match the given query (case-insensitive ILIKE). Search results are not cached
+// because they are highly variable and rarely re-requested with the same terms.
+func (s *MessageService) SearchMessages(ctx context.Context, query string, limit, offset int32) (*model.PagedResult[model.MessageSummary], error) {
+	total, err := s.repo.CountSearchMessages(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("count search messages: %w", err)
+	}
+
+	messages, err := s.repo.SearchMessages(ctx, query, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("search messages: %w", err)
+	}
+
+	summaries := make([]model.MessageSummary, len(messages))
+	for i, m := range messages {
+		summaries[i] = pltMessageToSummary(m)
+	}
+
+	page := int(offset)/int(limit) + 1
+	return &model.PagedResult[model.MessageSummary]{
+		Items:    summaries,
+		Metadata: model.NewPaginationMetadata(page, int(limit), total),
+	}, nil
+}
+
 func (s *MessageService) ListDeletedMessages(ctx context.Context, limit, offset int32) (*model.PagedResult[model.MessageSummary], error) {
 	messages, err := s.repo.ListMessages(ctx, limit, offset)
 	if err != nil {

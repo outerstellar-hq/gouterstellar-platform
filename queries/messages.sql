@@ -5,6 +5,19 @@ WHERE deleted = false
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2;
 
+-- name: SearchMessages :many
+SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
+FROM plt_messages
+WHERE deleted = false
+AND (content ILIKE '%' || $1::text || '%' OR author ILIKE '%' || $1::text || '%')
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: CountSearchMessages :one
+SELECT COUNT(*) FROM plt_messages
+WHERE deleted = false
+AND (content ILIKE '%' || $1::text || '%' OR author ILIKE '%' || $1::text || '%');
+
 -- name: CountMessages :one
 SELECT COUNT(*) FROM plt_messages WHERE deleted = false;
 

@@ -13,6 +13,8 @@ import (
 
 type MessageRepository interface {
 	ListMessages(ctx context.Context, limit, offset int32) ([]db.PltMessage, error)
+	SearchMessages(ctx context.Context, query string, limit, offset int32) ([]db.PltMessage, error)
+	CountSearchMessages(ctx context.Context, query string) (int64, error)
 	CountMessages(ctx context.Context) (int64, error)
 	FindBySyncID(ctx context.Context, syncID string) (db.PltMessage, error)
 	CreateServerMessage(ctx context.Context, syncID, author, content string, updatedAtEpochMs int64) (db.PltMessage, error)
