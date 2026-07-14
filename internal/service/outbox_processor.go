@@ -20,15 +20,18 @@ const maxRetryCount int32 = 5
 type OutboxProcessor struct {
 	outboxRepo persistence.OutboxRepository
 	txMgr      *persistence.TransactionManager
+	eventPub   EventPublisher
 }
 
 func NewOutboxProcessor(
 	outboxRepo persistence.OutboxRepository,
 	txMgr *persistence.TransactionManager,
+	eventPub EventPublisher,
 ) *OutboxProcessor {
 	return &OutboxProcessor{
 		outboxRepo: outboxRepo,
 		txMgr:      txMgr,
+		eventPub:   eventPub,
 	}
 }
 
@@ -101,9 +104,15 @@ func (p *OutboxProcessor) processEntry(ctx context.Context, id uuid.UUID, payloa
 			return fmt.Errorf("parse message sync payload: %w", err)
 		}
 		slog.Info("Processing message sync outbox entry", "id", id)
+		if p.eventPub != nil {
+			p.eventPub.PublishRefresh("messages")
+		}
 		return nil
 	case "CONTACT_SYNC":
 		slog.Info("Processing contact sync outbox entry", "id", id)
+		if p.eventPub != nil {
+			p.eventPub.PublishRefresh("contacts")
+		}
 		return nil
 	default:
 		slog.Warn("Unknown outbox payload type", "id", id, "type", payloadType)

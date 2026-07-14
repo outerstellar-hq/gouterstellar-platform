@@ -162,7 +162,7 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 
 	messageSvc := service.NewMessageService(messageRepo, outboxRepo, txMgr, messageCache, wsPublisher, auditRepo, notificationSvc)
 	contactSvc := service.NewContactService(contactRepo, outboxRepo, txMgr, wsPublisher, notificationSvc)
-	outboxProcessor := service.NewOutboxProcessor(outboxRepo, txMgr)
+	outboxProcessor := service.NewOutboxProcessor(outboxRepo, txMgr, wsPublisher)
 	passwordResetSvc := service.NewPasswordResetService(userRepo, passwordEncoder, passwordResetRepo, emailSvc, auditRepo, cfg.AppBaseURL)
 
 	renderer, err := web.NewRenderer(templateFS, web.TemplateFuncMap(), cfg.Version)
