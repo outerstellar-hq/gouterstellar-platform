@@ -249,6 +249,30 @@ func (q *Queries) ListContactEmails(ctx context.Context, contactID int64) ([]str
 	return items, nil
 }
 
+const listContactEmailsBatch = `-- name: ListContactEmailsBatch :many
+SELECT contact_id, email FROM plt_contact_emails WHERE contact_id = ANY($1::bigint[])
+`
+
+func (q *Queries) ListContactEmailsBatch(ctx context.Context, dollar_1 []int64) ([]PltContactEmail, error) {
+	rows, err := q.db.Query(ctx, listContactEmailsBatch, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PltContactEmail{}
+	for rows.Next() {
+		var i PltContactEmail
+		if err := rows.Scan(&i.ContactID, &i.Email); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listContactPhones = `-- name: ListContactPhones :many
 SELECT phone FROM plt_contact_phones WHERE contact_id = $1
 `
@@ -273,6 +297,30 @@ func (q *Queries) ListContactPhones(ctx context.Context, contactID int64) ([]str
 	return items, nil
 }
 
+const listContactPhonesBatch = `-- name: ListContactPhonesBatch :many
+SELECT contact_id, phone FROM plt_contact_phones WHERE contact_id = ANY($1::bigint[])
+`
+
+func (q *Queries) ListContactPhonesBatch(ctx context.Context, dollar_1 []int64) ([]PltContactPhone, error) {
+	rows, err := q.db.Query(ctx, listContactPhonesBatch, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PltContactPhone{}
+	for rows.Next() {
+		var i PltContactPhone
+		if err := rows.Scan(&i.ContactID, &i.Phone); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listContactSocials = `-- name: ListContactSocials :many
 SELECT social_media FROM plt_contact_socials WHERE contact_id = $1
 `
@@ -290,6 +338,30 @@ func (q *Queries) ListContactSocials(ctx context.Context, contactID int64) ([]st
 			return nil, err
 		}
 		items = append(items, social_media)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listContactSocialsBatch = `-- name: ListContactSocialsBatch :many
+SELECT contact_id, social_media FROM plt_contact_socials WHERE contact_id = ANY($1::bigint[])
+`
+
+func (q *Queries) ListContactSocialsBatch(ctx context.Context, dollar_1 []int64) ([]PltContactSocial, error) {
+	rows, err := q.db.Query(ctx, listContactSocialsBatch, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PltContactSocial{}
+	for rows.Next() {
+		var i PltContactSocial
+		if err := rows.Scan(&i.ContactID, &i.SocialMedia); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

@@ -46,12 +46,14 @@ func (s *ContactService) ListContacts(ctx context.Context, limit, offset int32) 
 		return nil, fmt.Errorf("list contacts: %w", err)
 	}
 
+	subs, err := loadContactSubs(ctx, s.repo, contacts)
+	if err != nil {
+		return nil, err
+	}
+
 	summaries := make([]model.ContactSummary, len(contacts))
 	for i, c := range contacts {
-		emails, _ := s.repo.ListContactEmails(ctx, c.ID)
-		phones, _ := s.repo.ListContactPhones(ctx, c.ID)
-		socials, _ := s.repo.ListContactSocials(ctx, c.ID)
-		summaries[i] = pltContactToSummary(c, emails, phones, socials)
+		summaries[i] = pltContactToSummary(c, subs.Emails[c.ID], subs.Phones[c.ID], subs.Socials[c.ID])
 	}
 	return summaries, nil
 }
@@ -74,12 +76,14 @@ func (s *ContactService) SearchContacts(ctx context.Context, query string, limit
 		return nil, 0, fmt.Errorf("search contacts: %w", err)
 	}
 
+	subs, err := loadContactSubs(ctx, s.repo, contacts)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	summaries := make([]model.ContactSummary, len(contacts))
 	for i, c := range contacts {
-		emails, _ := s.repo.ListContactEmails(ctx, c.ID)
-		phones, _ := s.repo.ListContactPhones(ctx, c.ID)
-		socials, _ := s.repo.ListContactSocials(ctx, c.ID)
-		summaries[i] = pltContactToSummary(c, emails, phones, socials)
+		summaries[i] = pltContactToSummary(c, subs.Emails[c.ID], subs.Phones[c.ID], subs.Socials[c.ID])
 	}
 	return summaries, total, nil
 }
@@ -195,12 +199,14 @@ func (s *ContactService) GetChangesSince(ctx context.Context, since int64) (*mod
 		return nil, fmt.Errorf("find contact changes since: %w", err)
 	}
 
+	subs, err := loadContactSubs(ctx, s.repo, contacts)
+	if err != nil {
+		return nil, err
+	}
+
 	syncContacts := make([]model.SyncContact, len(contacts))
 	for i, c := range contacts {
-		emails, _ := s.repo.ListContactEmails(ctx, c.ID)
-		phones, _ := s.repo.ListContactPhones(ctx, c.ID)
-		socials, _ := s.repo.ListContactSocials(ctx, c.ID)
-		syncContacts[i] = pltContactToSyncContact(c, emails, phones, socials)
+		syncContacts[i] = pltContactToSyncContact(c, subs.Emails[c.ID], subs.Phones[c.ID], subs.Socials[c.ID])
 	}
 
 	return &model.SyncPullContactResponse{
@@ -303,6 +309,23 @@ func ptrToString(p *string) string {
 		return ""
 	}
 	return *p
+}
+
+// loadContactSubs collects the contact IDs from a page of contacts and fetches
+// their emails/phones/socials in a single batched call per sub-table, rather
+// than looping ListContactEmails/Phones/Socials per row (an N+1). Missing IDs
+// resolve to nil slices, which the plt*To* converters treat as empty — matching
+// the prior per-row behavior.
+func loadContactSubs(ctx context.Context, repo persistence.ContactRepository, contacts []db.PltContact) (persistence.ContactSubTables, error) {
+	ids := make([]int64, len(contacts))
+	for i, c := range contacts {
+		ids[i] = c.ID
+	}
+	subs, err := repo.LoadSubTablesBatch(ctx, ids)
+	if err != nil {
+		return persistence.ContactSubTables{}, fmt.Errorf("load contact sub-tables: %w", err)
+	}
+	return subs, nil
 }
 
 func pltContactToStored(c db.PltContact, emails, phones, socials []string) *model.StoredContact {

@@ -64,8 +64,11 @@ type Querier interface {
 	InsertContactPhone(ctx context.Context, arg InsertContactPhoneParams) error
 	InsertContactSocial(ctx context.Context, arg InsertContactSocialParams) error
 	ListContactEmails(ctx context.Context, contactID int64) ([]string, error)
+	ListContactEmailsBatch(ctx context.Context, dollar_1 []int64) ([]PltContactEmail, error)
 	ListContactPhones(ctx context.Context, contactID int64) ([]string, error)
+	ListContactPhonesBatch(ctx context.Context, dollar_1 []int64) ([]PltContactPhone, error)
 	ListContactSocials(ctx context.Context, contactID int64) ([]string, error)
+	ListContactSocialsBatch(ctx context.Context, dollar_1 []int64) ([]PltContactSocial, error)
 	ListContacts(ctx context.Context, arg ListContactsParams) ([]PltContact, error)
 	ListDeadLetterOutbox(ctx context.Context, limit int32) ([]ListDeadLetterOutboxRow, error)
 	ListDirtyContacts(ctx context.Context) ([]PltContact, error)

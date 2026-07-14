@@ -65,6 +65,19 @@ type ContactRepository interface {
 	SetContactPhones(ctx context.Context, contactID int64, phones []string) error
 	ListContactSocials(ctx context.Context, contactID int64) ([]string, error)
 	SetContactSocials(ctx context.Context, contactID int64, socials []string) error
+	// LoadSubTablesBatch fetches emails/phones/socials for all given contact IDs
+	// in three queries (one per sub-table), returning a map keyed by contact ID.
+	// It replaces the previous N+1 pattern of looping ListContactEmails/Phones/
+	// Socials per row.
+	LoadSubTablesBatch(ctx context.Context, contactIDs []int64) (ContactSubTables, error)
+}
+
+// ContactSubTables holds the emails/phones/socials for a set of contacts, keyed
+// by contact database ID. Returned by LoadSubTablesBatch.
+type ContactSubTables struct {
+	Emails  map[int64][]string
+	Phones  map[int64][]string
+	Socials map[int64][]string
 }
 
 type UserRepository interface {

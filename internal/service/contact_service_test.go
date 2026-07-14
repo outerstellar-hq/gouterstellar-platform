@@ -145,6 +145,14 @@ func (m *mockContactRepo) SetContactSocials(ctx context.Context, contactID int64
 	return args.Error(0)
 }
 
+func (m *mockContactRepo) LoadSubTablesBatch(ctx context.Context, contactIDs []int64) (persistence.ContactSubTables, error) {
+	args := m.Called(ctx, contactIDs)
+	if args.Get(0) == nil {
+		return persistence.ContactSubTables{}, args.Error(1)
+	}
+	return args.Get(0).(persistence.ContactSubTables), args.Error(1)
+}
+
 type mockContactOutboxRepo struct {
 	mock.Mock
 }

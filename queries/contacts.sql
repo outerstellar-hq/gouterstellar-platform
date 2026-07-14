@@ -102,6 +102,9 @@ UPDATE plt_contacts SET dirty = false WHERE dirty = true;
 -- name: ListContactEmails :many
 SELECT email FROM plt_contact_emails WHERE contact_id = $1;
 
+-- name: ListContactEmailsBatch :many
+SELECT contact_id, email FROM plt_contact_emails WHERE contact_id = ANY($1::bigint[]);
+
 -- name: SetContactEmails :exec
 DELETE FROM plt_contact_emails WHERE contact_id = $1;
 
@@ -111,6 +114,9 @@ INSERT INTO plt_contact_emails (contact_id, email) VALUES ($1, $2);
 -- name: ListContactPhones :many
 SELECT phone FROM plt_contact_phones WHERE contact_id = $1;
 
+-- name: ListContactPhonesBatch :many
+SELECT contact_id, phone FROM plt_contact_phones WHERE contact_id = ANY($1::bigint[]);
+
 -- name: SetContactPhones :exec
 DELETE FROM plt_contact_phones WHERE contact_id = $1;
 
@@ -119,6 +125,9 @@ INSERT INTO plt_contact_phones (contact_id, phone) VALUES ($1, $2);
 
 -- name: ListContactSocials :many
 SELECT social_media FROM plt_contact_socials WHERE contact_id = $1;
+
+-- name: ListContactSocialsBatch :many
+SELECT contact_id, social_media FROM plt_contact_socials WHERE contact_id = ANY($1::bigint[]);
 
 -- name: SetContactSocials :exec
 DELETE FROM plt_contact_socials WHERE contact_id = $1;
