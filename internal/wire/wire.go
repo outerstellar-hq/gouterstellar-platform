@@ -160,7 +160,12 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 		emailSvc = &service.NoOpEmailService{}
 	}
 
-	analytics := &service.NoOpAnalyticsService{}
+	var analytics service.AnalyticsService
+	if cfg.Segment.Enabled && cfg.Segment.WriteKey != "" {
+		analytics = service.NewSegmentAnalyticsService(cfg.Segment.WriteKey)
+	} else {
+		analytics = &service.NoOpAnalyticsService{}
+	}
 
 	messageSvc := service.NewMessageService(messageRepo, outboxRepo, txMgr, messageCache, wsPublisher, auditRepo, notificationSvc)
 	contactSvc := service.NewContactService(contactRepo, outboxRepo, txMgr, wsPublisher, notificationSvc)
