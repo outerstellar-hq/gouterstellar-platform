@@ -25,7 +25,15 @@ func CSRF(enabled bool) func(http.Handler) http.Handler {
 			token := generateCSRFToken()
 			r = web.WithCSRFToken(r, token)
 
-			if strings.HasPrefix(r.URL.Path, "/api/") {
+			// API clients authenticate with a Bearer token (Authorization:
+			// Bearer ...) rather than the session cookie + CSRF token that
+			// browser forms use. A request carrying a Bearer header is therefore
+			// exempt from CSRF: it is not vulnerable to cookie-based CSRF and
+			// has no access to the CSRF token embedded in the rendered form.
+			// This replaces the former URL-prefix ("/api/") sniff, which both
+			// exempted legitimate API traffic and silently bypassed CSRF for any
+			// path that happened to start with /api/.
+			if hasBearerAuth(r) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -44,6 +52,18 @@ func CSRF(enabled bool) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// hasBearerAuth reports whether the request carries an Authorization header
+// whose scheme is Bearer (case-insensitive per RFC 7235). Trailing whitespace
+// around the scheme is tolerated.
+func hasBearerAuth(r *http.Request) bool {
+	v := r.Header.Get("Authorization")
+	const prefix = "bearer "
+	if len(v) <= len(prefix) {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(v[:len(prefix)]), "bearer")
 }
 
 func isUnsafeMethod(method string) bool {
