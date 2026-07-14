@@ -26,3 +26,15 @@ func UserFromContext(ctx context.Context) *model.User {
 	u, _ := ctx.Value(userCtxKey{}).(*model.User)
 	return u
 }
+
+// ActorUserIDFromContext returns the string form of the acting user's ID, or an
+// empty string when no authenticated user is present. Callers pass the result
+// to user-scoped side effects (e.g. WebSocket refresh broadcasts): an empty
+// string means "no known actor" and should be treated as a broadcast.
+func ActorUserIDFromContext(ctx context.Context) string {
+	user := UserFromContext(ctx)
+	if user == nil {
+		return ""
+	}
+	return user.ID.String()
+}

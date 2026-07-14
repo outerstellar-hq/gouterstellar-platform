@@ -134,7 +134,7 @@ func (s *ContactService) CreateContact(ctx context.Context, name string, emails,
 		return nil, err
 	}
 
-	s.eventPub.PublishRefresh("contacts")
+	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "contacts")
 
 	s.notifyActor(ctx, "New Contact", name, "contact")
 
@@ -164,7 +164,7 @@ func (s *ContactService) UpdateContact(ctx context.Context, contact *model.Store
 		return nil, err
 	}
 
-	s.eventPub.PublishRefresh("contacts")
+	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "contacts")
 
 	return stored, nil
 }
@@ -185,7 +185,7 @@ func (s *ContactService) DeleteContact(ctx context.Context, syncID string) error
 		return err
 	}
 
-	s.eventPub.PublishRefresh("contacts")
+	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "contacts")
 	return nil
 }
 
@@ -258,7 +258,7 @@ func (s *ContactService) ProcessPushRequest(ctx context.Context, req *model.Sync
 		conflicts = []model.SyncContactConflict{}
 	}
 
-	s.eventPub.PublishRefresh("contacts")
+	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "contacts")
 
 	return &model.SyncPushContactResponse{
 		AppliedCount: appliedCount,

@@ -229,7 +229,7 @@ func (s *MessageService) CreateServerMessage(ctx context.Context, author, conten
 
 	stored := pltMessageToStored(m)
 	s.cache.InvalidateByPrefix("messages:")
-	s.eventPub.PublishRefresh("messages")
+	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
 
 	s.notifyActor(ctx, "New Message", truncateContent(content), "message")
 
@@ -262,7 +262,7 @@ func (s *MessageService) CreateLocalMessage(ctx context.Context, author, content
 
 	stored := pltMessageToStored(m)
 	s.cache.InvalidateByPrefix("messages:")
-	s.eventPub.PublishRefresh("messages")
+	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
 
 	return stored, nil
 }
@@ -331,7 +331,7 @@ func (s *MessageService) ProcessPushRequest(ctx context.Context, req *model.Sync
 	}
 
 	s.cache.InvalidateAll()
-	s.eventPub.PublishRefresh("messages")
+	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
 
 	return &model.SyncPushResponse{
 		AppliedCount: appliedCount,
@@ -346,7 +346,7 @@ func (s *MessageService) Restore(ctx context.Context, syncID string) error {
 	}
 	s.cache.Invalidate("message:" + syncID)
 	s.cache.InvalidateByPrefix("messages:")
-	s.eventPub.PublishRefresh("messages")
+	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
 	return nil
 }
 
@@ -364,7 +364,7 @@ func (s *MessageService) DeleteMessage(ctx context.Context, syncID string) error
 
 	s.cache.Invalidate("message:" + syncID)
 	s.cache.InvalidateByPrefix("messages:")
-	s.eventPub.PublishRefresh("messages")
+	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
 	return nil
 }
 
@@ -388,7 +388,7 @@ func (s *MessageService) UpdateMessage(ctx context.Context, msg *model.StoredMes
 	stored := pltMessageToStored(updated)
 	s.cache.Invalidate("message:" + msg.SyncID)
 	s.cache.InvalidateByPrefix("messages:")
-	s.eventPub.PublishRefresh("messages")
+	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
 	return stored, nil
 }
 
@@ -426,7 +426,7 @@ func (s *MessageService) ResolveConflict(ctx context.Context, syncID string, str
 
 	s.cache.Invalidate("message:" + syncID)
 	s.cache.InvalidateByPrefix("messages:")
-	s.eventPub.PublishRefresh("messages")
+	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
 	return nil
 }
 

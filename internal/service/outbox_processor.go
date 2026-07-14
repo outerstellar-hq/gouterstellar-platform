@@ -105,13 +105,17 @@ func (p *OutboxProcessor) processEntry(ctx context.Context, id uuid.UUID, payloa
 		}
 		slog.Info("Processing message sync outbox entry", "id", id)
 		if p.eventPub != nil {
-			p.eventPub.PublishRefresh("messages")
+			// The outbox worker runs without a user context, so broadcast the
+			// refresh to all connected clients rather than scoping to a user.
+			p.eventPub.PublishRefresh("", "messages")
 		}
 		return nil
 	case "CONTACT_SYNC":
 		slog.Info("Processing contact sync outbox entry", "id", id)
 		if p.eventPub != nil {
-			p.eventPub.PublishRefresh("contacts")
+			// The outbox worker runs without a user context, so broadcast the
+			// refresh to all connected clients rather than scoping to a user.
+			p.eventPub.PublishRefresh("", "contacts")
 		}
 		return nil
 	default:
