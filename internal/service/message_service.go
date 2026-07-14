@@ -25,6 +25,7 @@ type MessageService struct {
 	auditRepo           persistence.AuditRepository
 	notificationService *NotificationService
 	emailService        EmailService
+	pipeline            *WritePipeline
 }
 
 func NewMessageService(
@@ -37,7 +38,7 @@ func NewMessageService(
 	notificationService *NotificationService,
 	emailService EmailService,
 ) *MessageService {
-	return &MessageService{
+	s := &MessageService{
 		repo:                repo,
 		outbox:              outbox,
 		txMgr:               txMgr,
@@ -47,6 +48,11 @@ func NewMessageService(
 		notificationService: notificationService,
 		emailService:        emailService,
 	}
+	// The pipeline reuses the service's already-wired cache/event/notifier/email
+	// dependencies so side-effects fire through the same instances. Built once
+	// at construction so each mutation just calls the relevant hook.
+	s.pipeline = NewWritePipeline(cache, eventPub, notificationService, emailService)
+	return s
 }
 
 func (s *MessageService) ListMessages(ctx context.Context, limit, offset int32) (*model.PagedResult[model.MessageSummary], error) {
@@ -231,12 +237,7 @@ func (s *MessageService) CreateServerMessage(ctx context.Context, author, conten
 	}
 
 	stored := pltMessageToStored(m)
-	s.cache.InvalidateByPrefix("messages:")
-	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
-
-	s.notifyActor(ctx, "New Message", truncateContent(content), "message")
-	s.notifyActorByEmail(ctx, "New message created",
-		fmt.Sprintf("A new message was created:\n\nAuthor: %s\nContent: %s", author, content))
+	s.pipeline.AfterMessageCreated(ctx, author, content)
 
 	return stored, nil
 }
@@ -266,6 +267,10 @@ func (s *MessageService) CreateLocalMessage(ctx context.Context, author, content
 	}
 
 	stored := pltMessageToStored(m)
+	// Local creates don't notify or email — they only refresh the cache and
+	// broadcast the change. AfterMessageCreated is overkill here (it would fire
+	// notifications), so invalidate the prefix directly. A future hook could
+	// model "local create" explicitly if notifications are ever wanted.
 	s.cache.InvalidateByPrefix("messages:")
 	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
 
@@ -349,9 +354,7 @@ func (s *MessageService) Restore(ctx context.Context, syncID string) error {
 	if err != nil {
 		return fmt.Errorf("restore message: %w", err)
 	}
-	s.cache.Invalidate("message:" + syncID)
-	s.cache.InvalidateByPrefix("messages:")
-	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
+	s.pipeline.AfterMessageChange(ctx, syncID)
 	return nil
 }
 
@@ -367,9 +370,7 @@ func (s *MessageService) DeleteMessage(ctx context.Context, syncID string) error
 		return err
 	}
 
-	s.cache.Invalidate("message:" + syncID)
-	s.cache.InvalidateByPrefix("messages:")
-	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
+	s.pipeline.AfterMessageChange(ctx, syncID)
 	return nil
 }
 
@@ -391,9 +392,7 @@ func (s *MessageService) UpdateMessage(ctx context.Context, msg *model.StoredMes
 	}
 
 	stored := pltMessageToStored(updated)
-	s.cache.Invalidate("message:" + msg.SyncID)
-	s.cache.InvalidateByPrefix("messages:")
-	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
+	s.pipeline.AfterMessageChange(ctx, msg.SyncID)
 	return stored, nil
 }
 
@@ -429,9 +428,7 @@ func (s *MessageService) ResolveConflict(ctx context.Context, syncID string, str
 		}
 	}
 
-	s.cache.Invalidate("message:" + syncID)
-	s.cache.InvalidateByPrefix("messages:")
-	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
+	s.pipeline.AfterMessageChange(ctx, syncID)
 	return nil
 }
 
