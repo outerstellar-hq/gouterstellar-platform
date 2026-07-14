@@ -20,6 +20,10 @@
             </div>
             <button type="submit" class="btn btn-primary">Sign In</button>
         </form>
+        {{ if .BodyData.GoogleLoginEnabled }}
+        <div class="auth-divider"><span>or</span></div>
+        <a href="/auth/oauth/google" class="btn btn-oauth">Sign in with Google</a>
+        {{ end }}
     </div>
 </div>
 {{ end }}

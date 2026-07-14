@@ -29,6 +29,20 @@ type SegmentConfig struct {
 	Enabled  bool   `mapstructure:"enabled"`
 }
 
+// OAuthConfig groups third-party OAuth provider configuration. Each provider is
+// independent; a provider is enabled when its ClientID/ClientSecret are set.
+type OAuthConfig struct {
+	Google GoogleOAuthConfig `mapstructure:"google"`
+}
+
+// GoogleOAuthConfig holds the credentials for the Google OAuth 2.0 / OpenID
+// Connect provider.
+type GoogleOAuthConfig struct {
+	ClientID     string `mapstructure:"client_id"`
+	ClientSecret string `mapstructure:"client_secret"`
+	RedirectURI  string `mapstructure:"redirect_uri"`
+}
+
 type Config struct {
 	Version               string        `mapstructure:"version"`
 	Port                  int           `mapstructure:"port"`
@@ -45,6 +59,7 @@ type Config struct {
 	JWT                   JwtConfig     `mapstructure:"jwt"`
 	Email                 EmailConfig   `mapstructure:"email"`
 	Segment               SegmentConfig `mapstructure:"segment"`
+	OAuth                 OAuthConfig   `mapstructure:"oauth"`
 }
 
 func Load() *Config {
@@ -79,6 +94,9 @@ func Load() *Config {
 	v.SetDefault("email.starttls", true)
 	v.SetDefault("segment.enabled", false)
 	v.SetDefault("segment.write_key", "")
+	v.SetDefault("oauth.google.client_id", "")
+	v.SetDefault("oauth.google.client_secret", "")
+	v.SetDefault("oauth.google.redirect_uri", "")
 
 	if err := v.ReadInConfig(); err != nil {
 		slog.Warn("No config file found, using defaults and env vars", "error", err)

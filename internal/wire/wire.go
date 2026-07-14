@@ -103,6 +103,17 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 	oauthSvc := security.NewOAuthService(userRepo, oauthRepo, passwordEncoder)
 	appleProvider := security.NewAppleOAuthProvider()
 
+	// Register the Google OAuth provider when fully configured; otherwise leave
+	// it nil so resolveProvider treats "google" as unsupported.
+	var googleProvider *security.GoogleOAuthProvider
+	if cfg.OAuth.Google.ClientID != "" && cfg.OAuth.Google.ClientSecret != "" {
+		googleProvider = security.NewGoogleOAuthProvider(
+			cfg.OAuth.Google.ClientID,
+			cfg.OAuth.Google.ClientSecret,
+			cfg.OAuth.Google.RedirectURI,
+		)
+	}
+
 	sessionRealm := security.NewSessionRealm(func(ctx context.Context, tokenHash string) model.SessionLookup {
 		session, err := sessionRepo.FindByTokenHash(ctx, tokenHash)
 		if err != nil {
@@ -186,7 +197,7 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 
 	syncAPI := handler.NewSyncAPI(messageSvc, contactSvc, analytics)
 	authAPI := handler.NewAuthAPI(securitySvc, apiKeySvc, passwordResetSvc, cfg.SessionCookieSecure, analytics, jwtSvc)
-	authHandler := handler.NewAuthHandler(securitySvc, passwordResetSvc, renderer, cfg.SessionCookieSecure, analytics)
+	authHandler := handler.NewAuthHandler(securitySvc, passwordResetSvc, renderer, cfg.SessionCookieSecure, analytics, googleProvider != nil)
 	homeHandler := handler.NewHomeHandler(messageSvc, contactSvc, securitySvc, renderer, cfg.Version)
 	messagesHandler := handler.NewMessagesHandler(messageSvc, renderer)
 	contactsHandler := handler.NewContactsHandler(contactSvc, renderer)
@@ -195,7 +206,15 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 	notificationsHandler := handler.NewNotificationsHandler(notificationSvc, renderer)
 	notificationAPI := handler.NewNotificationAPI(notificationSvc)
 	deviceRegistrationAPI := handler.NewDeviceRegistrationAPI(deviceTokenRepo)
-	oauthHandler := handler.NewOAuthHandler(securitySvc, oauthSvc, cfg.SessionCookieSecure, appleProvider, cfg.AppBaseURL)
+
+	// Coerce the optional Google provider into the interface without producing
+	// a non-nil interface wrapping a nil pointer: a bare nil assignment yields
+	// a nil interface, which resolveProvider treats as "unsupported".
+	var googleProviderIfc security.OAuthProvider
+	if googleProvider != nil {
+		googleProviderIfc = googleProvider
+	}
+	oauthHandler := handler.NewOAuthHandler(securitySvc, oauthSvc, cfg.SessionCookieSecure, appleProvider, googleProviderIfc, cfg.AppBaseURL)
 	searchHandler := handler.NewSearchHandler(messageSvc, contactSvc, renderer)
 	settingsHandler := handler.NewSettingsHandler(securitySvc, apiKeySvc, renderer)
 	errorHandler := handler.NewErrorHandler(renderer, cfg.Version)

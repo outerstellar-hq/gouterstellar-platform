@@ -46,9 +46,10 @@ type ContactItem struct {
 }
 
 type AuthPage struct {
-	ReturnTo  string
-	Error     string
-	CSRFToken string
+	ReturnTo           string
+	Error              string
+	CSRFToken          string
+	GoogleLoginEnabled bool
 }
 
 type AdminUsersPage struct {

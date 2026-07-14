@@ -18,6 +18,7 @@ type OAuthHandler struct {
 	oauthService    *security.OAuthService
 	sessionSecure   bool
 	appleProvider   security.OAuthProvider
+	googleProvider  security.OAuthProvider
 	appBaseURL      string
 }
 
@@ -26,6 +27,7 @@ func NewOAuthHandler(
 	oauthSvc *security.OAuthService,
 	sessionSecure bool,
 	appleProvider security.OAuthProvider,
+	googleProvider security.OAuthProvider,
 	appBaseURL string,
 ) *OAuthHandler {
 	return &OAuthHandler{
@@ -33,6 +35,7 @@ func NewOAuthHandler(
 		oauthService:    oauthSvc,
 		sessionSecure:   sessionSecure,
 		appleProvider:   appleProvider,
+		googleProvider:  googleProvider,
 		appBaseURL:      appBaseURL,
 	}
 }
@@ -148,6 +151,8 @@ func (h *OAuthHandler) resolveProvider(name string) security.OAuthProvider {
 	switch name {
 	case "apple":
 		return h.appleProvider
+	case "google":
+		return h.googleProvider
 	default:
 		return nil
 	}

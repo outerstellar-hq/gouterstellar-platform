@@ -13,11 +13,12 @@ import (
 )
 
 type AuthHandler struct {
-	securityService  *service.SecurityService
-	passwordResetSvc *service.PasswordResetService
-	renderer         *web.Renderer
-	sessionSecure    bool
-	analytics        service.AnalyticsService
+	securityService    *service.SecurityService
+	passwordResetSvc   *service.PasswordResetService
+	renderer           *web.Renderer
+	sessionSecure      bool
+	analytics          service.AnalyticsService
+	googleLoginEnabled bool
 }
 
 func NewAuthHandler(
@@ -26,13 +27,15 @@ func NewAuthHandler(
 	renderer *web.Renderer,
 	sessionSecure bool,
 	analytics service.AnalyticsService,
+	googleLoginEnabled bool,
 ) *AuthHandler {
 	return &AuthHandler{
-		securityService:  secSvc,
-		passwordResetSvc: passwordResetSvc,
-		renderer:         renderer,
-		sessionSecure:    sessionSecure,
-		analytics:        analytics,
+		securityService:    secSvc,
+		passwordResetSvc:   passwordResetSvc,
+		renderer:           renderer,
+		sessionSecure:      sessionSecure,
+		analytics:          analytics,
+		googleLoginEnabled: googleLoginEnabled,
 	}
 }
 
@@ -52,8 +55,9 @@ func (h *AuthHandler) RegisterRoutes(r chi.Router) {
 func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 	returnTo := r.URL.Query().Get("returnTo")
 	page := viewmodel.AuthPage{
-		ReturnTo:  returnTo,
-		CSRFToken: web.CSRFTokenFromRequest(r),
+		ReturnTo:           returnTo,
+		CSRFToken:          web.CSRFTokenFromRequest(r),
+		GoogleLoginEnabled: h.googleLoginEnabled,
 	}
 	if err := h.renderer.RenderPage(w, r, "auth_login", page); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
@@ -256,8 +260,9 @@ func isSafeRedirect(url string) bool {
 
 func (h *AuthHandler) renderAuthError(w http.ResponseWriter, r *http.Request, errMsg string) {
 	page := viewmodel.AuthPage{
-		Error:     errMsg,
-		CSRFToken: web.CSRFTokenFromRequest(r),
+		Error:              errMsg,
+		CSRFToken:          web.CSRFTokenFromRequest(r),
+		GoogleLoginEnabled: h.googleLoginEnabled,
 	}
 	_ = h.renderer.RenderWithStatus(w, r, "auth_login", page, http.StatusBadRequest)
 }
