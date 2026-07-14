@@ -5,6 +5,22 @@ WHERE deleted = false
 ORDER BY name ASC
 LIMIT $1 OFFSET $2;
 
+-- name: SearchContacts :many
+-- Returns one page of non-deleted contacts whose name or company match the
+-- query (case-insensitive ILIKE). Mirrors SearchMessages. company is nullable,
+-- so COALESCE protects the ILIKE from NULL operands.
+SELECT id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict
+FROM plt_contacts
+WHERE deleted = false
+AND (name ILIKE '%' || $1::text || '%' OR COALESCE(company, '') ILIKE '%' || $1::text || '%')
+ORDER BY name ASC
+LIMIT $2 OFFSET $3;
+
+-- name: CountSearchContacts :one
+SELECT COUNT(*) FROM plt_contacts
+WHERE deleted = false
+AND (name ILIKE '%' || $1::text || '%' OR COALESCE(company, '') ILIKE '%' || $1::text || '%');
+
 -- name: CountContacts :one
 SELECT COUNT(*) FROM plt_contacts WHERE deleted = false;
 

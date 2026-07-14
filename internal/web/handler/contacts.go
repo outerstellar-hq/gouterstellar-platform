@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -37,7 +38,22 @@ func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {
 	pageSize := getIntParam(r, "pageSize", 20)
 	offset := (page - 1) * pageSize
 
-	contacts, err := h.contactService.ListContacts(r.Context(), safeInt32(pageSize), safeInt32(offset))
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+
+	// SearchContacts returns (items, total, err) and scopes both the rows and
+	// the count to the query. When there is no query we fall back to the plain
+	// list + count so the unfiltered page stays cache-friendly in the repo.
+	var contacts []model.ContactSummary
+	var total int64
+	var err error
+	if query != "" {
+		contacts, total, err = h.contactService.SearchContacts(r.Context(), query, safeInt32(pageSize), safeInt32(offset))
+	} else {
+		contacts, err = h.contactService.ListContacts(r.Context(), safeInt32(pageSize), safeInt32(offset))
+		if err == nil {
+			total, _ = h.contactService.CountContacts(r.Context())
+		}
+	}
 	if err != nil {
 		_ = h.renderer.RenderWithStatus(w, r, "error", viewmodel.ErrorPage{
 			StatusCode: http.StatusInternalServerError,
@@ -47,7 +63,6 @@ func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	total, _ := h.contactService.CountContacts(r.Context())
 	totalPages := int(total) / pageSize
 	if int(total)%pageSize > 0 {
 		totalPages++
@@ -80,6 +95,7 @@ func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {
 	if err := h.renderer.RenderPage(w, r, "contacts", viewmodel.ContactsPage{
 		Contacts:   contactItems,
 		Pagination: pagination,
+		Query:      query,
 	}); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}

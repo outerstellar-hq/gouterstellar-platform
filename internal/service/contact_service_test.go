@@ -23,6 +23,16 @@ func (m *mockContactRepo) ListContacts(ctx context.Context, limit, offset int32)
 	return args.Get(0).([]db.PltContact), args.Error(1)
 }
 
+func (m *mockContactRepo) SearchContacts(ctx context.Context, query string, limit, offset int32) ([]db.PltContact, error) {
+	args := m.Called(ctx, query, limit, offset)
+	return args.Get(0).([]db.PltContact), args.Error(1)
+}
+
+func (m *mockContactRepo) CountSearchContacts(ctx context.Context, query string) (int64, error) {
+	args := m.Called(ctx, query)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func (m *mockContactRepo) CountContacts(ctx context.Context) (int64, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(int64), args.Error(1)

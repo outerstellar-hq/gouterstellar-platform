@@ -20,6 +20,19 @@ func (q *Queries) CountContacts(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countSearchContacts = `-- name: CountSearchContacts :one
+SELECT COUNT(*) FROM plt_contacts
+WHERE deleted = false
+AND (name ILIKE '%' || $1::text || '%' OR COALESCE(company, '') ILIKE '%' || $1::text || '%')
+`
+
+func (q *Queries) CountSearchContacts(ctx context.Context, dollar_1 string) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchContacts, dollar_1)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createLocalContact = `-- name: CreateLocalContact :one
 INSERT INTO plt_contacts (sync_id, name, company, company_address, department, updated_at_epoch_ms, dirty, deleted, version)
 VALUES ($1, $2, $3, $4, $5, $6, true, false, 1)
@@ -463,6 +476,57 @@ func (q *Queries) RestoreContact(ctx context.Context, syncID string) (PltContact
 		&i.SyncConflict,
 	)
 	return i, err
+}
+
+const searchContacts = `-- name: SearchContacts :many
+SELECT id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict
+FROM plt_contacts
+WHERE deleted = false
+AND (name ILIKE '%' || $1::text || '%' OR COALESCE(company, '') ILIKE '%' || $1::text || '%')
+ORDER BY name ASC
+LIMIT $2 OFFSET $3
+`
+
+type SearchContactsParams struct {
+	Column1 string `json:"column_1"`
+	Limit   int32  `json:"limit"`
+	Offset  int32  `json:"offset"`
+}
+
+// Returns one page of non-deleted contacts whose name or company match the
+// query (case-insensitive ILIKE). Mirrors SearchMessages. company is nullable,
+// so COALESCE protects the ILIKE from NULL operands.
+func (q *Queries) SearchContacts(ctx context.Context, arg SearchContactsParams) ([]PltContact, error) {
+	rows, err := q.db.Query(ctx, searchContacts, arg.Column1, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PltContact{}
+	for rows.Next() {
+		var i PltContact
+		if err := rows.Scan(
+			&i.ID,
+			&i.SyncID,
+			&i.Name,
+			&i.Company,
+			&i.CompanyAddress,
+			&i.Department,
+			&i.CreatedAt,
+			&i.UpdatedAtEpochMs,
+			&i.Deleted,
+			&i.Dirty,
+			&i.Version,
+			&i.SyncConflict,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const setContactEmails = `-- name: SetContactEmails :exec

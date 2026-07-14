@@ -57,6 +57,30 @@ func (s *ContactService) CountContacts(ctx context.Context) (int64, error) {
 	return s.repo.CountContacts(ctx)
 }
 
+// SearchContacts returns one page of non-deleted contacts whose name or company
+// match the query (case-insensitive ILIKE), plus the total match count. Mirrors
+// MessageService.SearchMessages.
+func (s *ContactService) SearchContacts(ctx context.Context, query string, limit, offset int32) ([]model.ContactSummary, int64, error) {
+	total, err := s.repo.CountSearchContacts(ctx, query)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count search contacts: %w", err)
+	}
+
+	contacts, err := s.repo.SearchContacts(ctx, query, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("search contacts: %w", err)
+	}
+
+	summaries := make([]model.ContactSummary, len(contacts))
+	for i, c := range contacts {
+		emails, _ := s.repo.ListContactEmails(ctx, c.ID)
+		phones, _ := s.repo.ListContactPhones(ctx, c.ID)
+		socials, _ := s.repo.ListContactSocials(ctx, c.ID)
+		summaries[i] = pltContactToSummary(c, emails, phones, socials)
+	}
+	return summaries, total, nil
+}
+
 func (s *ContactService) GetContactBySyncID(ctx context.Context, syncID string) (*model.StoredContact, error) {
 	c, err := s.repo.FindBySyncID(ctx, syncID)
 	if err != nil {

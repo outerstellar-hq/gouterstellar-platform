@@ -18,6 +18,7 @@ type Querier interface {
 	CountDirtyMessages(ctx context.Context) (int64, error)
 	CountMessages(ctx context.Context) (int64, error)
 	CountMessagesByYear(ctx context.Context, updatedAtEpochMs int64) (int64, error)
+	CountSearchContacts(ctx context.Context, dollar_1 string) (int64, error)
 	CountSearchMessages(ctx context.Context, dollar_1 string) (int64, error)
 	CountUnreadNotifications(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountUsersByRole(ctx context.Context, role string) (int64, error)
@@ -98,6 +99,10 @@ type Querier interface {
 	SaveOAuthConnection(ctx context.Context, arg SaveOAuthConnectionParams) (PltOauthConnection, error)
 	SaveOutbox(ctx context.Context, arg SaveOutboxParams) error
 	SavePasswordResetToken(ctx context.Context, arg SavePasswordResetTokenParams) (PltPasswordResetToken, error)
+	// Returns one page of non-deleted contacts whose name or company match the
+	// query (case-insensitive ILIKE). Mirrors SearchMessages. company is nullable,
+	// so COALESCE protects the ILIKE from NULL operands.
+	SearchContacts(ctx context.Context, arg SearchContactsParams) ([]PltContact, error)
 	SearchMessages(ctx context.Context, arg SearchMessagesParams) ([]PltMessage, error)
 	SeedAdminUser(ctx context.Context, arg SeedAdminUserParams) (PltUser, error)
 	SetContactEmails(ctx context.Context, contactID int64) error

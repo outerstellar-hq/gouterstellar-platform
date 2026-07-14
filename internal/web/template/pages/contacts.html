@@ -8,9 +8,53 @@
         </form>
     </div>
 
+    <details class="contact-create">
+        <summary>Add new contact</summary>
+        <form method="POST" action="/contacts/create" class="contact-form">
+            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+            <div class="form-group">
+                <label for="contact-name">Name</label>
+                <input type="text" id="contact-name" name="name" required>
+            </div>
+            <div class="form-group">
+                <label for="contact-email">Email</label>
+                <input type="email" id="contact-email" name="emails" placeholder="one email per field">
+            </div>
+            <div class="form-group">
+                <label for="contact-phone">Phone</label>
+                <input type="text" id="contact-phone" name="phones">
+            </div>
+            <div class="form-group">
+                <label for="contact-company">Company</label>
+                <input type="text" id="contact-company" name="company">
+            </div>
+            <button type="submit" class="btn btn-primary">Create</button>
+        </form>
+    </details>
+
     <div class="contact-list">
         {{ range .BodyData.Contacts }}
-        {{ template "contact_row" . }}
+        <div class="contact-row{{ if .Deleted }} deleted{{ end }}{{ if .Dirty }} dirty{{ end }}">
+            <div class="contact-name">{{ .Name }}</div>
+            <div class="contact-details">
+                {{ if .Company }}<span class="contact-company">{{ .Company }}</span>{{ end }}
+                {{ range .Emails }}<span class="contact-email">{{ . }}</span>{{ end }}
+                {{ range .Phones }}<span class="contact-phone">{{ . }}</span>{{ end }}
+                {{ range .Social }}<span class="contact-social">{{ . }}</span>{{ end }}
+            </div>
+            <div class="contact-meta">
+                <span class="contact-time">{{ .UpdatedAt }}</span>
+                {{ if .Dirty }}<span class="badge badge-warning">Unsynced</span>{{ end }}
+                {{ if .Deleted }}<span class="badge badge-error">Deleted</span>{{ end }}
+            </div>
+            <div class="contact-actions">
+                <a href="/contacts/{{ .SyncID }}" class="btn btn-sm">Edit</a>
+                <form method="POST" action="/contacts/{{ .SyncID }}/delete" class="inline-form">
+                    <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                    <button type="submit" class="btn btn-sm btn-danger" data-confirm="Delete contact '{{ .Name }}'?">Delete</button>
+                </form>
+            </div>
+        </div>
         {{ else }}
         <p class="empty-state">No contacts found.</p>
         {{ end }}

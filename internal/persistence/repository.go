@@ -40,6 +40,8 @@ type MessageRepository interface {
 
 type ContactRepository interface {
 	ListContacts(ctx context.Context, limit, offset int32) ([]db.PltContact, error)
+	SearchContacts(ctx context.Context, query string, limit, offset int32) ([]db.PltContact, error)
+	CountSearchContacts(ctx context.Context, query string) (int64, error)
 	CountContacts(ctx context.Context) (int64, error)
 	ListDirtyContacts(ctx context.Context) ([]db.PltContact, error)
 	FindBySyncID(ctx context.Context, syncID string) (db.PltContact, error)

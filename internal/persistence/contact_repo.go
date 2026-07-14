@@ -33,6 +33,18 @@ func (r *contactRepo) ListContacts(ctx context.Context, limit, offset int32) ([]
 	})
 }
 
+func (r *contactRepo) SearchContacts(ctx context.Context, query string, limit, offset int32) ([]db.PltContact, error) {
+	return r.q.SearchContacts(ctx, db.SearchContactsParams{
+		Column1: query,
+		Limit:   limit,
+		Offset:  offset,
+	})
+}
+
+func (r *contactRepo) CountSearchContacts(ctx context.Context, query string) (int64, error) {
+	return r.q.CountSearchContacts(ctx, query)
+}
+
 func (r *contactRepo) CountContacts(ctx context.Context) (int64, error) {
 	return r.q.CountContacts(ctx)
 }
