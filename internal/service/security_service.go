@@ -32,6 +32,7 @@ type SecurityService struct {
 	passwordEncoder       security.PasswordEncoder
 	sessionRepo           persistence.SessionRepository
 	auditRepo             persistence.AuditRepository
+	auditor               Auditor
 	notificationService   *NotificationService
 	emailService          EmailService
 	sessionTimeoutSeconds int64
@@ -51,6 +52,10 @@ func NewSecurityService(
 		passwordEncoder:       passwordEncoder,
 		sessionRepo:           sessionRepo,
 		auditRepo:             auditRepo,
+		// The auditor wraps the same repo so the write path is uniform with the
+		// other services. auditRepo is retained for the audit-read methods
+		// (GetAuditLog/GetAuditLogPaged/CountAuditEntries).
+		auditor:               NewAuditService(auditRepo),
 		notificationService:   notificationService,
 		emailService:          emailService,
 		sessionTimeoutSeconds: sessionTimeoutSeconds,
@@ -389,9 +394,12 @@ func (s *SecurityService) LookupSession(ctx context.Context, rawToken string) mo
 	return model.SessionActive{User: user}
 }
 
-// Logout invalidates a session by its raw token. It is a no-op for an empty
-// token so it is safe to call unconditionally from logout handlers.
-func (s *SecurityService) Logout(ctx context.Context, rawToken string) error {
+// Logout invalidates a session by its raw token and records an audit event when
+// an actor is supplied. It is a no-op for an empty token so it is safe to call
+// unconditionally from logout handlers. The actor parameters (userID/username)
+// are optional: pass nil to skip the audit entry, matching the prior handler
+// behavior where a logout without a known user was logged without an actor.
+func (s *SecurityService) Logout(ctx context.Context, rawToken string, actorID *uuid.UUID, actorName *string) error {
 	if rawToken == "" {
 		return nil
 	}
@@ -399,6 +407,7 @@ func (s *SecurityService) Logout(ctx context.Context, rawToken string) error {
 	if err := s.sessionRepo.DeleteByTokenHash(ctx, tokenHash); err != nil {
 		return fmt.Errorf("delete session: %w", err)
 	}
+	s.AuditLogout(ctx, actorID, actorName)
 	return nil
 }
 
@@ -544,9 +553,8 @@ func (s *SecurityService) UpdatePreferences(ctx context.Context, userID uuid.UUI
 }
 
 func (s *SecurityService) auditLog(ctx context.Context, actorID *uuid.UUID, actorUsername *string, targetID *uuid.UUID, targetUsername *string, action, detail string) {
-	_, err := s.auditRepo.LogAudit(ctx, actorID, actorUsername, targetID, targetUsername, action, detail)
-	if err != nil {
-		slog.Error("Failed to log audit entry", "action", action, "error", err)
+	if s.auditor != nil {
+		s.auditor.Record(ctx, action, actorID, actorUsername, targetID, targetUsername, detail)
 	}
 }
 

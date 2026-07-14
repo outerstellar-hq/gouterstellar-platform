@@ -215,9 +215,8 @@ func (m *mockAuditRepo) CountAll(ctx context.Context) (int64, error) {
 func TestCreateServerMessage_BlankValidation(t *testing.T) {
 	repo := new(mockMessageRepo)
 	outbox := new(mockOutboxRepo)
-	audit := new(mockAuditRepo)
 	cache := persistence.NewMessageCache(60)
-	svc := NewMessageService(repo, outbox, &FakeTxRunner{}, cache, &NoOpEventPublisher{}, audit, nil, nil)
+	svc := NewMessageService(repo, outbox, &FakeTxRunner{}, cache, &NoOpEventPublisher{}, nil, nil)
 
 	_, err := svc.CreateServerMessage(context.Background(), "", "hello")
 	assert.Error(t, err)
@@ -227,9 +226,8 @@ func TestCreateServerMessage_BlankValidation(t *testing.T) {
 func TestCreateServerMessage_Success(t *testing.T) {
 	repo := new(mockMessageRepo)
 	outbox := new(mockOutboxRepo)
-	audit := new(mockAuditRepo)
 	cache := persistence.NewMessageCache(60)
-	svc := NewMessageService(repo, outbox, &FakeTxRunner{}, cache, &NoOpEventPublisher{}, audit, nil, nil)
+	svc := NewMessageService(repo, outbox, &FakeTxRunner{}, cache, &NoOpEventPublisher{}, nil, nil)
 
 	// WithTx returns the same mock so the tx-bound write uses the same stubs.
 	repo.On("WithTx", mock.Anything).Return(repo)

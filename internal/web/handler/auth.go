@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
 	extplatform "github.com/rygel/gouterstellar-platform/platform"
 
 	"github.com/rygel/gouterstellar-platform/internal/service"
@@ -132,18 +133,16 @@ func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 	if token := web.GetSessionToken(r); token != "" {
-		user := web.UserFromRequest(r)
-		if user != nil {
-			uid := user.ID
-			username := user.Username
-			if err := h.securityService.Logout(r.Context(), token); err != nil {
-				slog.Warn("Failed to delete session on logout", "error", err)
-			}
-			h.securityService.AuditLogout(r.Context(), &uid, &username)
-		} else {
-			if err := h.securityService.Logout(r.Context(), token); err != nil {
-				slog.Warn("Failed to delete session on logout", "error", err)
-			}
+		var uid *uuid.UUID
+		var username *string
+		if user := web.UserFromRequest(r); user != nil {
+			id := user.ID
+			name := user.Username
+			uid = &id
+			username = &name
+		}
+		if err := h.securityService.Logout(r.Context(), token, uid, username); err != nil {
+			slog.Warn("Failed to delete session on logout", "error", err)
 		}
 	}
 	http.SetCookie(w, web.ClearSessionCookie(h.sessionSecure))

@@ -18,7 +18,7 @@ type PasswordResetService struct {
 	passwordEncoder security.PasswordEncoder
 	resetRepo       persistence.PasswordResetRepository
 	emailService    EmailService
-	auditRepo       persistence.AuditRepository
+	auditor         Auditor
 	appBaseURL      string
 }
 
@@ -27,7 +27,7 @@ func NewPasswordResetService(
 	passwordEncoder security.PasswordEncoder,
 	resetRepo persistence.PasswordResetRepository,
 	emailService EmailService,
-	auditRepo persistence.AuditRepository,
+	auditor Auditor,
 	appBaseURL string,
 ) *PasswordResetService {
 	return &PasswordResetService{
@@ -35,7 +35,7 @@ func NewPasswordResetService(
 		passwordEncoder: passwordEncoder,
 		resetRepo:       resetRepo,
 		emailService:    emailService,
-		auditRepo:       auditRepo,
+		auditor:         auditor,
 		appBaseURL:      appBaseURL,
 	}
 }
@@ -64,7 +64,7 @@ func (s *PasswordResetService) RequestPasswordReset(ctx context.Context, email s
 	}
 
 	actorID, actorName := userToAuditParams(user)
-	s.auditLog(ctx, actorID, actorName, nil, nil, "PASSWORD_RESET_REQUESTED", "Password reset requested")
+	s.auditor.Record(ctx, "PASSWORD_RESET_REQUESTED", actorID, actorName, nil, nil, "Password reset requested")
 
 	return &token, nil
 }
@@ -110,14 +110,7 @@ func (s *PasswordResetService) ResetPassword(ctx context.Context, token, newPass
 	}
 
 	actorID, actorName := userToAuditParams(user)
-	s.auditLog(ctx, actorID, actorName, nil, nil, "PASSWORD_RESET_COMPLETED", "Password reset completed")
+	s.auditor.Record(ctx, "PASSWORD_RESET_COMPLETED", actorID, actorName, nil, nil, "Password reset completed")
 
 	return nil
-}
-
-func (s *PasswordResetService) auditLog(ctx context.Context, actorID *uuid.UUID, actorUsername *string, targetID *uuid.UUID, targetUsername *string, action, detail string) {
-	_, err := s.auditRepo.LogAudit(ctx, actorID, actorUsername, targetID, targetUsername, action, detail)
-	if err != nil {
-		slog.Error("Failed to log audit entry", "action", action, "error", err)
-	}
 }

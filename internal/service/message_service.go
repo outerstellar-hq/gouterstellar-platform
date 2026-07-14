@@ -22,7 +22,6 @@ type MessageService struct {
 	txMgr               TransactionRunner
 	cache               *persistence.MessageCache
 	eventPub            EventPublisher
-	auditRepo           persistence.AuditRepository
 	notificationService *NotificationService
 	emailService        EmailService
 	pipeline            *WritePipeline
@@ -34,7 +33,6 @@ func NewMessageService(
 	txMgr TransactionRunner,
 	cache *persistence.MessageCache,
 	eventPub EventPublisher,
-	auditRepo persistence.AuditRepository,
 	notificationService *NotificationService,
 	emailService EmailService,
 ) *MessageService {
@@ -44,7 +42,6 @@ func NewMessageService(
 		txMgr:               txMgr,
 		cache:               cache,
 		eventPub:            eventPub,
-		auditRepo:           auditRepo,
 		notificationService: notificationService,
 		emailService:        emailService,
 	}

@@ -139,10 +139,10 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 		analytics = &service.NoOpAnalyticsService{}
 	}
 
-	messageSvc := service.NewMessageService(r.messageRepo, r.outboxRepo, txMgr, messageCache, wsPublisher, r.auditRepo, notificationSvc, emailSvc)
+	messageSvc := service.NewMessageService(r.messageRepo, r.outboxRepo, txMgr, messageCache, wsPublisher, notificationSvc, emailSvc)
 	contactSvc := service.NewContactService(r.contactRepo, r.outboxRepo, txMgr, wsPublisher, notificationSvc)
 	outboxProcessor := service.NewOutboxProcessor(r.outboxRepo, txMgr, wsPublisher)
-	passwordResetSvc := service.NewPasswordResetService(r.userRepo, passwordEncoder, r.passwordResetRepo, emailSvc, r.auditRepo, cfg.AppBaseURL)
+	passwordResetSvc := service.NewPasswordResetService(r.userRepo, passwordEncoder, r.passwordResetRepo, emailSvc, service.NewAuditService(r.auditRepo), cfg.AppBaseURL)
 
 	return &services{
 		messageSvc:        messageSvc,
