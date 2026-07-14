@@ -59,7 +59,9 @@ func (s *PasswordResetService) RequestPasswordReset(ctx context.Context, email s
 
 	resetURL := fmt.Sprintf("%s/auth/reset/confirm?token=%s", s.appBaseURL, token)
 	body := fmt.Sprintf("Click the following link to reset your password: %s", resetURL)
-	s.emailService.Send(email, "Password Reset", body)
+	if err := s.emailService.Send(email, "Password Reset", body); err != nil {
+		slog.Warn("Failed to send password reset email", "email", email, "error", err)
+	}
 
 	actorID, actorName := userToAuditParams(user)
 	s.auditLog(ctx, actorID, actorName, nil, nil, "PASSWORD_RESET_REQUESTED", "Password reset requested")

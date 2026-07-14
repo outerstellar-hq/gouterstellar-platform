@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -35,7 +36,7 @@ func NewResilientEmailService(delegate EmailService) *ResilientEmailService {
 	}
 }
 
-func (r *ResilientEmailService) Send(to, subject, body string) {
+func (r *ResilientEmailService) Send(to, subject, body string) error {
 	r.mu.Lock()
 	state := r.state
 	r.mu.Unlock()
@@ -43,23 +44,30 @@ func (r *ResilientEmailService) Send(to, subject, body string) {
 	switch state {
 	case circuitOpen:
 		slog.Warn("Circuit breaker open, dropping email", "to", to, "subject", subject)
-		return
+		return fmt.Errorf("circuit breaker open")
 	case circuitHalfOpen:
-		r.halfOpenSend(to, subject, body)
-		return
+		return r.halfOpenSend(to, subject, body)
 	default:
-		r.closedSend(to, subject, body)
+		return r.closedSend(to, subject, body)
 	}
 }
 
-func (r *ResilientEmailService) closedSend(to, subject, body string) {
-	r.delegate.Send(to, subject, body)
-	r.recordFailure(false)
+func (r *ResilientEmailService) closedSend(to, subject, body string) error {
+	err := r.delegate.Send(to, subject, body)
+	r.recordFailure(err != nil)
+	return err
 }
 
-func (r *ResilientEmailService) halfOpenSend(to, subject, body string) {
-	r.delegate.Send(to, subject, body)
-	r.recordFailure(false)
+func (r *ResilientEmailService) halfOpenSend(to, subject, body string) error {
+	err := r.delegate.Send(to, subject, body)
+	r.recordFailure(err != nil)
+	if err == nil {
+		r.mu.Lock()
+		r.state = circuitClosed
+		r.failures = r.failures[:0]
+		r.mu.Unlock()
+	}
+	return err
 }
 
 func (r *ResilientEmailService) recordFailure(wasFailure bool) {
