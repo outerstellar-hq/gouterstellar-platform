@@ -141,10 +141,21 @@ func (s *ContactService) UpdateContact(ctx context.Context, contact *model.Store
 }
 
 func (s *ContactService) DeleteContact(ctx context.Context, syncID string) error {
-	_, err := s.repo.SoftDeleteContact(ctx, syncID)
+	err := s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
+		txRepo := s.repo.WithTx(tx)
+		contact, err := txRepo.FindBySyncID(ctx, syncID)
+		if err != nil {
+			return fmt.Errorf("find contact for delete: %w", err)
+		}
+		if _, err := txRepo.SoftDeleteContact(ctx, syncID); err != nil {
+			return fmt.Errorf("delete contact: %w", err)
+		}
+		return s.saveContactOutboxEntryTx(ctx, tx, txRepo, contact)
+	})
 	if err != nil {
-		return fmt.Errorf("delete contact: %w", err)
+		return err
 	}
+
 	s.eventPub.PublishRefresh("contacts")
 	return nil
 }

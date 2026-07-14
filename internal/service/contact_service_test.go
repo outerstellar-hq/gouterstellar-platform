@@ -240,3 +240,33 @@ func TestCreateContact_Success(t *testing.T) {
 func strPtr(s string) *string {
 	return &s
 }
+
+func TestDeleteContact_Success(t *testing.T) {
+	repo := new(mockContactRepo)
+	outbox := new(mockContactOutboxRepo)
+	svc := NewContactService(repo, outbox, &FakeTxRunner{}, &NoOpEventPublisher{})
+
+	// WithTx returns the same mock so the tx-bound reads/writes use the same stubs.
+	repo.On("WithTx", mock.Anything).Return(repo)
+	repo.On("FindBySyncID", mock.Anything, "srv_test").Return(db.PltContact{
+		ID:               1,
+		SyncID:           "srv_test",
+		Name:             "Alice",
+		UpdatedAtEpochMs: 1000,
+		Version:          1,
+	}, nil)
+	repo.On("SoftDeleteContact", mock.Anything, "srv_test").Return(db.PltContact{
+		ID:     1,
+		SyncID: "srv_test",
+	}, nil)
+	repo.On("ListContactEmails", mock.Anything, int64(1)).Return([]string{}, nil)
+	repo.On("ListContactPhones", mock.Anything, int64(1)).Return([]string{}, nil)
+	repo.On("ListContactSocials", mock.Anything, int64(1)).Return([]string{}, nil)
+	outbox.On("SaveOutboxTx", mock.Anything, mock.Anything, mock.AnythingOfType("uuid.UUID"), "CONTACT_SYNC", mock.AnythingOfType("string"), "PENDING").Return(nil)
+
+	err := svc.DeleteContact(context.Background(), "srv_test")
+
+	assert.NoError(t, err)
+	repo.AssertExpectations(t)
+	outbox.AssertExpectations(t)
+}
