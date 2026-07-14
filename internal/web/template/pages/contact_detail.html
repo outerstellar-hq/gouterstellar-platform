@@ -1,0 +1,33 @@
+{{ define "content" }}
+<div class="page-header">
+    <h1>{{ .BodyData.Contact.Name }}</h1>
+    <a href="/contacts" class="btn btn-secondary">Back</a>
+</div>
+<div class="contact-detail">
+    <dl>
+        <dt>Name</dt><dd>{{ .BodyData.Contact.Name }}</dd>
+        {{ if .BodyData.Contact.Company }}
+        <dt>Company</dt><dd>{{ .BodyData.Contact.Company }}</dd>
+        {{ end }}
+        {{ if .BodyData.Contact.Department }}
+        <dt>Department</dt><dd>{{ .BodyData.Contact.Department }}</dd>
+        {{ end }}
+        {{ if .BodyData.Contact.CompanyAddress }}
+        <dt>Company address</dt><dd>{{ .BodyData.Contact.CompanyAddress }}</dd>
+        {{ end }}
+        {{ if .BodyData.Contact.Emails }}
+        <dt>Emails</dt><dd>{{ range .BodyData.Contact.Emails }}{{ . }} {{ end }}</dd>
+        {{ end }}
+        {{ if .BodyData.Contact.Phones }}
+        <dt>Phones</dt><dd>{{ range .BodyData.Contact.Phones }}{{ . }} {{ end }}</dd>
+        {{ end }}
+        {{ if .BodyData.Contact.Social }}
+        <dt>Social</dt><dd>{{ range .BodyData.Contact.Social }}{{ . }} {{ end }}</dd>
+        {{ end }}
+    </dl>
+    <form method="POST" action="/contacts/{{ .BodyData.Contact.SyncID }}/delete">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <button type="submit" class="btn btn-danger" data-confirm="Delete this contact?">Delete</button>
+    </form>
+</div>
+{{ end }}

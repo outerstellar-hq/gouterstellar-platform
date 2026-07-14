@@ -204,6 +204,8 @@ func pageTitle(page string) string {
 		return "Reset Sent"
 	case "contacts":
 		return "Contacts"
+	case "contact_detail":
+		return "Contact"
 	case "messages":
 		return "Messages"
 	case "search":

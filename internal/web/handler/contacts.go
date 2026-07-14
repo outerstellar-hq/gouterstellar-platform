@@ -110,7 +110,23 @@ func (h *ContactsHandler) Detail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, contact)
+	item := viewmodel.ContactItem{
+		SyncID:         contact.SyncID,
+		Name:           contact.Name,
+		Emails:         contact.Emails,
+		Phones:         contact.Phones,
+		Social:         contact.SocialMedia,
+		Company:        contact.Company,
+		CompanyAddress: contact.CompanyAddress,
+		Department:     contact.Department,
+		UpdatedAt:      formatEpochMs(contact.UpdatedAtEpochMs),
+		Dirty:          contact.Dirty,
+		Deleted:        contact.Deleted,
+	}
+
+	if err := h.renderer.RenderPage(w, r, "contact_detail", viewmodel.ContactDetailPage{Contact: item}); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
 }
 
 func (h *ContactsHandler) Create(w http.ResponseWriter, r *http.Request) {

@@ -26,16 +26,23 @@ type ContactsPage struct {
 	Query      string
 }
 
+// ContactDetailPage is the view model for the contact detail HTML page.
+type ContactDetailPage struct {
+	Contact ContactItem
+}
+
 type ContactItem struct {
-	SyncID    string
-	Name      string
-	Emails    []string
-	Phones    []string
-	Social    []string
-	Company   string
-	UpdatedAt string
-	Dirty     bool
-	Deleted   bool
+	SyncID         string
+	Name           string
+	Emails         []string
+	Phones         []string
+	Social         []string
+	Company        string
+	CompanyAddress string
+	Department     string
+	UpdatedAt      string
+	Dirty          bool
+	Deleted        bool
 }
 
 type AuthPage struct {
