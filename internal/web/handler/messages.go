@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
@@ -98,4 +100,68 @@ func (h *MessagesHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
+}
+
+// Create reads author and content from a form POST and creates a new
+// server-originated message, then redirects back to the message list.
+func (h *MessagesHandler) Create(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid form submission")
+		return
+	}
+
+	author := r.FormValue("author")
+	content := r.FormValue("content")
+
+	if _, err := h.messageService.CreateServerMessage(r.Context(), author, content); err != nil {
+		handleServiceError(w, err)
+		return
+	}
+
+	http.Redirect(w, r, "/messages", http.StatusSeeOther)
+}
+
+// Delete soft-deletes a message identified by the {syncId} URL parameter.
+func (h *MessagesHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	syncID := chi.URLParam(r, "syncId")
+
+	if err := h.messageService.DeleteMessage(r.Context(), syncID); err != nil {
+		handleServiceError(w, err)
+		return
+	}
+
+	http.Redirect(w, r, "/messages", http.StatusSeeOther)
+}
+
+// Restore un-deletes a soft-deleted message identified by the {syncId} URL
+// parameter.
+func (h *MessagesHandler) Restore(w http.ResponseWriter, r *http.Request) {
+	syncID := chi.URLParam(r, "syncId")
+
+	if err := h.messageService.Restore(r.Context(), syncID); err != nil {
+		handleServiceError(w, err)
+		return
+	}
+
+	http.Redirect(w, r, "/messages", http.StatusSeeOther)
+}
+
+// ResolveConflict resolves a sync conflict on the message identified by the
+// {syncId} URL parameter using the strategy submitted in the form body
+// ("mine" or "server").
+func (h *MessagesHandler) ResolveConflict(w http.ResponseWriter, r *http.Request) {
+	syncID := chi.URLParam(r, "syncId")
+
+	if err := r.ParseForm(); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid form submission")
+		return
+	}
+
+	strategy := model.ConflictStrategyFromString(r.FormValue("strategy"))
+	if err := h.messageService.ResolveConflict(r.Context(), syncID, strategy); err != nil {
+		handleServiceError(w, err)
+		return
+	}
+
+	http.Redirect(w, r, "/messages", http.StatusSeeOther)
 }

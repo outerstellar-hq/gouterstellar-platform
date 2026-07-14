@@ -36,6 +36,10 @@ type Bundle struct {
 	// ProtectedUI handlers
 	HomeShow              http.HandlerFunc
 	MessagesShow          http.HandlerFunc
+	MessagesCreate        http.HandlerFunc
+	MessagesDelete        http.HandlerFunc
+	MessagesRestore       http.HandlerFunc
+	MessagesResolve       http.HandlerFunc
 	ContactsList          http.HandlerFunc
 	ContactsDetail        http.HandlerFunc
 	ContactsCreate        http.HandlerFunc

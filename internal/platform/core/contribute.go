@@ -38,6 +38,10 @@ func (e *Extension) Contribute(ctx *extplatform.ContributionContext) error {
 	// --- Protected UI (auth required) ---
 	ctx.Routes.Protected(http.MethodGet, "/", "Home dashboard", http.HandlerFunc(b.HomeShow))
 	ctx.Routes.Protected(http.MethodGet, "/messages", "Messages", http.HandlerFunc(b.MessagesShow))
+	ctx.Routes.Protected(http.MethodPost, "/messages/create", "Create message", http.HandlerFunc(b.MessagesCreate))
+	ctx.Routes.Protected(http.MethodPost, "/messages/{syncId}/delete", "Delete message", http.HandlerFunc(b.MessagesDelete))
+	ctx.Routes.Protected(http.MethodPost, "/messages/{syncId}/restore", "Restore message", http.HandlerFunc(b.MessagesRestore))
+	ctx.Routes.Protected(http.MethodPost, "/messages/{syncId}/resolve", "Resolve conflict", http.HandlerFunc(b.MessagesResolve))
 	ctx.Routes.Protected(http.MethodGet, "/contacts", "Contacts list", http.HandlerFunc(b.ContactsList))
 	ctx.Routes.Protected(http.MethodGet, "/contacts/{syncId}", "Contact detail", http.HandlerFunc(b.ContactsDetail))
 	ctx.Routes.Protected(http.MethodPost, "/contacts/create", "Create contact", http.HandlerFunc(b.ContactsCreate))

@@ -258,6 +258,10 @@ func BuildCoreBundle(app *App, cfg *config.Config) core.Bundle {
 		// ProtectedUI
 		HomeShow:              app.HomeHandler.Show,
 		MessagesShow:          app.MessagesHandler.Show,
+		MessagesCreate:        app.MessagesHandler.Create,
+		MessagesDelete:        app.MessagesHandler.Delete,
+		MessagesRestore:       app.MessagesHandler.Restore,
+		MessagesResolve:       app.MessagesHandler.ResolveConflict,
 		ContactsList:          app.ContactsHandler.List,
 		ContactsDetail:        app.ContactsHandler.Detail,
 		ContactsCreate:        app.ContactsHandler.Create,
