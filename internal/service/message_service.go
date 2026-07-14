@@ -17,13 +17,14 @@ import (
 )
 
 type MessageService struct {
-	repo               persistence.MessageRepository
-	outbox             persistence.OutboxRepository
-	txMgr              TransactionRunner
-	cache              *persistence.MessageCache
-	eventPub           EventPublisher
-	auditRepo          persistence.AuditRepository
+	repo                persistence.MessageRepository
+	outbox              persistence.OutboxRepository
+	txMgr               TransactionRunner
+	cache               *persistence.MessageCache
+	eventPub            EventPublisher
+	auditRepo           persistence.AuditRepository
 	notificationService *NotificationService
+	emailService        EmailService
 }
 
 func NewMessageService(
@@ -34,15 +35,17 @@ func NewMessageService(
 	eventPub EventPublisher,
 	auditRepo persistence.AuditRepository,
 	notificationService *NotificationService,
+	emailService EmailService,
 ) *MessageService {
 	return &MessageService{
-		repo:               repo,
-		outbox:             outbox,
-		txMgr:              txMgr,
-		cache:              cache,
-		eventPub:           eventPub,
-		auditRepo:          auditRepo,
+		repo:                repo,
+		outbox:              outbox,
+		txMgr:               txMgr,
+		cache:               cache,
+		eventPub:            eventPub,
+		auditRepo:           auditRepo,
 		notificationService: notificationService,
+		emailService:        emailService,
 	}
 }
 
@@ -232,6 +235,8 @@ func (s *MessageService) CreateServerMessage(ctx context.Context, author, conten
 	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
 
 	s.notifyActor(ctx, "New Message", truncateContent(content), "message")
+	s.notifyActorByEmail(ctx, "New message created",
+		fmt.Sprintf("A new message was created:\n\nAuthor: %s\nContent: %s", author, content))
 
 	return stored, nil
 }
@@ -510,6 +515,23 @@ func (s *MessageService) notifyActor(ctx context.Context, title, body, nType str
 	}
 	if err := s.notificationService.Create(ctx, user.ID, title, body, nType); err != nil {
 		slog.Warn("Failed to create notification", "title", title, "error", err)
+	}
+}
+
+// notifyActorByEmail sends a best-effort notification email to the user acting
+// on the current request when they have email notifications enabled and an
+// EmailService is wired. It is nil-safe and never propagates errors — email
+// delivery is opportunistic and must not fail the originating write.
+func (s *MessageService) notifyActorByEmail(ctx context.Context, subject, body string) {
+	if s.emailService == nil {
+		return
+	}
+	user := UserFromContext(ctx)
+	if user == nil || !user.EmailNotificationsEnabled || user.Email == "" {
+		return
+	}
+	if err := s.emailService.Send(user.Email, subject, body); err != nil {
+		slog.Error("Failed to send notification email", "subject", subject, "error", err)
 	}
 }
 

@@ -140,6 +140,8 @@ func (r *Renderer) buildShell(req *http.Request) *viewmodel.ShellViewModel {
 		Theme:     "light",
 	}
 
+	shell.Layout = "sidebar"
+
 	if user := UserFromRequest(req); user != nil {
 		shell.User = &viewmodel.UserContext{
 			ID:       user.ID.String(),
@@ -153,6 +155,9 @@ func (r *Renderer) buildShell(req *http.Request) *viewmodel.ShellViewModel {
 		}
 		shell.Theme = theme
 		shell.IsDark = theme == "dark"
+		if user.Layout != nil && *user.Layout != "" {
+			shell.Layout = *user.Layout
+		}
 		if user.Language != nil {
 			shell.Language = *user.Language
 		}

@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	googleAuthURL     = "https://accounts.google.com/o/oauth2/v2/auth"
-	googleTokenURL    = "https://oauth2.googleapis.com/token"
-	googleUserInfoURL = "https://www.googleapis.com/oauth2/v2/userinfo"
+	googleAuthURL     = "https://accounts.google.com/o/oauth2/v2/auth"       //nolint:gosec // G101: public OAuth endpoint, not a credential
+	googleTokenURL    = "https://oauth2.googleapis.com/token"               // #nosec G101 -- public OAuth endpoint, not a credential
+	googleUserInfoURL = "https://www.googleapis.com/oauth2/v2/userinfo"     //nolint:gosec // G101: public OAuth endpoint, not a credential
 )
 
 // GoogleOAuthProvider implements OAuthProvider against Google's OAuth 2.0 /

@@ -33,6 +33,7 @@ type SecurityService struct {
 	sessionRepo           persistence.SessionRepository
 	auditRepo             persistence.AuditRepository
 	notificationService   *NotificationService
+	emailService          EmailService
 	sessionTimeoutSeconds int64
 }
 
@@ -42,6 +43,7 @@ func NewSecurityService(
 	sessionRepo persistence.SessionRepository,
 	auditRepo persistence.AuditRepository,
 	notificationService *NotificationService,
+	emailService EmailService,
 	sessionTimeoutSeconds int64,
 ) *SecurityService {
 	return &SecurityService{
@@ -50,6 +52,7 @@ func NewSecurityService(
 		sessionRepo:           sessionRepo,
 		auditRepo:             auditRepo,
 		notificationService:   notificationService,
+		emailService:          emailService,
 		sessionTimeoutSeconds: sessionTimeoutSeconds,
 	}
 }
@@ -121,6 +124,15 @@ func (s *SecurityService) Register(ctx context.Context, username, password strin
 
 	actorID, actorName := userToAuditParams(user)
 	s.auditLog(ctx, actorID, actorName, nil, nil, "USER_REGISTER", "New user registered")
+
+	// Send a welcome email regardless of notification preference — the user just
+	// signed up, so this transactional message is expected. Failures are logged
+	// but never block registration.
+	if s.emailService != nil && user.Email != "" {
+		if err := s.emailService.Send(user.Email, "Welcome to Outerstellar", "Your account has been created."); err != nil {
+			slog.Error("Failed to send welcome email", "userID", user.ID, "error", err)
+		}
+	}
 
 	return user, nil
 }
@@ -220,9 +232,19 @@ func (s *SecurityService) SetUserEnabled(ctx context.Context, adminID, targetID 
 
 	s.auditLog(ctx, actorID, actorName, targetIDPtr, targetName, action, fmt.Sprintf("Set enabled=%v", enabled))
 
-	if !enabled && s.notificationService != nil {
-		if err := s.notificationService.Create(ctx, targetID, "Account Disabled", "Your account has been disabled by an administrator.", "account"); err != nil {
-			slog.Warn("Failed to create account-disabled notification", "userID", targetID, "error", err)
+	if !enabled {
+		if s.notificationService != nil {
+			if err := s.notificationService.Create(ctx, targetID, "Account Disabled", "Your account has been disabled by an administrator.", "account"); err != nil {
+				slog.Warn("Failed to create account-disabled notification", "userID", targetID, "error", err)
+			}
+		}
+		// Notify the affected user by email when they have email notifications
+		// enabled. Synchronous send is acceptable for the PoC; failures are
+		// logged but never block the disable action.
+		if s.emailService != nil && targetModel.EmailNotificationsEnabled && targetModel.Email != "" {
+			if err := s.emailService.Send(targetModel.Email, "Account Disabled", "Your account has been disabled by an administrator."); err != nil {
+				slog.Error("Failed to send account-disabled email", "userID", targetID, "error", err)
+			}
 		}
 	}
 

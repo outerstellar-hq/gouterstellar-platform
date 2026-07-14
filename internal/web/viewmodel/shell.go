@@ -5,6 +5,7 @@ type ShellViewModel struct {
 	User      *UserContext
 	Theme     string
 	IsDark    bool
+	Layout    string
 	Language  string
 	CSRFToken string
 	Version   string

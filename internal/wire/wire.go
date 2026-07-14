@@ -90,12 +90,29 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 
 	notificationSvc := service.NewNotificationService(notificationRepo)
 
+	var emailSvc service.EmailService
+	if cfg.Email.Enabled {
+		emailSvc = service.NewResilientEmailService(service.NewSmtpEmailService(service.SmtpConfig{
+			Host:     cfg.Email.Host,
+			Port:     cfg.Email.Port,
+			Username: cfg.Email.Username,
+			Password: cfg.Email.Password,
+			From:     cfg.Email.From,
+			StartTLS: cfg.Email.StartTLS,
+		}))
+	} else if cfg.DevMode {
+		emailSvc = &service.ConsoleEmailService{}
+	} else {
+		emailSvc = &service.NoOpEmailService{}
+	}
+
 	securitySvc := service.NewSecurityService(
 		userRepo,
 		passwordEncoder,
 		sessionRepo,
 		auditRepo,
 		notificationSvc,
+		emailSvc,
 		int64(cfg.SessionTimeoutMinutes)*60,
 	)
 
@@ -155,22 +172,6 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 
 	realms := []security.AuthRealm{sessionRealm, apiKeyRealm, jwtRealm}
 
-	var emailSvc service.EmailService
-	if cfg.Email.Enabled {
-		emailSvc = service.NewResilientEmailService(service.NewSmtpEmailService(service.SmtpConfig{
-			Host:     cfg.Email.Host,
-			Port:     cfg.Email.Port,
-			Username: cfg.Email.Username,
-			Password: cfg.Email.Password,
-			From:     cfg.Email.From,
-			StartTLS: cfg.Email.StartTLS,
-		}))
-	} else if cfg.DevMode {
-		emailSvc = &service.ConsoleEmailService{}
-	} else {
-		emailSvc = &service.NoOpEmailService{}
-	}
-
 	var analytics service.AnalyticsService
 	if cfg.Segment.Enabled && cfg.Segment.WriteKey != "" {
 		analytics = service.NewSegmentAnalyticsService(cfg.Segment.WriteKey)
@@ -178,7 +179,7 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 		analytics = &service.NoOpAnalyticsService{}
 	}
 
-	messageSvc := service.NewMessageService(messageRepo, outboxRepo, txMgr, messageCache, wsPublisher, auditRepo, notificationSvc)
+	messageSvc := service.NewMessageService(messageRepo, outboxRepo, txMgr, messageCache, wsPublisher, auditRepo, notificationSvc, emailSvc)
 	contactSvc := service.NewContactService(contactRepo, outboxRepo, txMgr, wsPublisher, notificationSvc)
 	outboxProcessor := service.NewOutboxProcessor(outboxRepo, txMgr, wsPublisher)
 	passwordResetSvc := service.NewPasswordResetService(userRepo, passwordEncoder, passwordResetRepo, emailSvc, auditRepo, cfg.AppBaseURL)
