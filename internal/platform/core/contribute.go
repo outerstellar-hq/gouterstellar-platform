@@ -55,6 +55,8 @@ func (e *Extension) Contribute(ctx *extplatform.ContributionContext) error {
 	ctx.Routes.Protected(http.MethodPost, "/settings/api-keys", "Create API key", http.HandlerFunc(b.SettingsCreateAPIKey))
 	ctx.Routes.Protected(http.MethodPost, "/settings/api-keys/{id}/delete", "Delete API key", http.HandlerFunc(b.SettingsDeleteAPIKey))
 	ctx.Routes.Protected(http.MethodPost, "/settings/notifications", "Update notification prefs", http.HandlerFunc(b.SettingsNotifPrefs))
+	ctx.Routes.Protected(http.MethodGet, "/settings/sessions", "Active sessions", http.HandlerFunc(b.SettingsSessions))
+	ctx.Routes.Protected(http.MethodPost, "/settings/sessions/{tokenHash}/revoke", "Revoke session", http.HandlerFunc(b.SettingsRevokeSession))
 	ctx.Routes.Protected(http.MethodGet, "/notifications", "Notifications list", http.HandlerFunc(b.NotifsList))
 	ctx.Routes.Protected(http.MethodPost, "/notifications/{id}/read", "Mark notification read", http.HandlerFunc(b.NotifsMarkRead))
 	ctx.Routes.Protected(http.MethodPost, "/notifications/read-all", "Mark all read", http.HandlerFunc(b.NotifsMarkAllRead))

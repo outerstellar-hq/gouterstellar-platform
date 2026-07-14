@@ -102,6 +102,21 @@ type SettingsPage struct {
 	NewApiKey string
 }
 
+// SettingsSessionsPage is the view model for the active-sessions management page.
+type SettingsSessionsPage struct {
+	Sessions []SessionItem
+}
+
+// SessionItem is a UI-facing summary of a single active session. MaskedTokenHash
+// is a short prefix of the stored token hash, safe to render; TokenHash carries
+// the full hash so the revoke form can address the session.
+type SessionItem struct {
+	TokenHash        string
+	MaskedTokenHash  string
+	CreatedAt        string
+	ExpiresAt        string
+}
+
 type ProfileData struct {
 	Username                  string
 	Email                     string

@@ -1,0 +1,29 @@
+{{ define "content" }}
+<div class="settings-sessions-page">
+    <div class="page-header">
+        <h1>Active Sessions</h1>
+        <a href="/settings" class="btn btn-secondary">Back to settings</a>
+    </div>
+
+    <div class="session-list">
+        {{ range .BodyData.Sessions }}
+        <div class="session-row">
+            <div class="session-info">
+                <span class="session-token">{{ .MaskedTokenHash }}…</span>
+                <span class="session-meta">
+                    Created {{ .CreatedAt }} · Expires {{ .ExpiresAt }}
+                </span>
+            </div>
+            <div class="session-actions">
+                <form method="POST" action="/settings/sessions/{{ .TokenHash }}/revoke" class="inline-form">
+                    <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                    <button type="submit" class="btn btn-sm btn-danger" data-confirm="Revoke this session?">Revoke</button>
+                </form>
+            </div>
+        </div>
+        {{ else }}
+        <p class="empty-state">No active sessions.</p>
+        {{ end }}
+    </div>
+</div>
+{{ end }}

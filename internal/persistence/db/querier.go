@@ -81,6 +81,7 @@ type Querier interface {
 	// TO_TIMESTAMP(epoch / 1000.0) before EXTRACT.
 	ListMessagesByYear(ctx context.Context, arg ListMessagesByYearParams) ([]PltMessage, error)
 	ListPendingOutbox(ctx context.Context, limit int32) ([]ListPendingOutboxRow, error)
+	ListSessionsForUser(ctx context.Context, userID uuid.UUID) ([]ListSessionsForUserRow, error)
 	LogAudit(ctx context.Context, arg LogAuditParams) (PltAuditLog, error)
 	MarkAllNotificationsRead(ctx context.Context, userID uuid.UUID) (int64, error)
 	MarkCleanContacts(ctx context.Context) error

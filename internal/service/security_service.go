@@ -388,6 +388,53 @@ func (s *SecurityService) DeleteExpiredSessions(ctx context.Context) error {
 	return nil
 }
 
+// SessionInfo is a UI-facing summary of an active session. The token hash is
+// masked so only a short prefix is exposed; the full hash never leaves the
+// store but is carried on the struct so the UI can address a session for
+// revocation.
+type SessionInfo struct {
+	TokenHash string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
+// MaskedTokenHash returns the first 8 characters of the session token hash,
+// enough to distinguish sessions without leaking the full hash.
+func (s SessionInfo) MaskedTokenHash() string {
+	if len(s.TokenHash) <= 8 {
+		return s.TokenHash
+	}
+	return s.TokenHash[:8]
+}
+
+// ListUserSessions returns the active (non-expired) sessions for the given
+// user, most recently created first.
+func (s *SecurityService) ListUserSessions(ctx context.Context, userID uuid.UUID) ([]SessionInfo, error) {
+	rows, err := s.sessionRepo.ListForUser(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list user sessions: %w", err)
+	}
+
+	result := make([]SessionInfo, len(rows))
+	for i, row := range rows {
+		result[i] = SessionInfo{
+			TokenHash: row.TokenHash,
+			CreatedAt: row.CreatedAt.Time,
+			ExpiresAt: row.ExpiresAt.Time,
+		}
+	}
+	return result, nil
+}
+
+// RevokeSession deletes a single session by its token hash, invalidating the
+// associated cookie on its next lookup.
+func (s *SecurityService) RevokeSession(ctx context.Context, tokenHash string) error {
+	if err := s.sessionRepo.DeleteByTokenHash(ctx, tokenHash); err != nil {
+		return fmt.Errorf("revoke session: %w", err)
+	}
+	return nil
+}
+
 func (s *SecurityService) UpdateProfile(ctx context.Context, userID uuid.UUID, email string, username, avatarURL *string) error {
 	pltUser, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {

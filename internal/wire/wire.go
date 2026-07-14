@@ -275,6 +275,8 @@ func BuildCoreBundle(app *App, cfg *config.Config) core.Bundle {
 		SettingsCreateAPIKey:  app.SettingsHandler.CreateApiKey,
 		SettingsDeleteAPIKey:  app.SettingsHandler.DeleteApiKey,
 		SettingsNotifPrefs:    app.SettingsHandler.UpdateNotificationPrefs,
+		SettingsSessions:      app.SettingsHandler.Sessions,
+		SettingsRevokeSession: app.SettingsHandler.RevokeSession,
 		NotifsList:            app.NotificationsHandler.List,
 		NotifsMarkRead:        app.NotificationsHandler.MarkRead,
 		NotifsMarkAllRead:     app.NotificationsHandler.MarkAllRead,

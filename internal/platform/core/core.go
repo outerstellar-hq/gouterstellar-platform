@@ -53,6 +53,8 @@ type Bundle struct {
 	SettingsCreateAPIKey  http.HandlerFunc
 	SettingsDeleteAPIKey  http.HandlerFunc
 	SettingsNotifPrefs    http.HandlerFunc
+	SettingsSessions      http.HandlerFunc
+	SettingsRevokeSession http.HandlerFunc
 	NotifsList            http.HandlerFunc
 	NotifsMarkRead        http.HandlerFunc
 	NotifsMarkAllRead     http.HandlerFunc

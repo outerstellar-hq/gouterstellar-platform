@@ -274,3 +274,50 @@ func (h *SettingsHandler) DeleteApiKey(w http.ResponseWriter, r *http.Request) {
 
 	http.Redirect(w, r, "/settings?tab=api-keys", http.StatusSeeOther)
 }
+
+// Sessions lists the user's active (non-expired) sessions for management.
+func (h *SettingsHandler) Sessions(w http.ResponseWriter, r *http.Request) {
+	user := web.UserFromRequest(r)
+	if user == nil {
+		http.Redirect(w, r, "/auth", http.StatusSeeOther)
+		return
+	}
+
+	sessions, err := h.securityService.ListUserSessions(r.Context(), user.ID)
+	if err != nil {
+		handleServiceError(w, err)
+		return
+	}
+
+	items := make([]viewmodel.SessionItem, len(sessions))
+	for i, s := range sessions {
+		items[i] = viewmodel.SessionItem{
+			TokenHash:       s.TokenHash,
+			MaskedTokenHash: s.MaskedTokenHash(),
+			CreatedAt:       s.CreatedAt.Format("2006-01-02 15:04"),
+			ExpiresAt:       s.ExpiresAt.Format("2006-01-02 15:04"),
+		}
+	}
+
+	if err := h.renderer.RenderPage(w, r, "settings_sessions", viewmodel.SettingsSessionsPage{Sessions: items}); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
+}
+
+// RevokeSession deletes a single session by its token hash (read from the
+// {tokenHash} URL parameter), then redirects back to the sessions list.
+func (h *SettingsHandler) RevokeSession(w http.ResponseWriter, r *http.Request) {
+	user := web.UserFromRequest(r)
+	if user == nil {
+		http.Redirect(w, r, "/auth", http.StatusSeeOther)
+		return
+	}
+
+	tokenHash := chi.URLParam(r, "tokenHash")
+	if err := h.securityService.RevokeSession(r.Context(), tokenHash); err != nil {
+		handleServiceError(w, err)
+		return
+	}
+
+	http.Redirect(w, r, "/settings/sessions", http.StatusSeeOther)
+}

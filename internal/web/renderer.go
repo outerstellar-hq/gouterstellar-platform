@@ -212,6 +212,8 @@ func pageTitle(page string) string {
 		return "Search"
 	case "settings":
 		return "Settings"
+	case "settings_sessions":
+		return "Active Sessions"
 	case "notifications":
 		return "Notifications"
 	case "admin_users":

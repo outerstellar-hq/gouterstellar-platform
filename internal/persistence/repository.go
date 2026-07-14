@@ -96,6 +96,7 @@ type SessionRepository interface {
 	DeleteByTokenHash(ctx context.Context, tokenHash string) error
 	DeleteByUserID(ctx context.Context, userID uuid.UUID) error
 	DeleteExpired(ctx context.Context) (int64, error)
+	ListForUser(ctx context.Context, userID uuid.UUID) ([]db.ListSessionsForUserRow, error)
 }
 
 type ApiKeyRepository interface {

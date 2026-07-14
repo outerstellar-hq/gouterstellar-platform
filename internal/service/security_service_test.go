@@ -147,6 +147,11 @@ func (m *mockSessionRepo) DeleteExpired(ctx context.Context) (int64, error) {
 	return args.Get(0).(int64), args.Error(1)
 }
 
+func (m *mockSessionRepo) ListForUser(ctx context.Context, userID uuid.UUID) ([]db.ListSessionsForUserRow, error) {
+	args := m.Called(ctx, userID)
+	return args.Get(0).([]db.ListSessionsForUserRow), args.Error(1)
+}
+
 type mockPasswordEncoder struct {
 	mock.Mock
 }
