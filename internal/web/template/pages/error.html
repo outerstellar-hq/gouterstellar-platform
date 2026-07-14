@@ -1,9 +1,9 @@
 {{ define "content" }}
 <div class="error-page">
-    <h1>{{ .StatusCode }} - {{ .Title }}</h1>
-    <p>{{ .Message }}</p>
-    {{ if .RequestID }}
-    <p class="request-id">Request ID: {{ .RequestID }}</p>
+    <h1>{{ .BodyData.StatusCode }} - {{ .BodyData.Title }}</h1>
+    <p>{{ .BodyData.Message }}</p>
+    {{ if .BodyData.RequestID }}
+    <p class="request-id">Request ID: {{ .BodyData.RequestID }}</p>
     {{ end }}
     <a href="/" class="btn btn-primary">Back to Home</a>
 </div>

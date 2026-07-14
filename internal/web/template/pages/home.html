@@ -2,9 +2,9 @@
 <div class="home-page">
     <h1>Welcome to Outerstellar Platform</h1>
     <div class="stats">
-        <div class="stat-card"><h3>{{ .MessageCount }}</h3><p>Messages</p></div>
-        <div class="stat-card"><h3>{{ .ContactCount }}</h3><p>Contacts</p></div>
-        <div class="stat-card"><h3>{{ .UserCount }}</h3><p>Users</p></div>
+        <div class="stat-card"><h3>{{ .BodyData.MessageCount }}</h3><p>Messages</p></div>
+        <div class="stat-card"><h3>{{ .BodyData.ContactCount }}</h3><p>Contacts</p></div>
+        <div class="stat-card"><h3>{{ .BodyData.UserCount }}</h3><p>Users</p></div>
     </div>
 </div>
 {{ end }}

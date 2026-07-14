@@ -2,13 +2,13 @@
 <div class="notifications-page">
     <div class="page-header">
         <h1>Notifications</h1>
-        {{ if .UnreadCount }}
-        <span class="badge badge-unread">{{ .UnreadCount }} unread</span>
+        {{ if .BodyData.UnreadCount }}
+        <span class="badge badge-unread">{{ .BodyData.UnreadCount }} unread</span>
         {{ end }}
     </div>
 
     <div class="notification-list">
-        {{ range .Notifications }}
+        {{ range .BodyData.Notifications }}
         <div class="notification-item{{ if not .Read }} unread{{ end }}">
             <div class="notification-header">
                 <span class="notification-type badge badge-{{ .Type }}">{{ .Type }}</span>

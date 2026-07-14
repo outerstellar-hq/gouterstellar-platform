@@ -3,35 +3,35 @@
     <h1>Settings</h1>
 
     <nav class="settings-tabs">
-        <a href="/settings?tab=profile" {{ if eq .ActiveTab "profile" }}class="active"{{ end }}>Profile</a>
-        <a href="/settings?tab=password" {{ if eq .ActiveTab "password" }}class="active"{{ end }}>Password</a>
-        <a href="/settings?tab=api-keys" {{ if eq .ActiveTab "api-keys" }}class="active"{{ end }}>API Keys</a>
-        <a href="/settings?tab=notifications" {{ if eq .ActiveTab "notifications" }}class="active"{{ end }}>Notifications</a>
-        <a href="/settings?tab=appearance" {{ if eq .ActiveTab "appearance" }}class="active"{{ end }}>Appearance</a>
+        <a href="/settings?tab=profile" {{ if eq .BodyData.ActiveTab "profile" }}class="active"{{ end }}>Profile</a>
+        <a href="/settings?tab=password" {{ if eq .BodyData.ActiveTab "password" }}class="active"{{ end }}>Password</a>
+        <a href="/settings?tab=api-keys" {{ if eq .BodyData.ActiveTab "api-keys" }}class="active"{{ end }}>API Keys</a>
+        <a href="/settings?tab=notifications" {{ if eq .BodyData.ActiveTab "notifications" }}class="active"{{ end }}>Notifications</a>
+        <a href="/settings?tab=appearance" {{ if eq .BodyData.ActiveTab "appearance" }}class="active"{{ end }}>Appearance</a>
     </nav>
 
-    {{ if eq .ActiveTab "profile" }}
+    {{ if eq .BodyData.ActiveTab "profile" }}
     <div class="settings-tab-content active">
         <h2>Profile</h2>
         <form method="POST" action="/settings/profile">
             <div class="form-group">
                 <label for="username">Username</label>
-                <input type="text" id="username" name="username" value="{{ .Profile.Username }}" readonly>
+                <input type="text" id="username" name="username" value="{{ .BodyData.Profile.Username }}" readonly>
             </div>
             <div class="form-group">
                 <label for="email">Email</label>
-                <input type="email" id="email" name="email" value="{{ .Profile.Email }}">
+                <input type="email" id="email" name="email" value="{{ .BodyData.Profile.Email }}">
             </div>
             <div class="form-group">
                 <label for="avatarUrl">Avatar URL</label>
-                <input type="url" id="avatarUrl" name="avatarUrl" value="{{ .Profile.AvatarURL }}">
+                <input type="url" id="avatarUrl" name="avatarUrl" value="{{ .BodyData.Profile.AvatarURL }}">
             </div>
             <button type="submit" class="btn btn-primary">Save Profile</button>
         </form>
     </div>
     {{ end }}
 
-    {{ if eq .ActiveTab "password" }}
+    {{ if eq .BodyData.ActiveTab "password" }}
     <div class="settings-tab-content active">
         <h2>Change Password</h2>
         <form method="POST" action="/settings/password">
@@ -52,13 +52,13 @@
     </div>
     {{ end }}
 
-    {{ if eq .ActiveTab "api-keys" }}
+    {{ if eq .BodyData.ActiveTab "api-keys" }}
     <div class="settings-tab-content active">
         <h2>API Keys</h2>
-        {{ if .NewApiKey }}
+        {{ if .BodyData.NewApiKey }}
         <div class="alert alert-warning">
             <strong>New API key created.</strong> Copy it now — it won't be shown again:<br>
-            <code>{{ .NewApiKey }}</code>
+            <code>{{ .BodyData.NewApiKey }}</code>
         </div>
         {{ end }}
         <table class="data-table">
@@ -72,7 +72,7 @@
                 </tr>
             </thead>
             <tbody>
-                {{ range .ApiKeys }}
+                {{ range .BodyData.ApiKeys }}
                 <tr>
                     <td>{{ .Name }}</td>
                     <td><code>{{ .KeyPrefix }}...</code></td>
@@ -96,19 +96,19 @@
     </div>
     {{ end }}
 
-    {{ if eq .ActiveTab "notifications" }}
+    {{ if eq .BodyData.ActiveTab "notifications" }}
     <div class="settings-tab-content active">
         <h2>Notification Preferences</h2>
         <form method="POST" action="/settings/notifications">
             <div class="form-group">
                 <label>
-                    <input type="checkbox" name="email_notifications" value="on" {{ if .Profile.EmailNotificationsEnabled }}checked{{ end }}>
+                    <input type="checkbox" name="email_notifications" value="on" {{ if .BodyData.Profile.EmailNotificationsEnabled }}checked{{ end }}>
                     Email notifications
                 </label>
             </div>
             <div class="form-group">
                 <label>
-                    <input type="checkbox" name="push_notifications" value="on" {{ if .Profile.PushNotificationsEnabled }}checked{{ end }}>
+                    <input type="checkbox" name="push_notifications" value="on" {{ if .BodyData.Profile.PushNotificationsEnabled }}checked{{ end }}>
                     Push notifications
                 </label>
             </div>
@@ -117,27 +117,27 @@
     </div>
     {{ end }}
 
-    {{ if eq .ActiveTab "appearance" }}
+    {{ if eq .BodyData.ActiveTab "appearance" }}
     <div class="settings-tab-content active">
         <h2>Appearance</h2>
         <form method="POST" action="/settings/preferences">
             <div class="form-group">
                 <label for="theme">Theme</label>
                 <select id="theme" name="theme">
-                    <option value="light" {{ if eq .Theme "light" }}selected{{ end }}>Light</option>
-                    <option value="dark" {{ if eq .Theme "dark" }}selected{{ end }}>Dark</option>
-                    <option value="auto" {{ if eq .Theme "auto" }}selected{{ end }}>Auto</option>
+                    <option value="light" {{ if eq .BodyData.Theme "light" }}selected{{ end }}>Light</option>
+                    <option value="dark" {{ if eq .BodyData.Theme "dark" }}selected{{ end }}>Dark</option>
+                    <option value="auto" {{ if eq .BodyData.Theme "auto" }}selected{{ end }}>Auto</option>
                 </select>
             </div>
             <div class="form-group">
                 <label for="language">Language</label>
-                <input type="text" id="language" name="language" value="{{ .Language }}">
+                <input type="text" id="language" name="language" value="{{ .BodyData.Language }}">
             </div>
             <div class="form-group">
                 <label for="layout">Layout</label>
                 <select id="layout" name="layout">
-                    <option value="sidebar" {{ if eq .Layout "sidebar" }}selected{{ end }}>Sidebar</option>
-                    <option value="topbar" {{ if eq .Layout "topbar" }}selected{{ end }}>Topbar</option>
+                    <option value="sidebar" {{ if eq .BodyData.Layout "sidebar" }}selected{{ end }}>Sidebar</option>
+                    <option value="topbar" {{ if eq .BodyData.Layout "topbar" }}selected{{ end }}>Topbar</option>
                 </select>
             </div>
             <button type="submit" class="btn btn-primary">Save Preferences</button>

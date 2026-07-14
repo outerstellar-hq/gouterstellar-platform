@@ -2,13 +2,13 @@
 <div class="auth-page">
     <div class="auth-card">
         <h1>Sign In</h1>
-        {{ if .Error }}
-        <div class="toast toast-error">{{ .Error }}</div>
+        {{ if .BodyData.Error }}
+        <div class="toast toast-error">{{ .BodyData.Error }}</div>
         {{ end }}
         <form method="POST" action="/auth/login">
             <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
-            {{ if .ReturnTo }}
-            <input type="hidden" name="return_to" value="{{ .ReturnTo }}">
+            {{ if .BodyData.ReturnTo }}
+            <input type="hidden" name="return_to" value="{{ .BodyData.ReturnTo }}">
             {{ end }}
             <div class="form-group">
                 <label for="username">Username</label>

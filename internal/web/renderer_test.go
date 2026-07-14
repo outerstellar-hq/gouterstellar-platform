@@ -13,13 +13,13 @@ import (
 func testFS() fstest.MapFS {
 	return fstest.MapFS{
 		"template/base.html": &fstest.MapFile{
-			Data: []byte(`{{ define "base" }}<html><head><title>{{ .Title }}</title></head><body><nav>NAV</nav><main>{{ template "content" .BodyData }}</main></body></html>{{ end }}`),
+			Data: []byte(`{{ define "base" }}<html><head><title>{{ .Title }}</title></head><body><nav>NAV</nav><main>{{ template "content" . }}</main></body></html>{{ end }}`),
 		},
 		"template/partials/pagination.html": &fstest.MapFile{
 			Data: []byte(`{{ define "pagination" }}<div class="pagination">page {{ .CurrentPage }}</div>{{ end }}`),
 		},
 		"template/pages/home.html": &fstest.MapFile{
-			Data: []byte(`{{ define "content" }}<h1>{{ .Title }}</h1>{{ end }}`),
+			Data: []byte(`{{ define "content" }}<h1>{{ .BodyData.Title }}</h1>{{ end }}`),
 		},
 	}
 }

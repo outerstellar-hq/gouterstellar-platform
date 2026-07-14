@@ -15,7 +15,7 @@
             </tr>
         </thead>
         <tbody>
-            {{ range .Users }}
+            {{ range .BodyData.Users }}
             <tr>
                 <td>{{ .Username }}</td>
                 <td>{{ .Email }}</td>
@@ -41,6 +41,6 @@
         </tbody>
     </table>
 
-    {{ template "pagination" .Pagination }}
+    {{ template "pagination" .BodyData.Pagination }}
 </div>
 {{ end }}

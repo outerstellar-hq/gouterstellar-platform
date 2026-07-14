@@ -40,7 +40,7 @@
         {{ range .Messages }}
         <div class="toast toast-{{ .Type }}">{{ .Message }}</div>
         {{ end }}
-        {{ template "content" .BodyData }}
+        {{ template "content" . }}
     </main>
     <footer>
         <span>v{{ .Version }}</span>
