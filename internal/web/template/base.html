@@ -17,22 +17,22 @@
             {{ range .NavItems }}
             <a href="{{ .URL }}" class="nav-link{{ if .Active }} active{{ end }}">{{ .Label }}</a>
             {{ else }}
-            <a href="/" class="nav-link{{ if eq $.Body "home" }} active{{ end }}">Home</a>
-            <a href="/messages" class="nav-link{{ if eq $.Body "messages" }} active{{ end }}">Messages</a>
-            <a href="/contacts" class="nav-link{{ if eq $.Body "contacts" }} active{{ end }}">Contacts</a>
-            <a href="/notifications" class="nav-link{{ if eq $.Body "notifications" }} active{{ end }}">Notifications</a>
+            <a href="/" class="nav-link{{ if eq $.Body "home" }} active{{ end }}">{{ translate $.Language "nav.home" }}</a>
+            <a href="/messages" class="nav-link{{ if eq $.Body "messages" }} active{{ end }}">{{ translate $.Language "nav.messages" }}</a>
+            <a href="/contacts" class="nav-link{{ if eq $.Body "contacts" }} active{{ end }}">{{ translate $.Language "nav.contacts" }}</a>
+            <a href="/notifications" class="nav-link{{ if eq $.Body "notifications" }} active{{ end }}">{{ translate $.Language "nav.notifications" }}</a>
             {{ if $.User.IsAdmin }}
-            <a href="/admin/users" class="nav-link{{ if eq $.Body "admin_users" }} active{{ end }}">Admin</a>
+            <a href="/admin/users" class="nav-link{{ if eq $.Body "admin_users" }} active{{ end }}">{{ translate $.Language "nav.admin" }}</a>
             {{ end }}
-            <a href="/settings" class="nav-link{{ if eq $.Body "settings" }} active{{ end }}">Settings</a>
+            <a href="/settings" class="nav-link{{ if eq $.Body "settings" }} active{{ end }}">{{ translate $.Language "nav.settings" }}</a>
             {{ end }}
             {{ if .User.IsAdmin }}
-            <a href="/admin/users" class="nav-link{{ if eq .Body "admin_users" }} active{{ end }}">Admin</a>
+            <a href="/admin/users" class="nav-link{{ if eq .Body "admin_users" }} active{{ end }}">{{ translate $.Language "nav.admin" }}</a>
             {{ end }}
         </div>
         <div class="nav-user">
             <span>{{ .User.Username }}</span>
-            <form method="POST" action="/auth/logout"><button type="submit">Logout</button></form>
+            <form method="POST" action="/auth/logout"><button type="submit">{{ translate $.Language "nav.logout" }}</button></form>
         </div>
     </nav>
     {{ end }}

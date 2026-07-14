@@ -20,6 +20,7 @@ import (
 	"github.com/rygel/gouterstellar-platform/internal/web"
 	"github.com/rygel/gouterstellar-platform/internal/web/filter"
 	"github.com/rygel/gouterstellar-platform/internal/web/handler"
+	"github.com/rygel/gouterstellar-platform/pkg/i18n"
 	extplatform "github.com/rygel/gouterstellar-platform/platform"
 )
 
@@ -55,6 +56,7 @@ type App struct {
 	AuthMetrics           *filter.AuthMetrics
 	EmailService          service.EmailService
 	Analytics             service.AnalyticsService
+	I18n                  *i18n.I18nService
 	ActivityUpdater       *security.AsyncActivityUpdater
 	JwtService            *security.JwtService
 	PermissionResolver    security.PermissionResolver
@@ -165,6 +167,13 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 	outboxProcessor := service.NewOutboxProcessor(outboxRepo, txMgr, wsPublisher)
 	passwordResetSvc := service.NewPasswordResetService(userRepo, passwordEncoder, passwordResetRepo, emailSvc, auditRepo, cfg.AppBaseURL)
 
+	// Instantiate the i18n service from the embedded locale bundles and publish
+	// it to the web package so the translate template func can resolve keys at
+	// render time. Installed before the renderer is constructed so the func map
+	// closure captures a usable service.
+	i18nSvc := i18n.NewI18nService(web.LocaleFS, web.LocaleBasePath)
+	web.SetGlobalI18nService(i18nSvc)
+
 	renderer, err := web.NewRenderer(templateFS, web.TemplateFuncMap(), cfg.Version)
 	if err != nil {
 		panic("failed to parse templates: " + err.Error())
@@ -224,6 +233,7 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 		AuthMetrics:           authMetrics,
 		EmailService:          emailSvc,
 		Analytics:             analytics,
+		I18n:                  i18nSvc,
 		ActivityUpdater:       activityUpdater,
 		JwtService:            jwtSvc,
 		PermissionResolver:    permissionResolver,

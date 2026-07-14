@@ -6,8 +6,49 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/rygel/gouterstellar-platform/pkg/i18n"
 )
+
+// i18nHolder stores the wired I18nService so the "translate" template func
+// (registered at parse time, before Wire runs) can reach it at render time.
+// SetGlobalI18nService is called once during wiring; TranslateForTemplate is
+// read on every render.
+var (
+	i18nMu  sync.RWMutex
+	i18nSvc *i18n.I18nService
+)
+
+// SetGlobalI18nService installs the i18n service used by the translate template
+// function. It is intended to be called once during application wiring.
+func SetGlobalI18nService(svc *i18n.I18nService) {
+	i18nMu.Lock()
+	i18nSvc = svc
+	i18nMu.Unlock()
+}
+
+// TranslateForTemplate resolves a key for the given language code, falling back
+// to English and then to the key itself. It is nil-safe so templates render
+// even when the i18n service has not been wired.
+func TranslateForTemplate(lang, key string) string {
+	i18nMu.RLock()
+	svc := i18nSvc
+	i18nMu.RUnlock()
+	if svc == nil {
+		return key
+	}
+	// Honour the requested locale for this render without mutating the shared
+	// service locale (which is process-global). The service falls back to "en"
+	// internally when a locale bundle has no translation for the key.
+	current := svc.Locale()
+	if lang != "" && lang != current && i18n.IsSupported(lang) {
+		svc.SetLocale(lang)
+		defer svc.SetLocale(current)
+	}
+	return svc.Translate(key)
+}
 
 func TemplateFuncMap() template.FuncMap {
 	return template.FuncMap{
@@ -43,5 +84,6 @@ func TemplateFuncMap() template.FuncMap {
 		"urlEncode": func(s string) string {
 			return url.QueryEscape(s)
 		},
+		"translate": TranslateForTemplate,
 	}
 }
