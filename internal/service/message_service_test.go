@@ -130,11 +130,6 @@ type mockOutboxRepo struct {
 	mock.Mock
 }
 
-func (m *mockOutboxRepo) SaveOutbox(ctx context.Context, id uuid.UUID, payloadType, payload, status string) error {
-	args := m.Called(ctx, id, payloadType, payload, status)
-	return args.Error(0)
-}
-
 func (m *mockOutboxRepo) ListPending(ctx context.Context, limit int32) ([]db.ListPendingOutboxRow, error) {
 	args := m.Called(ctx, limit)
 	return args.Get(0).([]db.ListPendingOutboxRow), args.Error(1)

@@ -20,15 +20,6 @@ func NewOutboxRepository(pool *pgxpool.Pool) OutboxRepository {
 	return &outboxRepo{q: db.New(pool), pool: pool}
 }
 
-func (r *outboxRepo) SaveOutbox(ctx context.Context, id uuid.UUID, payloadType, payload, status string) error {
-	return r.q.SaveOutbox(ctx, db.SaveOutboxParams{
-		ID:          id,
-		PayloadType: payloadType,
-		Payload:     payload,
-		Status:      status,
-	})
-}
-
 // WithTx returns a copy of this repository whose underlying sqlc Queries is
 // bound to the given transaction. Operations on the returned repository
 // participate in the transaction and only persist when the transaction commits.

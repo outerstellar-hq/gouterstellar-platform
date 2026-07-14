@@ -429,19 +429,6 @@ func (s *MessageService) ResolveConflict(ctx context.Context, syncID string, str
 	return nil
 }
 
-func (s *MessageService) saveOutboxEntry(ctx context.Context, syncID string, m db.PltMessage) {
-	syncMsg := pltMessageToSyncMessage(m)
-	payload, err := model.SyncMessageToJSON(syncMsg)
-	if err != nil {
-		slog.Error("Failed to serialize outbox payload", "syncID", syncID, "error", err)
-		return
-	}
-
-	if err := s.outbox.SaveOutbox(ctx, uuid.New(), "MESSAGE_SYNC", payload, "PENDING"); err != nil {
-		slog.Error("Failed to save outbox entry", "syncID", syncID, "error", err)
-	}
-}
-
 // saveOutboxEntryTx serializes and inserts an outbox entry within a caller-
 // supplied transaction. It is the transactional counterpart of saveOutboxEntry
 // and is intended for the TODO: transactional outbox write below.

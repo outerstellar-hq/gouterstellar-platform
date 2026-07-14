@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -272,22 +271,6 @@ func (s *ContactService) ProcessPushRequest(ctx context.Context, req *model.Sync
 	}, nil
 }
 
-func (s *ContactService) saveContactOutboxEntry(ctx context.Context, c db.PltContact) {
-	emails, _ := s.repo.ListContactEmails(ctx, c.ID)
-	phones, _ := s.repo.ListContactPhones(ctx, c.ID)
-	socials, _ := s.repo.ListContactSocials(ctx, c.ID)
-	syncContact := pltContactToSyncContact(c, emails, phones, socials)
-	payload, err := model.SyncContactToJSON(syncContact)
-	if err != nil {
-		slog.Error("Failed to serialize contact outbox payload", "syncID", c.SyncID, "error", err)
-		return
-	}
-
-	if err := s.outbox.SaveOutbox(ctx, uuid.New(), "CONTACT_SYNC", payload, "PENDING"); err != nil {
-		slog.Error("Failed to save contact outbox entry", "syncID", c.SyncID, "error", err)
-	}
-}
-
 // saveContactOutboxEntryTx serializes and inserts a contact outbox entry within
 // a caller-supplied transaction. The tx-bound repo is used for the sub-table
 // reads so the reads also participate in the transaction. It is the
@@ -377,9 +360,6 @@ func pltContactToSyncContact(c db.PltContact, emails, phones, socials []string) 
 		Deleted:          c.Deleted,
 	}
 }
-
-// Keep json import used - needed for conflict resolution in future
-var _ = json.Marshal
 
 // notifyActor records a best-effort notification for the user acting on the
 // current request. It is nil-safe: if no NotificationService is wired or no

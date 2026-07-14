@@ -121,7 +121,6 @@ type ApiKeyRepository interface {
 }
 
 type OutboxRepository interface {
-	SaveOutbox(ctx context.Context, id uuid.UUID, payloadType, payload, status string) error
 	ListPending(ctx context.Context, limit int32) ([]db.ListPendingOutboxRow, error)
 	MarkProcessed(ctx context.Context, id uuid.UUID) (db.MarkOutboxProcessedRow, error)
 	MarkFailed(ctx context.Context, id uuid.UUID, lastError *string) (db.MarkOutboxFailedRow, error)

@@ -72,10 +72,22 @@ func TestOutboxRepositoryIntegration(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	// saveOutbox seeds an outbox row via the transactional SaveOutboxTx path,
+	// committing immediately. The non-transactional SaveOutbox was removed, so
+	// every insert now goes through a transaction; this helper keeps the
+	// subtests readable while exercising the real insert path.
+	saveOutbox := func(t *testing.T, id uuid.UUID, payloadType, payload, status string) {
+		t.Helper()
+		tx, err := pool.Begin(ctx)
+		require.NoError(t, err)
+		require.NoError(t, repo.SaveOutboxTx(ctx, tx, id, payloadType, payload, status))
+		require.NoError(t, tx.Commit(ctx))
+	}
+
 	t.Run("save_claim_process", func(t *testing.T) {
 		cleanOutbox(t)
 		id := uuid.New()
-		require.NoError(t, repo.SaveOutbox(ctx, id, "MESSAGE_SYNC", `{"syncId":"m1"}`, "PENDING"))
+		saveOutbox(t, id, "MESSAGE_SYNC", `{"syncId":"m1"}`, "PENDING")
 
 		// ClaimPending returns the entry and flips it to PROCESSING.
 		claimed, err := repo.ClaimPending(ctx, 10)
@@ -102,7 +114,7 @@ func TestOutboxRepositoryIntegration(t *testing.T) {
 	t.Run("retry_resets_to_pending_and_increments", func(t *testing.T) {
 		cleanOutbox(t)
 		id := uuid.New()
-		require.NoError(t, repo.SaveOutbox(ctx, id, "CONTACT_SYNC", `{"syncId":"c1"}`, "PENDING"))
+		saveOutbox(t, id, "CONTACT_SYNC", `{"syncId":"c1"}`, "PENDING")
 
 		// First claim -> retry_count=1, status PROCESSING.
 		claimed, err := repo.ClaimPending(ctx, 10)
@@ -133,7 +145,7 @@ func TestOutboxRepositoryIntegration(t *testing.T) {
 		// PROCESSING, it is no longer returned by ClaimPending.
 		cleanOutbox(t)
 		id := uuid.New()
-		require.NoError(t, repo.SaveOutbox(ctx, id, "MESSAGE_SYNC", `{"syncId":"dl"}`, "PENDING"))
+		saveOutbox(t, id, "MESSAGE_SYNC", `{"syncId":"dl"}`, "PENDING")
 
 		for i := 1; i <= 5; i++ {
 			claimed, err := repo.ClaimPending(ctx, 10)
@@ -164,7 +176,7 @@ func TestOutboxRepositoryIntegration(t *testing.T) {
 	t.Run("GetStats_counts_by_status", func(t *testing.T) {
 		cleanOutbox(t)
 		id := uuid.New()
-		require.NoError(t, repo.SaveOutbox(ctx, id, "MESSAGE_SYNC", `{}`, "PENDING"))
+		saveOutbox(t, id, "MESSAGE_SYNC", `{}`, "PENDING")
 
 		stats, err := repo.GetStats(ctx)
 		require.NoError(t, err)
@@ -185,9 +197,9 @@ func TestOutboxRepositoryIntegration(t *testing.T) {
 	t.Run("ListPending_only_returns_pending", func(t *testing.T) {
 		cleanOutbox(t)
 		pendingID := uuid.New()
-		require.NoError(t, repo.SaveOutbox(ctx, pendingID, "MESSAGE_SYNC", `{}`, "PENDING"))
+		saveOutbox(t, pendingID, "MESSAGE_SYNC", `{}`, "PENDING")
 		processedID := uuid.New()
-		require.NoError(t, repo.SaveOutbox(ctx, processedID, "MESSAGE_SYNC", `{}`, "PENDING"))
+		saveOutbox(t, processedID, "MESSAGE_SYNC", `{}`, "PENDING")
 		_, err := repo.MarkProcessed(ctx, processedID)
 		require.NoError(t, err)
 
@@ -203,7 +215,7 @@ func TestOutboxRepositoryIntegration(t *testing.T) {
 	t.Run("MarkFailed_sets_failed_status_and_increments", func(t *testing.T) {
 		cleanOutbox(t)
 		id := uuid.New()
-		require.NoError(t, repo.SaveOutbox(ctx, id, "CONTACT_SYNC", `{}`, "PENDING"))
+		saveOutbox(t, id, "CONTACT_SYNC", `{}`, "PENDING")
 
 		errMsg := "boom"
 		failed, err := repo.MarkFailed(ctx, id, &errMsg)
