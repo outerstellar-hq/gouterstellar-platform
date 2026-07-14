@@ -23,7 +23,6 @@ import (
 	"github.com/rygel/gouterstellar-platform/internal/config"
 	"github.com/rygel/gouterstellar-platform/internal/observability"
 	"github.com/rygel/gouterstellar-platform/internal/persistence"
-	"github.com/rygel/gouterstellar-platform/internal/platform/core"
 	"github.com/rygel/gouterstellar-platform/internal/web"
 	"github.com/rygel/gouterstellar-platform/internal/web/filter"
 	"github.com/rygel/gouterstellar-platform/internal/wire"
@@ -77,14 +76,13 @@ func main() {
 	templateFS := web.TemplateFS()
 	app := wire.Wire(cfg, pool, templateFS)
 
-	// Build the core extension bundle from the wired application handlers,
-	// then populate the health/metrics/static handlers that depend on the
+	// Build the core extension from the wired application handlers, then
+	// populate the health/metrics/static handlers that depend on the
 	// connection pool and filesystem.
-	coreBundle := wire.BuildCoreBundle(app, cfg)
-	coreBundle.Health = healthHandler(pool)
-	coreBundle.Metrics = promhttp.HandlerFor(app.Registry, promhttp.HandlerOpts{})
-	coreBundle.Static = http.StripPrefix("/static/", http.FileServer(http.Dir("static")))
-	coreExt := core.NewExtension(coreBundle)
+	coreExt := wire.BuildCoreExtension(app)
+	coreExt.SetHealth(healthHandler(pool))
+	coreExt.SetMetrics(promhttp.HandlerFor(app.Registry, promhttp.HandlerOpts{}))
+	coreExt.SetStatic(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
 	reportsExt := reports.New(app.ServiceBag.MessageCounter)
 

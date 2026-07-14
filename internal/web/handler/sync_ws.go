@@ -7,8 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
+
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
 
 	"github.com/rygel/gouterstellar-platform/internal/persistence"
 	"github.com/rygel/gouterstellar-platform/internal/service"
@@ -36,8 +37,10 @@ func NewSyncWebSocket(
 	}
 }
 
-func (h *SyncWebSocket) RegisterRoutes(r chi.Router) {
-	r.Get("/ws/sync", h.Handle)
+// ContributeRoutes registers the WebSocket sync route (protected).
+func (h *SyncWebSocket) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.Protected(http.MethodGet, "/ws/sync", "WebSocket sync", http.HandlerFunc(h.Handle))
+	return nil
 }
 
 var upgrader = websocket.Upgrader{

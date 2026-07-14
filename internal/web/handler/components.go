@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
 
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
@@ -28,9 +28,11 @@ func NewComponentsHandler(
 	}
 }
 
-func (h *ComponentsHandler) RegisterRoutes(r chi.Router) {
-	r.Get("/components/message-list", h.MessageList)
-	r.Get("/components/contact-list", h.ContactList)
+// ContributeRoutes registers the component partial routes (protected).
+func (h *ComponentsHandler) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.Protected(http.MethodGet, "/components/message-list", "Message list partial", http.HandlerFunc(h.MessageList))
+	ctx.Routes.Protected(http.MethodGet, "/components/contact-list", "Contact list partial", http.HandlerFunc(h.ContactList))
+	return nil
 }
 
 func (h *ComponentsHandler) MessageList(w http.ResponseWriter, r *http.Request) {

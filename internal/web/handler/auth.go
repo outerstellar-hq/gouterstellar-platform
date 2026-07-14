@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
 
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
@@ -39,17 +39,19 @@ func NewAuthHandler(
 	}
 }
 
-func (h *AuthHandler) RegisterRoutes(r chi.Router) {
-	r.Get("/auth", h.ShowLogin)
-	r.Post("/auth/login", h.HandleLogin)
-	r.Post("/auth/register", h.HandleRegister)
-	r.Post("/auth/logout", h.HandleLogout)
-	r.Get("/auth/change-password", h.ShowChangePassword)
-	r.Post("/auth/change-password", h.HandleChangePassword)
-	r.Get("/auth/reset", h.ShowResetPassword)
-	r.Post("/auth/reset", h.HandleResetPassword)
-	r.Get("/auth/reset/confirm", h.ShowConfirmResetPassword)
-	r.Post("/auth/reset/confirm", h.HandleConfirmResetPassword)
+// ContributeRoutes registers the auth UI routes (public, no auth required).
+func (h *AuthHandler) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.Public(http.MethodGet, "/auth", "Login page", http.HandlerFunc(h.ShowLogin))
+	ctx.Routes.Public(http.MethodPost, "/auth/login", "Handle login", http.HandlerFunc(h.HandleLogin))
+	ctx.Routes.Public(http.MethodPost, "/auth/register", "Handle registration", http.HandlerFunc(h.HandleRegister))
+	ctx.Routes.Public(http.MethodPost, "/auth/logout", "Handle logout", http.HandlerFunc(h.HandleLogout))
+	ctx.Routes.Public(http.MethodGet, "/auth/change-password", "Change password page", http.HandlerFunc(h.ShowChangePassword))
+	ctx.Routes.Public(http.MethodPost, "/auth/change-password", "Handle password change", http.HandlerFunc(h.HandleChangePassword))
+	ctx.Routes.Public(http.MethodGet, "/auth/reset", "Reset password page", http.HandlerFunc(h.ShowResetPassword))
+	ctx.Routes.Public(http.MethodPost, "/auth/reset", "Handle password reset", http.HandlerFunc(h.HandleResetPassword))
+	ctx.Routes.Public(http.MethodGet, "/auth/reset/confirm", "Confirm reset password page", http.HandlerFunc(h.ShowConfirmResetPassword))
+	ctx.Routes.Public(http.MethodPost, "/auth/reset/confirm", "Handle password reset confirmation", http.HandlerFunc(h.HandleConfirmResetPassword))
+	return nil
 }
 
 func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {

@@ -7,6 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
+
 	"github.com/rygel/gouterstellar-platform/internal/security"
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
@@ -27,14 +29,18 @@ func NewSettingsHandler(secSvc *service.SecurityService, apiKeySvc *security.Api
 	}
 }
 
-func (h *SettingsHandler) RegisterRoutes(r chi.Router) {
-	r.Get("/settings", h.Show)
-	r.Post("/settings/profile", h.UpdateProfile)
-	r.Post("/settings/password", h.ChangePassword)
-	r.Post("/settings/preferences", h.UpdatePreferences)
-	r.Post("/settings/api-keys", h.CreateApiKey)
-	r.Post("/settings/api-keys/{id}/delete", h.DeleteApiKey)
-	r.Post("/settings/notifications", h.UpdateNotificationPrefs)
+// ContributeRoutes registers the settings UI routes (protected).
+func (h *SettingsHandler) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.Protected(http.MethodGet, "/settings", "Settings page", http.HandlerFunc(h.Show))
+	ctx.Routes.Protected(http.MethodPost, "/settings/profile", "Update profile", http.HandlerFunc(h.UpdateProfile))
+	ctx.Routes.Protected(http.MethodPost, "/settings/password", "Change password", http.HandlerFunc(h.ChangePassword))
+	ctx.Routes.Protected(http.MethodPost, "/settings/preferences", "Update preferences", http.HandlerFunc(h.UpdatePreferences))
+	ctx.Routes.Protected(http.MethodPost, "/settings/api-keys", "Create API key", http.HandlerFunc(h.CreateApiKey))
+	ctx.Routes.Protected(http.MethodPost, "/settings/api-keys/{id}/delete", "Delete API key", http.HandlerFunc(h.DeleteApiKey))
+	ctx.Routes.Protected(http.MethodPost, "/settings/notifications", "Update notification prefs", http.HandlerFunc(h.UpdateNotificationPrefs))
+	ctx.Routes.Protected(http.MethodGet, "/settings/sessions", "Active sessions", http.HandlerFunc(h.Sessions))
+	ctx.Routes.Protected(http.MethodPost, "/settings/sessions/{tokenHash}/revoke", "Revoke session", http.HandlerFunc(h.RevokeSession))
+	return nil
 }
 
 func (h *SettingsHandler) Show(w http.ResponseWriter, r *http.Request) {

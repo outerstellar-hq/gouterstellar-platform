@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
 
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
@@ -33,14 +33,18 @@ func NewDevDashboardHandler(
 	}
 }
 
-func (h *DevDashboardHandler) RegisterRoutes(r chi.Router) {
+// ContributeRoutes registers the dev dashboard admin routes. Registration is
+// gated by the enabled flag so the routes only exist when DevDashboardEnabled
+// is set in config.
+func (h *DevDashboardHandler) ContributeRoutes(ctx *extplatform.ContributionContext) error {
 	if !h.enabled {
-		return
+		return nil
 	}
-	r.Get("/dev/dashboard", h.Show)
-	r.Post("/dev/outbox/process", h.ProcessOutbox)
-	r.Post("/dev/sessions/cleanup", h.CleanupSessions)
-	r.Post("/dev/cache/invalidate", h.InvalidateCache)
+	ctx.Routes.Admin(http.MethodGet, "/dev/dashboard", "Dev dashboard", http.HandlerFunc(h.Show))
+	ctx.Routes.Admin(http.MethodPost, "/dev/outbox/process", "Process outbox", http.HandlerFunc(h.ProcessOutbox))
+	ctx.Routes.Admin(http.MethodPost, "/dev/sessions/cleanup", "Cleanup sessions", http.HandlerFunc(h.CleanupSessions))
+	ctx.Routes.Admin(http.MethodPost, "/dev/cache/invalidate", "Invalidate cache", http.HandlerFunc(h.InvalidateCache))
+	return nil
 }
 
 func (h *DevDashboardHandler) Show(w http.ResponseWriter, r *http.Request) {

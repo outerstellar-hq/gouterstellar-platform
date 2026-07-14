@@ -8,6 +8,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
+
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/security"
 	"github.com/rygel/gouterstellar-platform/internal/service"
@@ -41,21 +43,23 @@ func NewAuthAPI(
 	}
 }
 
-func (h *AuthAPI) RegisterRoutes(r chi.Router) {
-	r.Post("/api/v1/auth/login", h.Login)
-	r.Post("/api/v1/auth/token", h.IssueToken)
-	r.Post("/api/v1/auth/register", h.Register)
-	r.Post("/api/v1/auth/change-password", h.ChangePassword)
-	r.Post("/api/v1/auth/reset-password", h.RequestPasswordReset)
-	r.Post("/api/v1/auth/confirm-reset", h.ConfirmPasswordReset)
-	r.Post("/api/v1/auth/logout", h.Logout)
-	r.Get("/api/v1/auth/profile", h.GetProfile)
-	r.Put("/api/v1/auth/profile", h.UpdateProfile)
-	r.Put("/api/v1/auth/notification-preferences", h.UpdateNotificationPreferences)
-	r.Delete("/api/v1/auth/account", h.DeleteAccount)
-	r.Post("/api/v1/auth/api-keys", h.CreateApiKey)
-	r.Get("/api/v1/auth/api-keys", h.ListApiKeys)
-	r.Delete("/api/v1/auth/api-keys/{id}", h.DeleteApiKey)
+// ContributeRoutes registers the auth API routes (bearer auth applied by builder).
+func (h *AuthAPI) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/login", "API login", http.HandlerFunc(h.Login))
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/token", "Issue token", http.HandlerFunc(h.IssueToken))
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/register", "API register", http.HandlerFunc(h.Register))
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/change-password", "API change password", http.HandlerFunc(h.ChangePassword))
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/reset-password", "Request password reset", http.HandlerFunc(h.RequestPasswordReset))
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/confirm-reset", "Confirm password reset", http.HandlerFunc(h.ConfirmPasswordReset))
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/logout", "API logout", http.HandlerFunc(h.Logout))
+	ctx.Routes.API(http.MethodGet, "/api/v1/auth/profile", "Get profile", http.HandlerFunc(h.GetProfile))
+	ctx.Routes.API(http.MethodPut, "/api/v1/auth/profile", "Update profile", http.HandlerFunc(h.UpdateProfile))
+	ctx.Routes.API(http.MethodPut, "/api/v1/auth/notification-preferences", "Update notif prefs", http.HandlerFunc(h.UpdateNotificationPreferences))
+	ctx.Routes.API(http.MethodDelete, "/api/v1/auth/account", "Delete account", http.HandlerFunc(h.DeleteAccount))
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/api-keys", "Create API key", http.HandlerFunc(h.CreateApiKey))
+	ctx.Routes.API(http.MethodGet, "/api/v1/auth/api-keys", "List API keys", http.HandlerFunc(h.ListApiKeys))
+	ctx.Routes.API(http.MethodDelete, "/api/v1/auth/api-keys/{id}", "Delete API key", http.HandlerFunc(h.DeleteApiKey))
+	return nil
 }
 
 func (h *AuthAPI) Login(w http.ResponseWriter, r *http.Request) {

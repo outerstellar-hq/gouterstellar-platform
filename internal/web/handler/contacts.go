@@ -7,6 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
+
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
@@ -25,12 +27,14 @@ func NewContactsHandler(contactSvc *service.ContactService, renderer *web.Render
 	}
 }
 
-func (h *ContactsHandler) RegisterRoutes(r chi.Router) {
-	r.Get("/contacts", h.List)
-	r.Get("/contacts/{syncId}", h.Detail)
-	r.Post("/contacts/create", h.Create)
-	r.Post("/contacts/{syncId}/update", h.Update)
-	r.Post("/contacts/{syncId}/delete", h.Delete)
+// ContributeRoutes registers the contacts UI routes (protected).
+func (h *ContactsHandler) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.Protected(http.MethodGet, "/contacts", "Contacts list", http.HandlerFunc(h.List))
+	ctx.Routes.Protected(http.MethodGet, "/contacts/{syncId}", "Contact detail", http.HandlerFunc(h.Detail))
+	ctx.Routes.Protected(http.MethodPost, "/contacts/create", "Create contact", http.HandlerFunc(h.Create))
+	ctx.Routes.Protected(http.MethodPost, "/contacts/{syncId}/update", "Update contact", http.HandlerFunc(h.Update))
+	ctx.Routes.Protected(http.MethodPost, "/contacts/{syncId}/delete", "Delete contact", http.HandlerFunc(h.Delete))
+	return nil
 }
 
 func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {

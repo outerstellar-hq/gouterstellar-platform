@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
 
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
@@ -28,8 +28,10 @@ func NewSearchHandler(
 	}
 }
 
-func (h *SearchHandler) RegisterRoutes(r chi.Router) {
-	r.Get("/search", h.Search)
+// ContributeRoutes registers the search route (protected).
+func (h *SearchHandler) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.Protected(http.MethodGet, "/search", "Search", http.HandlerFunc(h.Search))
+	return nil
 }
 
 func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {

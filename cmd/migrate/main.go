@@ -32,9 +32,9 @@ func main() {
 	defer pool.Close()
 
 	// Build the migration sets from the same extension manifests the server uses.
-	// core.NewExtension takes a zero-value Bundle here: Manifest() only returns
-	// static data (it never touches the bundle), so this is safe.
-	coreExt := core.NewExtension(core.Bundle{})
+	// core.NewExtension() returns an empty extension: Manifest() only returns
+	// static data (it never touches the contributors), so this is safe.
+	coreExt := core.NewExtension()
 	sets := []extplatform.MigrationSet{}
 	sets = append(sets, coreExt.Manifest().Migrations...)
 

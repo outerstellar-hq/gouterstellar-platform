@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
 
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
@@ -34,8 +34,10 @@ func NewHomeHandler(
 	}
 }
 
-func (h *HomeHandler) RegisterRoutes(r chi.Router) {
-	r.Get("/", h.Show)
+// ContributeRoutes registers the home dashboard route (protected).
+func (h *HomeHandler) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.Protected(http.MethodGet, "/", "Home dashboard", http.HandlerFunc(h.Show))
+	return nil
 }
 
 func (h *HomeHandler) Show(w http.ResponseWriter, r *http.Request) {

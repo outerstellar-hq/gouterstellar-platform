@@ -7,6 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
+
 	"github.com/rygel/gouterstellar-platform/internal/persistence"
 	"github.com/rygel/gouterstellar-platform/internal/web"
 )
@@ -19,9 +21,11 @@ func NewDeviceRegistrationAPI(repo persistence.DeviceTokenRepository) *DeviceReg
 	return &DeviceRegistrationAPI{deviceTokenRepo: repo}
 }
 
-func (h *DeviceRegistrationAPI) RegisterRoutes(r chi.Router) {
-	r.Post("/api/v1/devices/register", h.Register)
-	r.Delete("/api/v1/devices/{id}", h.Unregister)
+// ContributeRoutes registers the device registration API routes (bearer auth applied by builder).
+func (h *DeviceRegistrationAPI) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.API(http.MethodPost, "/api/v1/devices/register", "Register device", http.HandlerFunc(h.Register))
+	ctx.Routes.API(http.MethodDelete, "/api/v1/devices/{id}", "Unregister device", http.HandlerFunc(h.Unregister))
+	return nil
 }
 
 type registerDeviceRequest struct {

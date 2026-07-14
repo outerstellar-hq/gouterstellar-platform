@@ -13,121 +13,41 @@ import (
 //go:embed migrations/*.sql
 var Migrations embed.FS
 
-// Bundle holds all the platform's internal HTTP handlers as function values.
-// It is the bridge between existing handler structs and the core extension.
-// Each field corresponds to a method on one of the existing handler structs;
-// the handler structs themselves are unchanged.
-type Bundle struct {
-	// PublicUI handlers
-	AuthShowLogin          http.HandlerFunc
-	AuthHandleLogin        http.HandlerFunc
-	AuthHandleRegister     http.HandlerFunc
-	AuthHandleLogout       http.HandlerFunc
-	AuthShowChangePwd      http.HandlerFunc
-	AuthHandleChangePwd    http.HandlerFunc
-	AuthShowReset          http.HandlerFunc
-	AuthHandleReset        http.HandlerFunc
-	AuthShowConfirmReset   http.HandlerFunc
-	AuthHandleConfirmReset http.HandlerFunc
-	OAuthRedirect          http.HandlerFunc
-	OAuthCallback          http.HandlerFunc
-	OAuthCallbackPost      http.HandlerFunc
-
-	// ProtectedUI handlers
-	HomeShow              http.HandlerFunc
-	MessagesShow          http.HandlerFunc
-	MessagesCreate        http.HandlerFunc
-	MessagesDelete        http.HandlerFunc
-	MessagesRestore       http.HandlerFunc
-	MessagesResolve       http.HandlerFunc
-	ContactsList          http.HandlerFunc
-	ContactsDetail        http.HandlerFunc
-	ContactsCreate        http.HandlerFunc
-	ContactsUpdate        http.HandlerFunc
-	ContactsDelete        http.HandlerFunc
-	SearchSearch          http.HandlerFunc
-	SettingsShow          http.HandlerFunc
-	SettingsProfile       http.HandlerFunc
-	SettingsPassword      http.HandlerFunc
-	SettingsPreferences   http.HandlerFunc
-	SettingsCreateAPIKey  http.HandlerFunc
-	SettingsDeleteAPIKey  http.HandlerFunc
-	SettingsNotifPrefs    http.HandlerFunc
-	SettingsSessions      http.HandlerFunc
-	SettingsRevokeSession http.HandlerFunc
-	NotifsList            http.HandlerFunc
-	NotifsMarkRead        http.HandlerFunc
-	NotifsMarkAllRead     http.HandlerFunc
-	NotifsDelete          http.HandlerFunc
-	ComponentsMsgList     http.HandlerFunc
-	ComponentsContactList http.HandlerFunc
-	SyncWebSocket         http.HandlerFunc
-
-	// API handlers
-	SyncPullMessages     http.HandlerFunc
-	SyncPushMessages     http.HandlerFunc
-	SyncPullContacts     http.HandlerFunc
-	SyncPushContacts     http.HandlerFunc
-	AuthAPILogin         http.HandlerFunc
-	AuthAPIToken         http.HandlerFunc
-	AuthAPIRegister      http.HandlerFunc
-	AuthAPIChangePwd     http.HandlerFunc
-	AuthAPIResetReq      http.HandlerFunc
-	AuthAPIConfirmReset  http.HandlerFunc
-	AuthAPILogout        http.HandlerFunc
-	AuthAPIGetProfile    http.HandlerFunc
-	AuthAPIUpdateProfile http.HandlerFunc
-	AuthAPINotifPrefs    http.HandlerFunc
-	AuthAPIDeleteAccount http.HandlerFunc
-	AuthAPICreateAPIKey  http.HandlerFunc
-	AuthAPIListAPIKeys   http.HandlerFunc
-	AuthAPIDeleteAPIKey  http.HandlerFunc
-	UserAPIListUsers     http.HandlerFunc
-	UserAPICountUsers    http.HandlerFunc
-	UserAPISetEnabled    http.HandlerFunc
-	UserAPISetRole       http.HandlerFunc
-	UserAPIExportUsers   http.HandlerFunc
-	UserAPIExportAudit   http.HandlerFunc
-	NotifAPIList         http.HandlerFunc
-	NotifAPIUnreadCount  http.HandlerFunc
-	NotifAPIMarkRead     http.HandlerFunc
-	NotifAPIMarkAllRead  http.HandlerFunc
-	NotifAPIDelete       http.HandlerFunc
-	DeviceAPIRegister    http.HandlerFunc
-	DeviceAPIUnregister  http.HandlerFunc
-
-	// Admin handlers
-	AdminListUsers     http.HandlerFunc
-	AdminSetEnabled    http.HandlerFunc
-	AdminSetRole       http.HandlerFunc
-	AdminExportUsers   http.HandlerFunc
-	AdminShowAudit     http.HandlerFunc
-	AdminExportAudit   http.HandlerFunc
-	DevDashboard       http.HandlerFunc
-	DevProcessOutbox   http.HandlerFunc
-	DevCleanupSessions http.HandlerFunc
-	DevInvalidateCache http.HandlerFunc
-
-	// Health/metrics/static
-	Health      http.HandlerFunc
-	Metrics     http.Handler
-	Static      http.Handler
-	OpenAPISpec http.HandlerFunc
-
-	// DevMode flag gates the dev dashboard routes.
-	DevDashboardEnabled bool
-}
-
-// Extension is the core platform extension. It wraps a populated Bundle and
-// implements extplatform.Extension by contributing every core route through
-// the platform's route registry.
+// Extension is the core platform extension. It owns the infrastructure
+// routes (health, metrics, static assets, OpenAPI spec) directly and
+// delegates every handler-owned route group to the handlers themselves via
+// the RouteContributor interface.
 type Extension struct {
-	bundle *Bundle
+	contributors []extplatform.RouteContributor
+	health       http.HandlerFunc
+	metrics      http.Handler
+	static       http.Handler
+	openapi      http.HandlerFunc
 }
 
-// NewExtension creates the core extension from a populated Bundle.
-func NewExtension(b Bundle) *Extension {
-	return &Extension{bundle: &b}
+// NewExtension creates an empty core extension. Use the Set* and
+// AddContributors methods to populate it before Contribute is called.
+func NewExtension() *Extension {
+	return &Extension{}
+}
+
+// SetHealth registers the health-check handler (owned by the server root
+// because it needs the live connection pool).
+func (e *Extension) SetHealth(h http.HandlerFunc) { e.health = h }
+
+// SetMetrics registers the Prometheus metrics handler.
+func (e *Extension) SetMetrics(h http.Handler) { e.metrics = h }
+
+// SetStatic registers the static-asset file server.
+func (e *Extension) SetStatic(h http.Handler) { e.static = h }
+
+// SetOpenAPI registers the OpenAPI spec handler.
+func (e *Extension) SetOpenAPI(h http.HandlerFunc) { e.openapi = h }
+
+// AddContributors appends route contributors (typically handlers) whose
+// ContributeRoutes methods register the handler-owned route groups.
+func (e *Extension) AddContributors(cs ...extplatform.RouteContributor) {
+	e.contributors = append(e.contributors, cs...)
 }
 
 // Manifest declares the core extension's identity, mode, route ownership, and

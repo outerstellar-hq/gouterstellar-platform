@@ -6,6 +6,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
+
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
@@ -22,6 +24,16 @@ func NewMessagesHandler(msgSvc *service.MessageService, renderer *web.Renderer) 
 		messageService: msgSvc,
 		renderer:       renderer,
 	}
+}
+
+// ContributeRoutes registers the messages UI routes (protected).
+func (h *MessagesHandler) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.Protected(http.MethodGet, "/messages", "Messages", http.HandlerFunc(h.Show))
+	ctx.Routes.Protected(http.MethodPost, "/messages/create", "Create message", http.HandlerFunc(h.Create))
+	ctx.Routes.Protected(http.MethodPost, "/messages/{syncId}/delete", "Delete message", http.HandlerFunc(h.Delete))
+	ctx.Routes.Protected(http.MethodPost, "/messages/{syncId}/restore", "Restore message", http.HandlerFunc(h.Restore))
+	ctx.Routes.Protected(http.MethodPost, "/messages/{syncId}/resolve", "Resolve conflict", http.HandlerFunc(h.ResolveConflict))
+	return nil
 }
 
 func (h *MessagesHandler) Show(w http.ResponseWriter, r *http.Request) {

@@ -7,6 +7,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
+
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
@@ -25,13 +27,15 @@ func NewUserAdminHandler(secSvc *service.SecurityService, renderer *web.Renderer
 	}
 }
 
-func (h *UserAdminHandler) RegisterRoutes(r chi.Router) {
-	r.Get("/admin/users", h.ListUsers)
-	r.Post("/admin/users/{id}/enabled", h.SetEnabled)
-	r.Post("/admin/users/{id}/role", h.SetRole)
-	r.Get("/admin/users/export", h.ExportUsers)
-	r.Get("/admin/audit", h.ShowAudit)
-	r.Get("/admin/audit/export", h.ExportAudit)
+// ContributeRoutes registers the admin UI routes.
+func (h *UserAdminHandler) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.Admin(http.MethodGet, "/admin/users", "User management", http.HandlerFunc(h.ListUsers))
+	ctx.Routes.Admin(http.MethodPost, "/admin/users/{id}/enabled", "Set user enabled", http.HandlerFunc(h.SetEnabled))
+	ctx.Routes.Admin(http.MethodPost, "/admin/users/{id}/role", "Set user role", http.HandlerFunc(h.SetRole))
+	ctx.Routes.Admin(http.MethodGet, "/admin/users/export", "Export users", http.HandlerFunc(h.ExportUsers))
+	ctx.Routes.Admin(http.MethodGet, "/admin/audit", "Audit log", http.HandlerFunc(h.ShowAudit))
+	ctx.Routes.Admin(http.MethodGet, "/admin/audit/export", "Export audit", http.HandlerFunc(h.ExportAudit))
+	return nil
 }
 
 func (h *UserAdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
