@@ -104,6 +104,48 @@ func (s *MessageService) SearchMessages(ctx context.Context, query string, limit
 	}, nil
 }
 
+// ListMessagesByYear returns one page of non-deleted messages whose updated_at
+// timestamp falls in the given calendar year. The year filter is evaluated at
+// the database level so paging counts stay correct.
+func (s *MessageService) ListMessagesByYear(ctx context.Context, year int, limit, offset int32) (*model.PagedResult[model.MessageSummary], error) {
+	total, err := s.repo.CountMessagesByYear(ctx, year)
+	if err != nil {
+		return nil, fmt.Errorf("count messages by year: %w", err)
+	}
+
+	messages, err := s.repo.ListMessagesByYear(ctx, year, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("list messages by year: %w", err)
+	}
+
+	summaries := make([]model.MessageSummary, len(messages))
+	for i, m := range messages {
+		summaries[i] = pltMessageToSummary(m)
+	}
+
+	page := int(offset)/int(limit) + 1
+	return &model.PagedResult[model.MessageSummary]{
+		Items:    summaries,
+		Metadata: model.NewPaginationMetadata(page, int(limit), total),
+	}, nil
+}
+
+// GetMessageYears returns the distinct calendar years (descending) for which
+// non-deleted messages exist. Used to populate the year filter UI. sqlc emits
+// []int32 from the EXTRACT expression, so the values are widened to int here to
+// match the viewmodel's []int slice.
+func (s *MessageService) GetMessageYears(ctx context.Context) ([]int, error) {
+	years, err := s.repo.ListMessageYears(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list message years: %w", err)
+	}
+	result := make([]int, len(years))
+	for i, y := range years {
+		result[i] = int(y)
+	}
+	return result, nil
+}
+
 func (s *MessageService) ListDeletedMessages(ctx context.Context, limit, offset int32) (*model.PagedResult[model.MessageSummary], error) {
 	messages, err := s.repo.ListMessages(ctx, limit, offset)
 	if err != nil {

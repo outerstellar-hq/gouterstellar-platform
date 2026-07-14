@@ -2,7 +2,9 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
+	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
 	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
@@ -31,7 +33,22 @@ func (h *MessagesHandler) Show(w http.ResponseWriter, r *http.Request) {
 	pageSize := getIntParam(r, "pageSize", 20)
 	offset := (page - 1) * pageSize
 
-	result, err := h.messageService.ListMessages(r.Context(), safeInt32(pageSize), safeInt32(offset))
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	year := getIntParam(r, "year", 0)
+
+	// Text search takes precedence over the year filter: a search query scopes
+	// results to matching text, and applying a year on top would hide matches
+	// from other years the user is searching across.
+	var result *model.PagedResult[model.MessageSummary]
+	var err error
+	switch {
+	case query != "":
+		result, err = h.messageService.SearchMessages(r.Context(), query, safeInt32(pageSize), safeInt32(offset))
+	case year > 0:
+		result, err = h.messageService.ListMessagesByYear(r.Context(), year, safeInt32(pageSize), safeInt32(offset))
+	default:
+		result, err = h.messageService.ListMessages(r.Context(), safeInt32(pageSize), safeInt32(offset))
+	}
 	if err != nil {
 		_ = h.renderer.RenderWithStatus(w, r, "error", viewmodel.ErrorPage{
 			StatusCode: http.StatusInternalServerError,
@@ -64,9 +81,20 @@ func (h *MessagesHandler) Show(w http.ResponseWriter, r *http.Request) {
 		PageSize:    result.Metadata.PageSize,
 	}
 
+	// The year filter is always populated so the UI is consistent whether or not
+	// a query/term is active. Errors here are non-fatal: an empty year list just
+	// hides the filter.
+	years, yearsErr := h.messageService.GetMessageYears(r.Context())
+	if yearsErr != nil {
+		years = nil
+	}
+
 	if err := h.renderer.RenderPage(w, r, "messages", viewmodel.MessagesPage{
 		Messages:   messageItems,
 		Pagination: pagination,
+		Query:      query,
+		Year:       year,
+		Years:      years,
 	}); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}

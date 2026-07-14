@@ -31,6 +31,19 @@ func (q *Queries) CountMessages(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countMessagesByYear = `-- name: CountMessagesByYear :one
+SELECT COUNT(*) FROM plt_messages
+WHERE deleted = false
+AND EXTRACT(YEAR FROM TO_TIMESTAMP(updated_at_epoch_ms / 1000.0)) = $1
+`
+
+func (q *Queries) CountMessagesByYear(ctx context.Context, updatedAtEpochMs int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countMessagesByYear, updatedAtEpochMs)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countSearchMessages = `-- name: CountSearchMessages :one
 SELECT COUNT(*) FROM plt_messages
 WHERE deleted = false
@@ -221,6 +234,35 @@ func (q *Queries) ListDirtyMessages(ctx context.Context) ([]PltMessage, error) {
 	return items, nil
 }
 
+const listMessageYears = `-- name: ListMessageYears :many
+SELECT DISTINCT EXTRACT(YEAR FROM TO_TIMESTAMP(updated_at_epoch_ms / 1000.0))::int AS year
+FROM plt_messages
+WHERE deleted = false
+ORDER BY year DESC
+`
+
+// Distinct calendar years (descending) for which non-deleted messages exist.
+// Used to populate the year filter on the messages page.
+func (q *Queries) ListMessageYears(ctx context.Context) ([]int32, error) {
+	rows, err := q.db.Query(ctx, listMessageYears)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int32{}
+	for rows.Next() {
+		var year int32
+		if err := rows.Scan(&year); err != nil {
+			return nil, err
+		}
+		items = append(items, year)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMessages = `-- name: ListMessages :many
 SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
 FROM plt_messages
@@ -236,6 +278,57 @@ type ListMessagesParams struct {
 
 func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]PltMessage, error) {
 	rows, err := q.db.Query(ctx, listMessages, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PltMessage{}
+	for rows.Next() {
+		var i PltMessage
+		if err := rows.Scan(
+			&i.ID,
+			&i.SyncID,
+			&i.Author,
+			&i.Content,
+			&i.CreatedAt,
+			&i.UpdatedAtEpochMs,
+			&i.Deleted,
+			&i.Dirty,
+			&i.DeletedAt,
+			&i.Version,
+			&i.SyncConflict,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMessagesByYear = `-- name: ListMessagesByYear :many
+SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
+FROM plt_messages
+WHERE deleted = false
+AND EXTRACT(YEAR FROM TO_TIMESTAMP(updated_at_epoch_ms / 1000.0)) = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListMessagesByYearParams struct {
+	UpdatedAtEpochMs int64 `json:"updated_at_epoch_ms"`
+	Limit            int32 `json:"limit"`
+	Offset           int32 `json:"offset"`
+}
+
+// Returns one page of non-deleted messages whose updated_at falls in the given
+// calendar year (interpreted in the database session time zone). updated_at is
+// stored as epoch milliseconds, so it is converted to a timestamp with
+// TO_TIMESTAMP(epoch / 1000.0) before EXTRACT.
+func (q *Queries) ListMessagesByYear(ctx context.Context, arg ListMessagesByYearParams) ([]PltMessage, error) {
+	rows, err := q.db.Query(ctx, listMessagesByYear, arg.UpdatedAtEpochMs, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

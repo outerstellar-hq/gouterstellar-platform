@@ -32,6 +32,25 @@ func (r *messageRepo) ListMessages(ctx context.Context, limit, offset int32) ([]
 	})
 }
 
+func (r *messageRepo) ListMessagesByYear(ctx context.Context, year int, limit, offset int32) ([]db.PltMessage, error) {
+	return r.q.ListMessagesByYear(ctx, db.ListMessagesByYearParams{
+		UpdatedAtEpochMs: int64(year),
+		Limit:            limit,
+		Offset:           offset,
+	})
+}
+
+func (r *messageRepo) CountMessagesByYear(ctx context.Context, year int) (int64, error) {
+	return r.q.CountMessagesByYear(ctx, int64(year))
+}
+
+// ListMessageYears returns distinct calendar years (descending) for non-deleted
+// messages. sqlc emits []int32 because the year is produced by EXTRACT on a
+// numeric expression, not read from a BIGINT column.
+func (r *messageRepo) ListMessageYears(ctx context.Context) ([]int32, error) {
+	return r.q.ListMessageYears(ctx)
+}
+
 func (r *messageRepo) SearchMessages(ctx context.Context, query string, limit, offset int32) ([]db.PltMessage, error) {
 	return r.q.SearchMessages(ctx, db.SearchMessagesParams{
 		Column1: query,

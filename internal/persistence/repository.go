@@ -13,6 +13,9 @@ import (
 
 type MessageRepository interface {
 	ListMessages(ctx context.Context, limit, offset int32) ([]db.PltMessage, error)
+	ListMessagesByYear(ctx context.Context, year int, limit, offset int32) ([]db.PltMessage, error)
+	CountMessagesByYear(ctx context.Context, year int) (int64, error)
+	ListMessageYears(ctx context.Context) ([]int32, error)
 	SearchMessages(ctx context.Context, query string, limit, offset int32) ([]db.PltMessage, error)
 	CountSearchMessages(ctx context.Context, query string) (int64, error)
 	CountMessages(ctx context.Context) (int64, error)

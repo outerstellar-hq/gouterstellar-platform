@@ -5,6 +5,31 @@ WHERE deleted = false
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2;
 
+-- name: ListMessagesByYear :many
+-- Returns one page of non-deleted messages whose updated_at falls in the given
+-- calendar year (interpreted in the database session time zone). updated_at is
+-- stored as epoch milliseconds, so it is converted to a timestamp with
+-- TO_TIMESTAMP(epoch / 1000.0) before EXTRACT.
+SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
+FROM plt_messages
+WHERE deleted = false
+AND EXTRACT(YEAR FROM TO_TIMESTAMP(updated_at_epoch_ms / 1000.0)) = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: CountMessagesByYear :one
+SELECT COUNT(*) FROM plt_messages
+WHERE deleted = false
+AND EXTRACT(YEAR FROM TO_TIMESTAMP(updated_at_epoch_ms / 1000.0)) = $1;
+
+-- name: ListMessageYears :many
+-- Distinct calendar years (descending) for which non-deleted messages exist.
+-- Used to populate the year filter on the messages page.
+SELECT DISTINCT EXTRACT(YEAR FROM TO_TIMESTAMP(updated_at_epoch_ms / 1000.0))::int AS year
+FROM plt_messages
+WHERE deleted = false
+ORDER BY year DESC;
+
 -- name: SearchMessages :many
 SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
 FROM plt_messages

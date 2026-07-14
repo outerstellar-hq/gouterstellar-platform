@@ -17,6 +17,7 @@ type Querier interface {
 	CountContacts(ctx context.Context) (int64, error)
 	CountDirtyMessages(ctx context.Context) (int64, error)
 	CountMessages(ctx context.Context) (int64, error)
+	CountMessagesByYear(ctx context.Context, updatedAtEpochMs int64) (int64, error)
 	CountSearchMessages(ctx context.Context, dollar_1 string) (int64, error)
 	CountUnreadNotifications(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountUsersByRole(ctx context.Context, role string) (int64, error)
@@ -69,7 +70,15 @@ type Querier interface {
 	ListDirtyContacts(ctx context.Context) ([]PltContact, error)
 	ListDirtyMessages(ctx context.Context) ([]PltMessage, error)
 	ListFailedOutbox(ctx context.Context, limit int32) ([]ListFailedOutboxRow, error)
+	// Distinct calendar years (descending) for which non-deleted messages exist.
+	// Used to populate the year filter on the messages page.
+	ListMessageYears(ctx context.Context) ([]int32, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]PltMessage, error)
+	// Returns one page of non-deleted messages whose updated_at falls in the given
+	// calendar year (interpreted in the database session time zone). updated_at is
+	// stored as epoch milliseconds, so it is converted to a timestamp with
+	// TO_TIMESTAMP(epoch / 1000.0) before EXTRACT.
+	ListMessagesByYear(ctx context.Context, arg ListMessagesByYearParams) ([]PltMessage, error)
 	ListPendingOutbox(ctx context.Context, limit int32) ([]ListPendingOutboxRow, error)
 	LogAudit(ctx context.Context, arg LogAuditParams) (PltAuditLog, error)
 	MarkAllNotificationsRead(ctx context.Context, userID uuid.UUID) (int64, error)

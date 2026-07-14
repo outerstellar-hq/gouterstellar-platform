@@ -23,6 +23,21 @@ func (m *mockMessageRepo) ListMessages(ctx context.Context, limit, offset int32)
 	return args.Get(0).([]db.PltMessage), args.Error(1)
 }
 
+func (m *mockMessageRepo) ListMessagesByYear(ctx context.Context, year int, limit, offset int32) ([]db.PltMessage, error) {
+	args := m.Called(ctx, year, limit, offset)
+	return args.Get(0).([]db.PltMessage), args.Error(1)
+}
+
+func (m *mockMessageRepo) CountMessagesByYear(ctx context.Context, year int) (int64, error) {
+	args := m.Called(ctx, year)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *mockMessageRepo) ListMessageYears(ctx context.Context) ([]int32, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]int32), args.Error(1)
+}
+
 func (m *mockMessageRepo) SearchMessages(ctx context.Context, query string, limit, offset int32) ([]db.PltMessage, error) {
 	args := m.Called(ctx, query, limit, offset)
 	return args.Get(0).([]db.PltMessage), args.Error(1)
