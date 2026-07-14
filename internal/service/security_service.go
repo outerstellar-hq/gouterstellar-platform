@@ -143,7 +143,7 @@ func (s *SecurityService) ChangePassword(ctx context.Context, userID uuid.UUID, 
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	_, err = s.userRepo.CreateUser(ctx, user.ID, user.Username, user.Email, hash, string(user.Role), user.Enabled)
+	err = s.userRepo.UpdatePasswordHash(ctx, userID, hash)
 	if err != nil {
 		return fmt.Errorf("update password: %w", err)
 	}

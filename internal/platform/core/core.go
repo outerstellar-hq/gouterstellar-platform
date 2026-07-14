@@ -19,17 +19,19 @@ var Migrations embed.FS
 // the handler structs themselves are unchanged.
 type Bundle struct {
 	// PublicUI handlers
-	AuthShowLogin       http.HandlerFunc
-	AuthHandleLogin     http.HandlerFunc
-	AuthHandleRegister  http.HandlerFunc
-	AuthHandleLogout    http.HandlerFunc
-	AuthShowChangePwd   http.HandlerFunc
-	AuthHandleChangePwd http.HandlerFunc
-	AuthShowReset       http.HandlerFunc
-	AuthHandleReset     http.HandlerFunc
-	OAuthRedirect       http.HandlerFunc
-	OAuthCallback       http.HandlerFunc
-	OAuthCallbackPost   http.HandlerFunc
+	AuthShowLogin          http.HandlerFunc
+	AuthHandleLogin        http.HandlerFunc
+	AuthHandleRegister     http.HandlerFunc
+	AuthHandleLogout       http.HandlerFunc
+	AuthShowChangePwd      http.HandlerFunc
+	AuthHandleChangePwd    http.HandlerFunc
+	AuthShowReset          http.HandlerFunc
+	AuthHandleReset        http.HandlerFunc
+	AuthShowConfirmReset   http.HandlerFunc
+	AuthHandleConfirmReset http.HandlerFunc
+	OAuthRedirect          http.HandlerFunc
+	OAuthCallback          http.HandlerFunc
+	OAuthCallbackPost      http.HandlerFunc
 
 	// ProtectedUI handlers
 	HomeShow              http.HandlerFunc

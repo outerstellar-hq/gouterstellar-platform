@@ -19,6 +19,7 @@ type PasswordResetService struct {
 	resetRepo       persistence.PasswordResetRepository
 	emailService    EmailService
 	auditRepo       persistence.AuditRepository
+	appBaseURL      string
 }
 
 func NewPasswordResetService(
@@ -27,6 +28,7 @@ func NewPasswordResetService(
 	resetRepo persistence.PasswordResetRepository,
 	emailService EmailService,
 	auditRepo persistence.AuditRepository,
+	appBaseURL string,
 ) *PasswordResetService {
 	return &PasswordResetService{
 		userRepo:        userRepo,
@@ -34,6 +36,7 @@ func NewPasswordResetService(
 		resetRepo:       resetRepo,
 		emailService:    emailService,
 		auditRepo:       auditRepo,
+		appBaseURL:      appBaseURL,
 	}
 }
 
@@ -54,7 +57,9 @@ func (s *PasswordResetService) RequestPasswordReset(ctx context.Context, email s
 		return nil, fmt.Errorf("save reset token: %w", err)
 	}
 
-	s.emailService.Send(email, "Password Reset", fmt.Sprintf("Your password reset token: %s", token))
+	resetURL := fmt.Sprintf("%s/auth/reset/confirm?token=%s", s.appBaseURL, token)
+	body := fmt.Sprintf("Click the following link to reset your password: %s", resetURL)
+	s.emailService.Send(email, "Password Reset", body)
 
 	actorID, actorName := userToAuditParams(user)
 	s.auditLog(ctx, actorID, actorName, nil, nil, "PASSWORD_RESET_REQUESTED", "Password reset requested")
@@ -92,7 +97,7 @@ func (s *PasswordResetService) ResetPassword(ctx context.Context, token, newPass
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	_, err = s.userRepo.CreateUser(ctx, user.ID, user.Username, user.Email, hash, string(user.Role), user.Enabled)
+	err = s.userRepo.UpdatePasswordHash(ctx, user.ID, hash)
 	if err != nil {
 		return fmt.Errorf("update password: %w", err)
 	}

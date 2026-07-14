@@ -393,6 +393,20 @@ func (q *Queries) UpdateNotificationPreferences(ctx context.Context, arg UpdateN
 	return i, err
 }
 
+const updatePasswordHash = `-- name: UpdatePasswordHash :exec
+UPDATE plt_users SET password_hash = $2 WHERE id = $1
+`
+
+type UpdatePasswordHashParams struct {
+	ID           uuid.UUID `json:"id"`
+	PasswordHash string    `json:"password_hash"`
+}
+
+func (q *Queries) UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error {
+	_, err := q.db.Exec(ctx, updatePasswordHash, arg.ID, arg.PasswordHash)
+	return err
+}
+
 const updatePreferences = `-- name: UpdatePreferences :one
 UPDATE plt_users
 SET language = $2, theme = $3, layout = $4

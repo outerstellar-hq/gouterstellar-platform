@@ -74,6 +74,13 @@ func (r *userRepo) UpdateEnabled(ctx context.Context, id uuid.UUID, enabled bool
 	})
 }
 
+func (r *userRepo) UpdatePasswordHash(ctx context.Context, userID uuid.UUID, passwordHash string) error {
+	return r.q.UpdatePasswordHash(ctx, db.UpdatePasswordHashParams{
+		ID:           userID,
+		PasswordHash: passwordHash,
+	})
+}
+
 func (r *userRepo) UpdateLastActivity(ctx context.Context, id uuid.UUID) error {
 	return r.q.UpdateLastActivity(ctx, id)
 }

@@ -45,6 +45,8 @@ func (h *AuthHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/auth/change-password", h.HandleChangePassword)
 	r.Get("/auth/reset", h.ShowResetPassword)
 	r.Post("/auth/reset", h.HandleResetPassword)
+	r.Get("/auth/reset/confirm", h.ShowConfirmResetPassword)
+	r.Post("/auth/reset/confirm", h.HandleConfirmResetPassword)
 }
 
 func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
@@ -203,6 +205,39 @@ func (h *AuthHandler) HandleResetPassword(w http.ResponseWriter, r *http.Request
 	})
 }
 
+// ShowConfirmResetPassword renders the confirm-reset form, pre-populated with
+// the reset token from the query string. The user arrives here by clicking the
+// link in the password reset email.
+func (h *AuthHandler) ShowConfirmResetPassword(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	page := viewmodel.AuthPage{
+		ReturnTo:  token,
+		CSRFToken: web.CSRFTokenFromRequest(r),
+	}
+	if err := h.renderer.RenderPage(w, r, "auth_reset_confirm", page); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
+}
+
+// HandleConfirmResetPassword accepts the submitted new password (with the reset
+// token) and delegates to PasswordResetService.ResetPassword.
+func (h *AuthHandler) HandleConfirmResetPassword(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		h.renderConfirmResetPasswordError(w, r, "Invalid form submission")
+		return
+	}
+
+	token := r.FormValue("token")
+	newPassword := r.FormValue("newPassword")
+
+	if err := h.passwordResetSvc.ResetPassword(r.Context(), token, newPassword); err != nil {
+		h.renderConfirmResetPasswordError(w, r, err.Error())
+		return
+	}
+
+	http.Redirect(w, r, "/auth", http.StatusSeeOther)
+}
+
 func isSafeRedirect(url string) bool {
 	if url == "" {
 		return false
@@ -241,4 +276,17 @@ func (h *AuthHandler) renderResetPasswordError(w http.ResponseWriter, r *http.Re
 		CSRFToken: web.CSRFTokenFromRequest(r),
 	}
 	_ = h.renderer.RenderWithStatus(w, r, "auth_reset_password", page, http.StatusBadRequest)
+}
+
+func (h *AuthHandler) renderConfirmResetPasswordError(w http.ResponseWriter, r *http.Request, errMsg string) {
+	token := ""
+	if err := r.ParseForm(); err == nil {
+		token = r.FormValue("token")
+	}
+	page := viewmodel.AuthPage{
+		Error:     errMsg,
+		ReturnTo:  token,
+		CSRFToken: web.CSRFTokenFromRequest(r),
+	}
+	_ = h.renderer.RenderWithStatus(w, r, "auth_reset_confirm", page, http.StatusBadRequest)
 }

@@ -161,7 +161,7 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 	contactSvc := service.NewContactService(contactRepo, outboxRepo, txMgr, wsPublisher)
 	notificationSvc := service.NewNotificationService(notificationRepo)
 	outboxProcessor := service.NewOutboxProcessor(outboxRepo, txMgr)
-	passwordResetSvc := service.NewPasswordResetService(userRepo, passwordEncoder, passwordResetRepo, emailSvc, auditRepo)
+	passwordResetSvc := service.NewPasswordResetService(userRepo, passwordEncoder, passwordResetRepo, emailSvc, auditRepo, cfg.AppBaseURL)
 
 	renderer, err := web.NewRenderer(templateFS, web.TemplateFuncMap(), cfg.Version)
 	if err != nil {
@@ -239,17 +239,19 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 func BuildCoreBundle(app *App, cfg *config.Config) core.Bundle {
 	return core.Bundle{
 		// PublicUI
-		AuthShowLogin:       app.AuthHandler.ShowLogin,
-		AuthHandleLogin:     app.AuthHandler.HandleLogin,
-		AuthHandleRegister:  app.AuthHandler.HandleRegister,
-		AuthHandleLogout:    app.AuthHandler.HandleLogout,
-		AuthShowChangePwd:   app.AuthHandler.ShowChangePassword,
-		AuthHandleChangePwd: app.AuthHandler.HandleChangePassword,
-		AuthShowReset:       app.AuthHandler.ShowResetPassword,
-		AuthHandleReset:     app.AuthHandler.HandleResetPassword,
-		OAuthRedirect:       app.OAuthHandler.Redirect,
-		OAuthCallback:       app.OAuthHandler.Callback,
-		OAuthCallbackPost:   app.OAuthHandler.CallbackPost,
+		AuthShowLogin:          app.AuthHandler.ShowLogin,
+		AuthHandleLogin:        app.AuthHandler.HandleLogin,
+		AuthHandleRegister:     app.AuthHandler.HandleRegister,
+		AuthHandleLogout:       app.AuthHandler.HandleLogout,
+		AuthShowChangePwd:      app.AuthHandler.ShowChangePassword,
+		AuthHandleChangePwd:    app.AuthHandler.HandleChangePassword,
+		AuthShowReset:          app.AuthHandler.ShowResetPassword,
+		AuthHandleReset:        app.AuthHandler.HandleResetPassword,
+		AuthShowConfirmReset:   app.AuthHandler.ShowConfirmResetPassword,
+		AuthHandleConfirmReset: app.AuthHandler.HandleConfirmResetPassword,
+		OAuthRedirect:          app.OAuthHandler.Redirect,
+		OAuthCallback:          app.OAuthHandler.Callback,
+		OAuthCallbackPost:      app.OAuthHandler.CallbackPost,
 
 		// ProtectedUI
 		HomeShow:              app.HomeHandler.Show,

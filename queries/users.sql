@@ -59,6 +59,9 @@ RETURNING id, username, email, password_hash, role, enabled, created_at, last_ac
        avatar_url, email_notifications_enabled, push_notifications_enabled,
        language, theme, layout;
 
+-- name: UpdatePasswordHash :exec
+UPDATE plt_users SET password_hash = $2 WHERE id = $1;
+
 -- name: UpdateLastActivity :exec
 UPDATE plt_users SET last_activity_at = CURRENT_TIMESTAMP WHERE id = $1;
 

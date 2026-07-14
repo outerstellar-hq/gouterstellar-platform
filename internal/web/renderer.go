@@ -198,6 +198,8 @@ func pageTitle(page string) string {
 		return "Change Password"
 	case "auth_reset_password":
 		return "Reset Password"
+	case "auth_reset_confirm":
+		return "Set New Password"
 	case "auth_reset_sent":
 		return "Reset Sent"
 	case "contacts":

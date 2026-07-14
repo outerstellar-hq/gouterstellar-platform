@@ -73,6 +73,11 @@ func (m *mockUserRepo) UpdateLastActivity(ctx context.Context, id uuid.UUID) err
 	return args.Error(0)
 }
 
+func (m *mockUserRepo) UpdatePasswordHash(ctx context.Context, userID uuid.UUID, passwordHash string) error {
+	args := m.Called(ctx, userID, passwordHash)
+	return args.Error(0)
+}
+
 func (m *mockUserRepo) DeleteByID(ctx context.Context, id uuid.UUID) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)

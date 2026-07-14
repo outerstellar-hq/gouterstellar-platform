@@ -118,6 +118,7 @@ type Querier interface {
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) (PltMessage, error)
 	UpdateNotificationPreferences(ctx context.Context, arg UpdateNotificationPreferencesParams) (PltUser, error)
 	UpdateOutboxStatus(ctx context.Context, arg UpdateOutboxStatusParams) (UpdateOutboxStatusRow, error)
+	UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error
 	UpdatePreferences(ctx context.Context, arg UpdatePreferencesParams) (PltUser, error)
 	UpdateSessionExpiresAt(ctx context.Context, arg UpdateSessionExpiresAtParams) (PltSession, error)
 	UpdateUserEnabled(ctx context.Context, arg UpdateUserEnabledParams) (PltUser, error)

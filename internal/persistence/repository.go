@@ -78,6 +78,7 @@ type UserRepository interface {
 	CountByRole(ctx context.Context, role string) (int64, error)
 	UpdateRole(ctx context.Context, id uuid.UUID, role string) (db.PltUser, error)
 	UpdateEnabled(ctx context.Context, id uuid.UUID, enabled bool) (db.PltUser, error)
+	UpdatePasswordHash(ctx context.Context, userID uuid.UUID, passwordHash string) error
 	UpdateLastActivity(ctx context.Context, id uuid.UUID) error
 	DeleteByID(ctx context.Context, id uuid.UUID) error
 	UpdateUsername(ctx context.Context, id uuid.UUID, username string) (db.PltUser, error)

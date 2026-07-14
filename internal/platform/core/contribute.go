@@ -22,6 +22,8 @@ func (e *Extension) Contribute(ctx *extplatform.ContributionContext) error {
 	ctx.Routes.Public(http.MethodPost, "/auth/change-password", "Handle password change", http.HandlerFunc(b.AuthHandleChangePwd))
 	ctx.Routes.Public(http.MethodGet, "/auth/reset", "Reset password page", http.HandlerFunc(b.AuthShowReset))
 	ctx.Routes.Public(http.MethodPost, "/auth/reset", "Handle password reset", http.HandlerFunc(b.AuthHandleReset))
+	ctx.Routes.Public(http.MethodGet, "/auth/reset/confirm", "Confirm reset password page", http.HandlerFunc(b.AuthShowConfirmReset))
+	ctx.Routes.Public(http.MethodPost, "/auth/reset/confirm", "Handle password reset confirmation", http.HandlerFunc(b.AuthHandleConfirmReset))
 	ctx.Routes.Public(http.MethodGet, "/auth/oauth/{provider}", "OAuth redirect", http.HandlerFunc(b.OAuthRedirect))
 	ctx.Routes.Public(http.MethodGet, "/auth/oauth/{provider}/callback", "OAuth callback", http.HandlerFunc(b.OAuthCallback))
 	ctx.Routes.Public(http.MethodPost, "/auth/oauth/{provider}/callback", "OAuth callback POST", http.HandlerFunc(b.OAuthCallbackPost))
