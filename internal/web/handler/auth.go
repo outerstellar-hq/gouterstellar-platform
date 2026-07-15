@@ -172,6 +172,12 @@ func (h *AuthHandler) HandleChangePassword(w http.ResponseWriter, r *http.Reques
 
 	currentPassword := r.FormValue("currentPassword")
 	newPassword := r.FormValue("newPassword")
+	confirmPassword := r.FormValue("confirmPassword")
+
+	if newPassword != confirmPassword {
+		h.renderChangePasswordError(w, r, "New password and confirmation do not match")
+		return
+	}
 
 	err := h.securityService.ChangePassword(r.Context(), user.ID, currentPassword, newPassword)
 	if err != nil {
@@ -205,9 +211,11 @@ func (h *AuthHandler) HandleResetPassword(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	_ = h.renderer.RenderPage(w, r, "auth_reset_sent", viewmodel.AuthPage{
+	if err := h.renderer.RenderPage(w, r, "auth_reset_sent", viewmodel.AuthPage{
 		CSRFToken: web.CSRFTokenFromRequest(r),
-	})
+	}); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
 }
 
 // ShowConfirmResetPassword renders the confirm-reset form, pre-populated with
@@ -260,7 +268,16 @@ func isSafeRedirect(url string) bool {
 }
 
 func (h *AuthHandler) renderAuthError(w http.ResponseWriter, r *http.Request, errMsg string) {
+	// Preserve the returnTo destination across a failed login/register so the
+	// post-login redirect still works after the user re-submits the form. The
+	// value may come from the query string (initial GET) or the posted form
+	// (the hidden input rendered on the login page).
+	returnTo := r.URL.Query().Get("returnTo")
+	if returnTo == "" {
+		returnTo = r.FormValue("returnTo")
+	}
 	page := viewmodel.AuthPage{
+		ReturnTo:           returnTo,
 		Error:              errMsg,
 		CSRFToken:          web.CSRFTokenFromRequest(r),
 		GoogleLoginEnabled: h.googleLoginEnabled,

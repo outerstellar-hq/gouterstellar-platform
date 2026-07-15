@@ -28,7 +28,14 @@
                     {{ end }}
                 </td>
                 <td>
-                    <form method="POST" action="/admin/users/{{ .ID }}/enabled">
+                    <form method="POST" action="/admin/users/{{ .ID }}/role" class="inline-form">
+                        <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                        <select name="role" onchange="this.form.submit()">
+                            <option value="USER" {{ if eq .Role "USER" }}selected{{ end }}>USER</option>
+                            <option value="ADMIN" {{ if eq .Role "ADMIN" }}selected{{ end }}>ADMIN</option>
+                        </select>
+                    </form>
+                    <form method="POST" action="/admin/users/{{ .ID }}/enabled" class="inline-form">
                         <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
                         <input type="hidden" name="enabled" value="{{ if .Enabled }}false{{ else }}true{{ end }}">
                         <button type="submit" class="btn btn-sm">

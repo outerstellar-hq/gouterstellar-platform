@@ -28,3 +28,11 @@ email:
 segment:
   write_key: ""
   enabled: false
+
+# OAuth providers. Uncomment and fill in credentials to enable a provider.
+# Defaults (empty) leave all providers disabled.
+#oauth:
+#  google:
+#    client_id: ""
+#    client_secret: ""
+#    redirect_uri: ""

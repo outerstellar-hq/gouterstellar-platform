@@ -431,7 +431,7 @@ func (s *MessageService) ResolveConflict(ctx context.Context, syncID string, str
 
 // saveOutboxEntryTx serializes and inserts an outbox entry within a caller-
 // supplied transaction. It is the transactional counterpart of saveOutboxEntry
-// and is intended for the TODO: transactional outbox write below.
+// and keeps the outbox write atomic with the mutation that produced it.
 func (s *MessageService) saveOutboxEntryTx(ctx context.Context, tx pgx.Tx, syncID string, m db.PltMessage) error {
 	syncMsg := pltMessageToSyncMessage(m)
 	payload, err := model.SyncMessageToJSON(syncMsg)
@@ -481,43 +481,16 @@ func (s *MessageService) CountMessages(ctx context.Context) (int64, error) {
 	return s.repo.CountMessages(ctx)
 }
 
-// notifyActor records a best-effort notification for the user acting on the
-// current request. It is nil-safe: if no NotificationService is wired or no
-// authenticated user is present in the context, it does nothing. Notification
-// failures are logged but never propagated, so a notification hiccup cannot
-// fail the originating write.
-func (s *MessageService) notifyActor(ctx context.Context, title, body, nType string) {
-	if s.notificationService == nil {
-		return
-	}
-	user := UserFromContext(ctx)
-	if user == nil {
-		return
-	}
-	if err := s.notificationService.Create(ctx, user.ID, title, body, nType); err != nil {
-		slog.Warn("Failed to create notification", "title", title, "error", err)
-	}
-}
-
-// notifyActorByEmail sends a best-effort notification email to the user acting
-// on the current request when they have email notifications enabled and an
-// EmailService is wired. It is nil-safe and never propagates errors — email
-// delivery is opportunistic and must not fail the originating write.
-func (s *MessageService) notifyActorByEmail(ctx context.Context, subject, body string) {
-	if s.emailService == nil {
-		return
-	}
-	user := UserFromContext(ctx)
-	if user == nil || !user.EmailNotificationsEnabled || user.Email == "" {
-		return
-	}
-	if err := s.emailService.Send(user.Email, subject, body); err != nil {
-		slog.Error("Failed to send notification email", "subject", subject, "error", err)
-	}
+// InvalidateCache flushes all cached message entries. It is exposed for the dev
+// dashboard's manual cache-invalidation control so operators can force a fresh
+// read from the database without restarting the process.
+func (s *MessageService) InvalidateCache() {
+	s.cache.InvalidateAll()
 }
 
 // truncateContent caps a string to maxNotificationBodyLen characters, appending
-// an ellipsis when truncated, so notification bodies stay readable.
+// an ellipsis when truncated, so notification bodies stay readable. It is shared
+// by the WritePipeline's notification path.
 func truncateContent(s string) string {
 	const maxNotificationBodyLen = 100
 	if len(s) <= maxNotificationBodyLen {

@@ -25,6 +25,47 @@
         <dt>Social</dt><dd>{{ range .BodyData.Contact.Social }}{{ . }} {{ end }}</dd>
         {{ end }}
     </dl>
+    <form method="POST" action="/contacts/{{ .BodyData.Contact.SyncID }}/update">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <div class="form-group">
+            <label for="name">Name</label>
+            <input type="text" id="name" name="name" value="{{ .BodyData.Contact.Name }}" required>
+        </div>
+        <div class="form-group">
+            <label for="emails">Emails</label>
+            {{ range $i, $e := .BodyData.Contact.Emails }}
+            <input type="text" name="emails" value="{{ $e }}">
+            {{ end }}
+            <input type="text" name="emails" placeholder="Add email">
+        </div>
+        <div class="form-group">
+            <label for="phones">Phones</label>
+            {{ range $i, $p := .BodyData.Contact.Phones }}
+            <input type="text" name="phones" value="{{ $p }}">
+            {{ end }}
+            <input type="text" name="phones" placeholder="Add phone">
+        </div>
+        <div class="form-group">
+            <label for="socials">Socials</label>
+            {{ range $i, $s := .BodyData.Contact.Social }}
+            <input type="text" name="socials" value="{{ $s }}">
+            {{ end }}
+            <input type="text" name="socials" placeholder="Add social">
+        </div>
+        <div class="form-group">
+            <label for="company">Company</label>
+            <input type="text" id="company" name="company" value="{{ .BodyData.Contact.Company }}">
+        </div>
+        <div class="form-group">
+            <label for="companyAddress">Company address</label>
+            <input type="text" id="companyAddress" name="companyAddress" value="{{ .BodyData.Contact.CompanyAddress }}">
+        </div>
+        <div class="form-group">
+            <label for="department">Department</label>
+            <input type="text" id="department" name="department" value="{{ .BodyData.Contact.Department }}">
+        </div>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+    </form>
     <form method="POST" action="/contacts/{{ .BodyData.Contact.SyncID }}/delete">
         <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
         <button type="submit" class="btn btn-danger" data-confirm="Delete this contact?">Delete</button>

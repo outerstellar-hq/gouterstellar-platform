@@ -63,9 +63,7 @@ gouterstellar-platform/
 │   │   └── viewmodel/          # Template view models
 │   └── wire/                   # Manual dependency injection
 ├── pkg/
-│   ├── i18n/                   # Internationalization (locales, .properties, placeholder injection)
-│   ├── theme/                  # Theme service (SmartShader color math, CSS variable generation)
-│   └── plugin/                 # Plugin manager (factory registration, lifecycle)
+│   └── i18n/                   # Internationalization (locales, .properties, placeholder injection)
 ├── static/
 │   ├── css/main.css            # Stylesheet with light/dark theming
 │   └── js/platform.js          # Theme toggle, CSRF injection, toast auto-dismiss

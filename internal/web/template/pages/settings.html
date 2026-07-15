@@ -8,6 +8,7 @@
         <a href="/settings?tab=api-keys" {{ if eq .BodyData.ActiveTab "api-keys" }}class="active"{{ end }}>API Keys</a>
         <a href="/settings?tab=notifications" {{ if eq .BodyData.ActiveTab "notifications" }}class="active"{{ end }}>Notifications</a>
         <a href="/settings?tab=appearance" {{ if eq .BodyData.ActiveTab "appearance" }}class="active"{{ end }}>Appearance</a>
+        <a href="/settings/sessions">Active Sessions</a>
     </nav>
 
     {{ if eq .BodyData.ActiveTab "profile" }}

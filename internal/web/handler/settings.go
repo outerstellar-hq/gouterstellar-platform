@@ -161,6 +161,12 @@ func (h *SettingsHandler) ChangePassword(w http.ResponseWriter, r *http.Request)
 
 	currentPassword := r.FormValue("currentPassword")
 	newPassword := r.FormValue("newPassword")
+	confirmPassword := r.FormValue("confirmPassword")
+
+	if newPassword != confirmPassword {
+		writeError(w, http.StatusBadRequest, "New password and confirmation do not match")
+		return
+	}
 
 	err := h.securityService.ChangePassword(r.Context(), user.ID, currentPassword, newPassword)
 	if err != nil {

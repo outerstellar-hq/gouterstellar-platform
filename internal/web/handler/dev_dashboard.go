@@ -74,5 +74,6 @@ func (h *DevDashboardHandler) CleanupSessions(w http.ResponseWriter, r *http.Req
 }
 
 func (h *DevDashboardHandler) InvalidateCache(w http.ResponseWriter, r *http.Request) {
+	h.messageService.InvalidateCache()
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Cache invalidated"})
 }

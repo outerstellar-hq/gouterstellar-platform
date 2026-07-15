@@ -2,8 +2,7 @@
 <div class="page-header">
     <h1>Search</h1>
 </div>
-<form method="GET" action="/search" class="search-form"
-      hx-get="/search" hx-target="#search-results" hx-trigger="submit, input changed delay:300ms" hx-push-url="true">
+<form method="GET" action="/search" class="search-form">
     <input type="text" name="q" value="{{ .BodyData.Query }}" placeholder="Search messages..." autofocus>
     <button type="submit" class="btn btn-primary">Search</button>
 </form>

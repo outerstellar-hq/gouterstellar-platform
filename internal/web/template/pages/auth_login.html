@@ -8,7 +8,7 @@
         <form method="POST" action="/auth/login">
             <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
             {{ if .BodyData.ReturnTo }}
-            <input type="hidden" name="return_to" value="{{ .BodyData.ReturnTo }}">
+            <input type="hidden" name="returnTo" value="{{ .BodyData.ReturnTo }}">
             {{ end }}
             <div class="form-group">
                 <label for="username">Username</label>

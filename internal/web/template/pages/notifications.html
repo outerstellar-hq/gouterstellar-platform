@@ -4,6 +4,10 @@
         <h1>Notifications</h1>
         {{ if .BodyData.UnreadCount }}
         <span class="badge badge-unread">{{ .BodyData.UnreadCount }} unread</span>
+        <form method="POST" action="/notifications/read-all" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+            <button type="submit" class="btn btn-sm">Mark All Read</button>
+        </form>
         {{ end }}
     </div>
 
@@ -17,11 +21,15 @@
             <h3>{{ .Title }}</h3>
             <p>{{ .Body }}</p>
             {{ if not .Read }}
-            <form method="POST" action="/notifications/{{ .ID }}/read">
+            <form method="POST" action="/notifications/{{ .ID }}/read" class="inline-form">
                 <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
                 <button type="submit" class="btn btn-sm">Mark as read</button>
             </form>
             {{ end }}
+            <form method="POST" action="/notifications/{{ .ID }}/delete" class="inline-form">
+                <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                <button type="submit" class="btn btn-sm btn-danger" data-confirm="Delete this notification?">Delete</button>
+            </form>
         </div>
         {{ else }}
         <p class="empty-state">No notifications.</p>

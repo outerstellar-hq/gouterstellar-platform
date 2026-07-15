@@ -72,7 +72,6 @@ type services struct {
 	passwordResetSvc  *service.PasswordResetService
 	apiKeySvc         *security.ApiKeyService
 	oauthSvc          *security.OAuthService
-	appleProvider     *security.AppleOAuthProvider
 	googleProvider    *security.GoogleOAuthProvider
 	realms            []security.AuthRealm
 	emailSvc          service.EmailService
@@ -117,7 +116,6 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 
 	apiKeySvc := security.NewApiKeyService(r.apiKeyRepo, r.userRepo)
 	oauthSvc := security.NewOAuthService(r.userRepo, r.oauthRepo, passwordEncoder)
-	appleProvider := security.NewAppleOAuthProvider()
 
 	// Register the Google OAuth provider when fully configured; otherwise leave
 	// it nil so resolveProvider treats "google" as unsupported.
@@ -153,7 +151,6 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 		passwordResetSvc:  passwordResetSvc,
 		apiKeySvc:         apiKeySvc,
 		oauthSvc:          oauthSvc,
-		appleProvider:     appleProvider,
 		googleProvider:    googleProvider,
 		realms:            realms,
 		emailSvc:          emailSvc,
@@ -317,7 +314,11 @@ func buildApp(cfg *config.Config, r repos, svcs *services, templateFS fs.FS, reg
 	if svcs.googleProvider != nil {
 		googleProviderIfc = svcs.googleProvider
 	}
-	oauthHandler := handler.NewOAuthHandler(svcs.securitySvc, svcs.oauthSvc, cfg.SessionCookieSecure, svcs.appleProvider, googleProviderIfc, cfg.AppBaseURL)
+	// Apple OAuth is intentionally not wired: the provider is an unimplemented
+	// stub that can only return errors. resolveProvider returns nil for "apple",
+	// which surfaces as "Unknown OAuth provider" — preferable to a half-working
+	// flow that fails at code exchange.
+	oauthHandler := handler.NewOAuthHandler(svcs.securitySvc, svcs.oauthSvc, cfg.SessionCookieSecure, nil, googleProviderIfc, cfg.AppBaseURL)
 	searchHandler := handler.NewSearchHandler(svcs.messageSvc, svcs.contactSvc, renderer)
 	settingsHandler := handler.NewSettingsHandler(svcs.securitySvc, svcs.apiKeySvc, renderer)
 	errorHandler := handler.NewErrorHandler(renderer, cfg.Version)
