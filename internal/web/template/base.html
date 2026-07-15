@@ -12,7 +12,7 @@
 <body class="{{ if .IsDark }}dark{{ end }} layout-{{ .Layout }}" hx-boost="true">
     {{ if .User }}
     <nav>
-        <div class="nav-brand">Outerstellar</div>
+        <div class="brand">Outerstellar</div>
         <div class="nav-links">
             {{ range .NavItems }}
             <a href="{{ .URL }}" class="nav-link{{ if .Active }} active{{ end }}">{{ .Label }}</a>
@@ -21,7 +21,10 @@
             <a href="/admin/users" class="nav-link{{ if eq .Body "admin_users" }} active{{ end }}">{{ translate $.Language "nav.admin" }}</a>
             {{ end }}
         </div>
-        <div class="nav-user">
+        <div class="user-section">
+            <div id="notification-bell" hx-get="/components/notification-bell" hx-trigger="load, every 60s" hx-swap="innerHTML">
+                <a href="/notifications" class="notification-bell notification-bell-fallback">Notifications</a>
+            </div>
             <span>{{ .User.Username }}</span>
             <form method="POST" action="/auth/logout"><input type="hidden" name="csrf_token" value="{{ .CSRFToken }}"><button type="submit">{{ translate $.Language "nav.logout" }}</button></form>
         </div>

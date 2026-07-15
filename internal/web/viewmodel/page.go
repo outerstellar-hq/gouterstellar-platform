@@ -142,6 +142,10 @@ type NotificationsPage struct {
 	UnreadCount   int
 }
 
+type NotificationBell struct {
+	UnreadCount int64
+}
+
 type NotificationItem struct {
 	ID        string
 	Title     string

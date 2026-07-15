@@ -10,6 +10,7 @@
 	--color-error-text: #b91c1c;
     --color-warning: #f59e0b;
     --color-info: #3b82f6;
+	--color-on-emphasis: #ffffff;
     --bg-primary: #ffffff;
     --bg-secondary: #f9fafb;
     --bg-card: #ffffff;
@@ -98,6 +99,60 @@ nav .user-section {
     align-items: center;
     gap: 12px;
     font-size: 14px;
+}
+
+.notification-bell {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    min-height: 36px;
+    color: var(--text-secondary);
+    border-radius: var(--radius);
+    text-decoration: none;
+}
+
+.notification-bell:hover {
+    color: var(--color-primary-text);
+    background: var(--bg-secondary);
+    text-decoration: none;
+}
+
+.notification-bell:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.notification-bell-icon {
+    font-size: 18px;
+    line-height: 1;
+}
+
+.notification-bell-count {
+    position: absolute;
+    top: 0;
+    right: -4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    color: var(--color-on-emphasis);
+    background: var(--color-error);
+    border: 2px solid var(--bg-primary);
+    border-radius: 999px;
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.notification-bell-fallback {
+    width: auto;
+    padding: 0 8px;
+    font-size: 13px;
 }
 
 nav .user-section .avatar {
