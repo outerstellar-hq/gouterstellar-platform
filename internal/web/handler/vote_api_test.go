@@ -69,7 +69,7 @@ func TestVoteAPIPostRejectsUnauthenticatedAndMalformedRequests(t *testing.T) {
 
 func TestVoteComponentFallsBackToMessageListWithoutHTMX(t *testing.T) {
 	stub := &stubMessageVoteService{}
-	handler := NewComponentsHandler(nil, nil, stub, nil)
+	handler := NewComponentsHandler(nil, nil, stub, nil, nil)
 	router := chi.NewRouter()
 	router.Post("/components/messages/{syncId}/vote", handler.Vote)
 	form := url.Values{"direction": {"-1"}}

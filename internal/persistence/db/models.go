@@ -135,6 +135,33 @@ type PltPasswordResetToken struct {
 	CreatedAt pgtype.Timestamp `json:"created_at"`
 }
 
+type PltPoll struct {
+	ID          int64              `json:"id"`
+	SyncID      string             `json:"sync_id"`
+	CreatorID   uuid.UUID          `json:"creator_id"`
+	Question    string             `json:"question"`
+	MultiChoice bool               `json:"multi_choice"`
+	ClosedAt    pgtype.Timestamptz `json:"closed_at"`
+	Deadline    pgtype.Timestamptz `json:"deadline"`
+	CreatedAt   time.Time          `json:"created_at"`
+	UpdatedAt   time.Time          `json:"updated_at"`
+}
+
+type PltPollOption struct {
+	ID         int64  `json:"id"`
+	PollID     int64  `json:"poll_id"`
+	Position   int16  `json:"position"`
+	OptionText string `json:"option_text"`
+}
+
+type PltPollVote struct {
+	ID        int64     `json:"id"`
+	PollID    int64     `json:"poll_id"`
+	OptionID  int64     `json:"option_id"`
+	UserID    uuid.UUID `json:"user_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type PltSession struct {
 	ID        int64            `json:"id"`
 	TokenHash string           `json:"token_hash"`

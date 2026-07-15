@@ -48,6 +48,23 @@ type VoteRepository interface {
 	WithTx(tx pgx.Tx) VoteRepository
 }
 
+type PollRepository interface {
+	CreatePoll(ctx context.Context, syncID string, creatorID uuid.UUID, question string, multiChoice bool, deadline *time.Time) (db.PltPoll, error)
+	CreateOption(ctx context.Context, pollID int64, position int16, optionText string) (db.PltPollOption, error)
+	FindBySyncID(ctx context.Context, syncID string) (db.PltPoll, error)
+	LockBySyncID(ctx context.Context, syncID string) (db.PltPoll, error)
+	ListOptions(ctx context.Context, pollID int64) ([]db.PltPollOption, error)
+	FindOption(ctx context.Context, pollID, optionID int64) (db.PltPollOption, error)
+	CastVote(ctx context.Context, pollID, optionID int64, userID uuid.UUID) error
+	RemoveVote(ctx context.Context, pollID, optionID int64, userID uuid.UUID) error
+	ListUserVotes(ctx context.Context, pollID int64, userID uuid.UUID) ([]int64, error)
+	ListVoteCounts(ctx context.Context, pollID int64) (map[int64]int32, error)
+	Close(ctx context.Context, pollID int64) error
+	Delete(ctx context.Context, pollID int64) error
+	ListOpen(ctx context.Context, limit, offset int32) ([]db.ListOpenPollsRow, error)
+	WithTx(tx pgx.Tx) PollRepository
+}
+
 type ContactRepository interface {
 	ListContacts(ctx context.Context, limit, offset int32) ([]db.PltContact, error)
 	SearchContacts(ctx context.Context, query string, limit, offset int32) ([]db.PltContact, error)

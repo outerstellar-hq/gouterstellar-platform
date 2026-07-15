@@ -36,6 +36,26 @@ type VoteControls struct {
 	CSRFToken    string
 }
 
+type PollCard struct {
+	SyncID        string
+	Question      string
+	MultiChoice   bool
+	Closed        bool
+	DeadlineLabel string
+	TotalVotes    int32
+	Options       []PollOption
+	CSRFToken     string
+}
+
+type PollOption struct {
+	ID        int64
+	Text      string
+	VoteCount int32
+	Percent   int32
+	Selected  bool
+	CanVote   bool
+}
+
 type ContactsPage struct {
 	Contacts   []ContactItem
 	Pagination PaginationInfo

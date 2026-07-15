@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
-	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -51,15 +49,8 @@ func (h *VoteAPI) Post(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxVoteRequestBytes)
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
 	var request model.VoteRequest
-	if err := decoder.Decode(&request); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid vote request")
-		return
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+	if err := decodeJSONBody(w, r, maxVoteRequestBytes, &request); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid vote request")
 		return
 	}

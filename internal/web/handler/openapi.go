@@ -52,6 +52,42 @@ func buildOpenAPISpec() map[string]interface{} {
 			{"url": "/api/v1", "description": "Current server"},
 		},
 		"paths": map[string]interface{}{
+			"/polls": map[string]interface{}{
+				"get": op("List open polls", false, ok("Open poll list")),
+				"post": op("Create a poll", true, map[string]interface{}{
+					"201": map[string]interface{}{"description": "Poll created"},
+					"400": map[string]interface{}{"description": "Invalid poll"},
+				}),
+			},
+			"/polls/{syncId}": map[string]interface{}{
+				"get": op("Get poll results", false, map[string]interface{}{
+					"200": map[string]interface{}{"description": "Poll results"},
+					"404": map[string]interface{}{"description": "Poll not found"},
+				}),
+				"delete": op("Delete a poll as its creator", true, map[string]interface{}{
+					"204": map[string]interface{}{"description": "Poll deleted"},
+					"403": map[string]interface{}{"description": "Only the creator may delete the poll"},
+					"404": map[string]interface{}{"description": "Poll not found"},
+				}),
+			},
+			"/polls/{syncId}/vote": map[string]interface{}{
+				"post": op("Cast a poll vote", true, map[string]interface{}{
+					"200": map[string]interface{}{"description": "Updated poll results"},
+					"400": map[string]interface{}{"description": "Invalid option"},
+					"404": map[string]interface{}{"description": "Poll not found"},
+					"409": map[string]interface{}{"description": "Poll is closed or single-choice vote conflicts"},
+				}),
+				"delete": op("Remove a poll vote", true, map[string]interface{}{
+					"204": map[string]interface{}{"description": "Vote removed"},
+				}),
+			},
+			"/polls/{syncId}/close": map[string]interface{}{
+				"post": op("Close a poll as its creator", true, map[string]interface{}{
+					"200": map[string]interface{}{"description": "Poll closed"},
+					"403": map[string]interface{}{"description": "Only the creator may close the poll"},
+					"404": map[string]interface{}{"description": "Poll not found"},
+				}),
+			},
 			"/messages/{syncId}/vote": map[string]interface{}{
 				"get": op("Get a message's vote score", false, ok("Vote score")),
 				"post": op("Create, toggle, or flip the current user's message vote", true, map[string]interface{}{

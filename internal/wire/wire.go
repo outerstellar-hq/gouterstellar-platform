@@ -29,6 +29,7 @@ import (
 type repos struct {
 	messageRepo       persistence.MessageRepository
 	voteRepo          persistence.VoteRepository
+	pollRepo          persistence.PollRepository
 	userRepo          persistence.UserRepository
 	sessionRepo       persistence.SessionRepository
 	contactRepo       persistence.ContactRepository
@@ -49,6 +50,7 @@ func buildRepos(pool *pgxpool.Pool) repos {
 	return repos{
 		messageRepo:       persistence.NewMessageRepository(pool),
 		voteRepo:          persistence.NewVoteRepository(pool),
+		pollRepo:          persistence.NewPollRepository(pool),
 		userRepo:          persistence.NewUserRepository(pool),
 		sessionRepo:       persistence.NewSessionRepository(pool),
 		contactRepo:       persistence.NewContactRepository(pool),
@@ -69,6 +71,7 @@ func buildRepos(pool *pgxpool.Pool) repos {
 type services struct {
 	messageSvc         *service.MessageService
 	voteSvc            *service.VoteService
+	pollSvc            *service.PollService
 	contactSvc         *service.ContactService
 	securitySvc        *service.SecurityService
 	totpSvc            *service.TOTPService
@@ -153,6 +156,7 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 
 	messageSvc := service.NewMessageService(r.messageRepo, r.outboxRepo, txMgr, messageCache, wsPublisher, notificationSvc, emailSvc)
 	voteSvc := service.NewVoteService(r.voteRepo, txMgr)
+	pollSvc := service.NewPollService(r.pollRepo, txMgr)
 	contactSvc := service.NewContactService(r.contactRepo, r.outboxRepo, txMgr, wsPublisher, notificationSvc)
 	outboxProcessor := service.NewOutboxProcessor(r.outboxRepo, txMgr, wsPublisher)
 	passwordResetSvc := service.NewPasswordResetService(r.userRepo, passwordEncoder, r.passwordResetRepo, emailSvc, service.NewAuditService(r.auditRepo), cfg.AppBaseURL)
@@ -160,6 +164,7 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 	return &services{
 		messageSvc:         messageSvc,
 		voteSvc:            voteSvc,
+		pollSvc:            pollSvc,
 		contactSvc:         contactSvc,
 		securitySvc:        securitySvc,
 		totpSvc:            totpSvc,
@@ -236,12 +241,14 @@ type App struct {
 	Renderer              *web.Renderer
 	MessageService        *service.MessageService
 	VoteService           *service.VoteService
+	PollService           *service.PollService
 	ContactService        *service.ContactService
 	SecurityService       *service.SecurityService
 	NotificationService   *service.NotificationService
 	OutboxProcessor       *service.OutboxProcessor
 	SyncAPI               *handler.SyncAPI
 	VoteAPI               *handler.VoteAPI
+	PollAPI               *handler.PollAPI
 	AuthAPI               *handler.AuthAPI
 	AuthHandler           *handler.AuthHandler
 	HomeHandler           *handler.HomeHandler
@@ -302,6 +309,7 @@ func buildApp(cfg *config.Config, r repos, svcs *services, templateFS fs.FS, reg
 
 	syncAPI := handler.NewSyncAPI(svcs.messageSvc, svcs.contactSvc, svcs.analytics)
 	voteAPI := handler.NewVoteAPI(svcs.voteSvc)
+	pollAPI := handler.NewPollAPI(svcs.pollSvc)
 	authAPI := handler.NewAuthAPI(svcs.securitySvc, svcs.totpSvc, svcs.apiKeySvc, svcs.passwordResetSvc, cfg.SessionCookieSecure, svcs.analytics, svcs.jwtSvc)
 	authHandler := handler.NewAuthHandler(svcs.securitySvc, svcs.totpSvc, svcs.passwordResetSvc, renderer, cfg.SessionCookieSecure, svcs.analytics, svcs.googleProvider != nil)
 	homeHandler := handler.NewHomeHandler(svcs.messageSvc, svcs.contactSvc, svcs.securitySvc, renderer, cfg.Version)
@@ -330,7 +338,7 @@ func buildApp(cfg *config.Config, r repos, svcs *services, templateFS fs.FS, reg
 	settingsHandler := handler.NewSettingsHandler(svcs.securitySvc, svcs.totpSvc, svcs.apiKeySvc, renderer)
 	errorHandler := handler.NewErrorHandler(renderer, cfg.Version)
 	devDashboardHandler := handler.NewDevDashboardHandler(svcs.outboxProcessor, svcs.securitySvc, svcs.messageSvc, renderer, cfg.DevDashboardEnabled)
-	componentsHandler := handler.NewComponentsHandler(svcs.messageSvc, svcs.contactSvc, svcs.voteSvc, renderer)
+	componentsHandler := handler.NewComponentsHandler(svcs.messageSvc, svcs.contactSvc, svcs.voteSvc, svcs.pollSvc, renderer)
 	openAPIHandler := handler.NewOpenAPIHandler()
 	syncWebSocket := handler.NewSyncWebSocket(svcs.wsPublisher, r.sessionRepo, r.userRepo, cfg.SessionCookieSecure)
 
@@ -343,12 +351,14 @@ func buildApp(cfg *config.Config, r repos, svcs *services, templateFS fs.FS, reg
 		Renderer:              renderer,
 		MessageService:        svcs.messageSvc,
 		VoteService:           svcs.voteSvc,
+		PollService:           svcs.pollSvc,
 		ContactService:        svcs.contactSvc,
 		SecurityService:       svcs.securitySvc,
 		NotificationService:   svcs.notificationSvc,
 		OutboxProcessor:       svcs.outboxProcessor,
 		SyncAPI:               syncAPI,
 		VoteAPI:               voteAPI,
+		PollAPI:               pollAPI,
 		AuthAPI:               authAPI,
 		AuthHandler:           authHandler,
 		HomeHandler:           homeHandler,
@@ -394,6 +404,7 @@ func BuildCoreExtension(app *App) *core.Extension {
 		app.AuthAPI,
 		app.SyncAPI,
 		app.VoteAPI,
+		app.PollAPI,
 		app.NotificationAPI,
 		app.UserAdminAPI,
 		app.DataExportHandler,
