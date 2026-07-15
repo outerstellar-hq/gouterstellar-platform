@@ -159,16 +159,16 @@ go run ./cmd/seed -username admin -password '<strong-password>'
 - `POST /api/v1/auth/logout` — invalidate session
 - `GET /api/v1/auth/profile` — get current user profile (Bearer auth)
 - `PUT /api/v1/auth/profile` — update profile
-- `POST /api/v1/auth/change-password` — change password
+- `PUT /api/v1/auth/password` — change password
 - `POST /api/v1/auth/api-keys` — create API key
 - `GET /api/v1/auth/api-keys` — list API keys
 - `DELETE /api/v1/auth/api-keys/{id}` — delete API key
 
 ### User Admin API (admin only)
-- `GET /api/v1/users` — list users
-- `GET /api/v1/users/count` — count users
-- `PUT /api/v1/users/{id}/enabled` — enable/disable user
-- `PUT /api/v1/users/{id}/role` — change user role
+- `GET /api/v1/admin/users` — list users
+- `GET /api/v1/admin/users/count` — count users
+- `PUT /api/v1/admin/users/{id}/enabled` — enable/disable user
+- `PUT /api/v1/admin/users/{id}/role` — change user role
 
 ### Web UI
 - `GET /auth` — login page

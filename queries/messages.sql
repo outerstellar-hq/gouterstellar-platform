@@ -8,6 +8,16 @@ LIMIT $1 OFFSET $2;
 -- name: CountMessages :one
 SELECT COUNT(*) FROM plt_messages WHERE deleted = false;
 
+-- name: ListDeletedMessages :many
+SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
+FROM plt_messages
+WHERE deleted = true
+ORDER BY deleted_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: CountDeletedMessages :one
+SELECT COUNT(*) FROM plt_messages WHERE deleted = true;
+
 -- name: FindBySyncID :one
 SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
 FROM plt_messages
@@ -53,13 +63,17 @@ SELECT COUNT(*) FROM plt_messages WHERE dirty = true AND deleted = false;
 
 -- name: SoftDeleteMessage :one
 UPDATE plt_messages
-SET deleted = true, deleted_at = CURRENT_TIMESTAMP, dirty = true, version = version + 1
+SET deleted = true, deleted_at = CURRENT_TIMESTAMP, dirty = true,
+    updated_at_epoch_ms = (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT,
+    version = version + 1
 WHERE sync_id = $1
 RETURNING id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict;
 
 -- name: RestoreMessage :one
 UPDATE plt_messages
-SET deleted = false, deleted_at = NULL, dirty = true, version = version + 1
+SET deleted = false, deleted_at = NULL, dirty = true,
+    updated_at_epoch_ms = (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT,
+    version = version + 1
 WHERE sync_id = $1
 RETURNING id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict;
 

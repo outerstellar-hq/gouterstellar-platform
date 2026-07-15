@@ -13,6 +13,8 @@ import (
 type MessageRepository interface {
 	ListMessages(ctx context.Context, limit, offset int32) ([]db.PltMessage, error)
 	CountMessages(ctx context.Context) (int64, error)
+	ListDeletedMessages(ctx context.Context, limit, offset int32) ([]db.PltMessage, error)
+	CountDeletedMessages(ctx context.Context) (int64, error)
 	FindBySyncID(ctx context.Context, syncID string) (db.PltMessage, error)
 	CreateServerMessage(ctx context.Context, syncID, author, content string, updatedAtEpochMs int64) (db.PltMessage, error)
 	CreateLocalMessage(ctx context.Context, syncID, author, content string, updatedAtEpochMs int64) (db.PltMessage, error)
@@ -31,6 +33,8 @@ type MessageRepository interface {
 type ContactRepository interface {
 	ListContacts(ctx context.Context, limit, offset int32) ([]db.PltContact, error)
 	CountContacts(ctx context.Context) (int64, error)
+	ListDeletedContacts(ctx context.Context, limit, offset int32) ([]db.PltContact, error)
+	CountDeletedContacts(ctx context.Context) (int64, error)
 	ListDirtyContacts(ctx context.Context) ([]db.PltContact, error)
 	FindBySyncID(ctx context.Context, syncID string) (db.PltContact, error)
 	FindChangesSince(ctx context.Context, since int64) ([]db.PltContact, error)
@@ -117,6 +121,7 @@ type NotificationRepository interface {
 type DeviceTokenRepository interface {
 	UpsertDeviceToken(ctx context.Context, userID uuid.UUID, platform, token string, appBundle *string) (db.PltDeviceToken, error)
 	DeleteDeviceToken(ctx context.Context, id int64, userID uuid.UUID) (int64, error)
+	DeleteDeviceTokenByValue(ctx context.Context, token string, userID uuid.UUID) (int64, error)
 	FindByUserID(ctx context.Context, userID uuid.UUID) ([]db.PltDeviceToken, error)
 	DeleteAllForUser(ctx context.Context, userID uuid.UUID) (int64, error)
 }

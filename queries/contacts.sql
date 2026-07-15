@@ -8,6 +8,16 @@ LIMIT $1 OFFSET $2;
 -- name: CountContacts :one
 SELECT COUNT(*) FROM plt_contacts WHERE deleted = false;
 
+-- name: ListDeletedContacts :many
+SELECT id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict
+FROM plt_contacts
+WHERE deleted = true
+ORDER BY name ASC
+LIMIT $1 OFFSET $2;
+
+-- name: CountDeletedContacts :one
+SELECT COUNT(*) FROM plt_contacts WHERE deleted = true;
+
 -- name: ListDirtyContacts :many
 SELECT id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict
 FROM plt_contacts
@@ -52,13 +62,17 @@ RETURNING id, sync_id, name, company, company_address, department, created_at, u
 
 -- name: SoftDeleteContact :one
 UPDATE plt_contacts
-SET deleted = true, dirty = true, version = version + 1
+SET deleted = true, dirty = true,
+    updated_at_epoch_ms = (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT,
+    version = version + 1
 WHERE sync_id = $1
 RETURNING id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict;
 
 -- name: RestoreContact :one
 UPDATE plt_contacts
-SET deleted = false, dirty = true, version = version + 1
+SET deleted = false, dirty = true,
+    updated_at_epoch_ms = (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT,
+    version = version + 1
 WHERE sync_id = $1
 RETURNING id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict;
 

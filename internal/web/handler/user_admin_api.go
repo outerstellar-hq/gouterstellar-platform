@@ -11,6 +11,7 @@ import (
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
+	"github.com/rygel/gouterstellar-platform/internal/web/filter"
 )
 
 type UserAdminAPI struct {
@@ -22,12 +23,15 @@ func NewUserAdminAPI(secSvc *service.SecurityService) *UserAdminAPI {
 }
 
 func (h *UserAdminAPI) RegisterRoutes(r chi.Router) {
-	r.Get("/api/v1/users", h.ListUsers)
-	r.Get("/api/v1/users/count", h.CountUsers)
-	r.Put("/api/v1/users/{id}/enabled", h.SetEnabled)
-	r.Put("/api/v1/users/{id}/role", h.SetRole)
-	r.Get("/api/v1/admin/users/export", h.ExportUsersCSV)
-	r.Get("/api/v1/admin/audit/export", h.ExportAuditCSV)
+	r.Group(func(r chi.Router) {
+		r.Use(filter.RequireAdmin)
+		r.Get("/api/v1/admin/users", h.ListUsers)
+		r.Get("/api/v1/admin/users/count", h.CountUsers)
+		r.Put("/api/v1/admin/users/{id}/enabled", h.SetEnabled)
+		r.Put("/api/v1/admin/users/{id}/role", h.SetRole)
+		r.Get("/api/v1/admin/users/export", h.ExportUsersCSV)
+		r.Get("/api/v1/admin/audit/export", h.ExportAuditCSV)
+	})
 }
 
 func (h *UserAdminAPI) ListUsers(w http.ResponseWriter, r *http.Request) {

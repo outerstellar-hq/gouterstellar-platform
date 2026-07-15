@@ -20,6 +20,17 @@ func (q *Queries) CountContacts(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countDeletedContacts = `-- name: CountDeletedContacts :one
+SELECT COUNT(*) FROM plt_contacts WHERE deleted = true
+`
+
+func (q *Queries) CountDeletedContacts(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countDeletedContacts)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createLocalContact = `-- name: CreateLocalContact :one
 INSERT INTO plt_contacts (sync_id, name, company, company_address, department, updated_at_epoch_ms, dirty, deleted, version)
 VALUES ($1, $2, $3, $4, $5, $6, true, false, 1)
@@ -330,6 +341,52 @@ func (q *Queries) ListContacts(ctx context.Context, arg ListContactsParams) ([]P
 	return items, nil
 }
 
+const listDeletedContacts = `-- name: ListDeletedContacts :many
+SELECT id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict
+FROM plt_contacts
+WHERE deleted = true
+ORDER BY name ASC
+LIMIT $1 OFFSET $2
+`
+
+type ListDeletedContactsParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+func (q *Queries) ListDeletedContacts(ctx context.Context, arg ListDeletedContactsParams) ([]PltContact, error) {
+	rows, err := q.db.Query(ctx, listDeletedContacts, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PltContact{}
+	for rows.Next() {
+		var i PltContact
+		if err := rows.Scan(
+			&i.ID,
+			&i.SyncID,
+			&i.Name,
+			&i.Company,
+			&i.CompanyAddress,
+			&i.Department,
+			&i.CreatedAt,
+			&i.UpdatedAtEpochMs,
+			&i.Deleted,
+			&i.Dirty,
+			&i.Version,
+			&i.SyncConflict,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDirtyContacts = `-- name: ListDirtyContacts :many
 SELECT id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict
 FROM plt_contacts
@@ -440,7 +497,9 @@ func (q *Queries) ResolveConflictContact(ctx context.Context, syncID string) (Pl
 
 const restoreContact = `-- name: RestoreContact :one
 UPDATE plt_contacts
-SET deleted = false, dirty = true, version = version + 1
+SET deleted = false, dirty = true,
+    updated_at_epoch_ms = (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT,
+    version = version + 1
 WHERE sync_id = $1
 RETURNING id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict
 `
@@ -494,7 +553,9 @@ func (q *Queries) SetContactSocials(ctx context.Context, contactID int64) error 
 
 const softDeleteContact = `-- name: SoftDeleteContact :one
 UPDATE plt_contacts
-SET deleted = true, dirty = true, version = version + 1
+SET deleted = true, dirty = true,
+    updated_at_epoch_ms = (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT,
+    version = version + 1
 WHERE sync_id = $1
 RETURNING id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict
 `

@@ -132,3 +132,8 @@ type HomePage struct {
 	ContactCount int64
 	UserCount    int64
 }
+
+type TrashPage struct {
+	Messages []MessageItem
+	Contacts []ContactItem
+}

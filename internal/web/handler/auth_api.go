@@ -44,9 +44,9 @@ func (h *AuthAPI) RegisterRoutes(r chi.Router) {
 	r.Post("/api/v1/auth/login", h.Login)
 	r.Post("/api/v1/auth/token", h.IssueToken)
 	r.Post("/api/v1/auth/register", h.Register)
-	r.Post("/api/v1/auth/change-password", h.ChangePassword)
-	r.Post("/api/v1/auth/reset-password", h.RequestPasswordReset)
-	r.Post("/api/v1/auth/confirm-reset", h.ConfirmPasswordReset)
+	r.Put("/api/v1/auth/password", h.ChangePassword)
+	r.Post("/api/v1/auth/reset-request", h.RequestPasswordReset)
+	r.Post("/api/v1/auth/reset-confirm", h.ConfirmPasswordReset)
 	r.Post("/api/v1/auth/logout", h.Logout)
 	r.Get("/api/v1/auth/profile", h.GetProfile)
 	r.Put("/api/v1/auth/profile", h.UpdateProfile)
@@ -146,7 +146,7 @@ func (h *AuthAPI) Register(w http.ResponseWriter, r *http.Request) {
 		"username": user.Username,
 	})
 
-	writeJSON(w, http.StatusCreated, model.AuthTokenResponse{
+	writeJSON(w, http.StatusOK, model.AuthTokenResponse{
 		Token:    token,
 		Username: user.Username,
 		Role:     string(user.Role),
@@ -332,7 +332,7 @@ func (h *AuthAPI) CreateApiKey(w http.ResponseWriter, r *http.Request) {
 		"name":   req.Name,
 	})
 
-	writeJSON(w, http.StatusCreated, result)
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *AuthAPI) ListApiKeys(w http.ResponseWriter, r *http.Request) {

@@ -30,6 +30,31 @@ func (h *ContactsHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/contacts/create", h.Create)
 	r.Post("/contacts/{syncId}/update", h.Update)
 	r.Post("/contacts/{syncId}/delete", h.Delete)
+	r.Post("/contacts/{syncId}/restore", h.Restore)
+	r.Get("/contacts/trash/list", h.TrashList)
+}
+
+func (h *ContactsHandler) Restore(w http.ResponseWriter, r *http.Request) {
+	if err := h.contactService.RestoreContact(r.Context(), chi.URLParam(r, "syncId")); err != nil {
+		handleServiceError(w, err)
+		return
+	}
+	http.Redirect(w, r, "/messages/trash", http.StatusFound)
+}
+
+func (h *ContactsHandler) TrashList(w http.ResponseWriter, r *http.Request) {
+	contacts, err := h.contactService.ListDeletedContacts(r.Context(), 100, 0)
+	if err != nil {
+		handleServiceError(w, err)
+		return
+	}
+	items := make([]viewmodel.ContactItem, len(contacts))
+	for i, contact := range contacts {
+		items[i] = viewmodel.ContactItem{SyncID: contact.SyncID, Name: contact.Name, Emails: contact.Emails, Phones: contact.Phones, Company: contact.Company, Deleted: true}
+	}
+	if err := h.renderer.Render(w, "components/contact_trash_list.html", viewmodel.ContactsPage{Contacts: items}); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
 }
 
 func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {

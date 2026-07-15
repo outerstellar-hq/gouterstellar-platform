@@ -27,6 +27,16 @@ func (m *mockMessageRepo) CountMessages(ctx context.Context) (int64, error) {
 	return args.Get(0).(int64), args.Error(1)
 }
 
+func (m *mockMessageRepo) ListDeletedMessages(ctx context.Context, limit, offset int32) ([]db.PltMessage, error) {
+	args := m.Called(ctx, limit, offset)
+	return args.Get(0).([]db.PltMessage), args.Error(1)
+}
+
+func (m *mockMessageRepo) CountDeletedMessages(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func (m *mockMessageRepo) FindBySyncID(ctx context.Context, syncID string) (db.PltMessage, error) {
 	args := m.Called(ctx, syncID)
 	return args.Get(0).(db.PltMessage), args.Error(1)

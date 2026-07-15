@@ -48,7 +48,6 @@ func main() {
 	r := chi.NewRouter()
 
 	r.Use(chimw.RequestID)
-	r.Use(chimw.RealIP)
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.Timeout(60 * time.Second))
 	r.Use(cors.Handler(cors.Options{
@@ -68,7 +67,7 @@ func main() {
 	r.Use(filter.Session(app.SecurityService, cfg.SessionCookieSecure))
 	r.Use(filter.Logging())
 
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+	readiness := func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
 		w.Header().Set("Content-Type", "application/json")
@@ -79,7 +78,13 @@ func main() {
 		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprintf(w, `{"status":"healthy","database":"up"}`)
+	}
+	r.With(filter.RequireLoopback).Get("/health/live", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"alive"}`))
 	})
+	r.With(filter.RequireLoopback).Get("/health/ready", readiness)
+	r.With(filter.RequireLoopback).Get("/health", readiness)
 	if cfg.MetricsToken != "" {
 		r.With(filter.RequireBearerToken(cfg.MetricsToken)).Handle("/metrics", promhttp.HandlerFor(app.Registry, promhttp.HandlerOpts{}))
 	}
@@ -96,13 +101,16 @@ func main() {
 	})
 
 	app.AuthHandler.RegisterRoutes(r)
-	app.HomeHandler.RegisterRoutes(r)
-	app.ContactsHandler.RegisterRoutes(r)
-	app.SearchHandler.RegisterRoutes(r)
-	app.SettingsHandler.RegisterRoutes(r)
 	app.OAuthHandler.RegisterRoutes(r)
-	app.NotificationsHandler.RegisterRoutes(r)
-	app.ComponentsHandler.RegisterRoutes(r)
+	r.Group(func(r chi.Router) {
+		r.Use(filter.RequireAuthenticated)
+		app.HomeHandler.RegisterRoutes(r)
+		app.ContactsHandler.RegisterRoutes(r)
+		app.SearchHandler.RegisterRoutes(r)
+		app.SettingsHandler.RegisterRoutes(r)
+		app.NotificationsHandler.RegisterRoutes(r)
+		app.ComponentsHandler.RegisterRoutes(r)
+	})
 	app.SyncWebSocket.RegisterRoutes(r)
 
 	r.Route("/admin", func(r chi.Router) {

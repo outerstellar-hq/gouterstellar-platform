@@ -78,25 +78,22 @@ func (s *MessageService) ListMessages(ctx context.Context, limit, offset int32) 
 }
 
 func (s *MessageService) ListDeletedMessages(ctx context.Context, limit, offset int32) (*model.PagedResult[model.MessageSummary], error) {
-	messages, err := s.repo.ListMessages(ctx, limit, offset)
+	messages, err := s.repo.ListDeletedMessages(ctx, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("list messages: %w", err)
+		return nil, fmt.Errorf("list deleted messages: %w", err)
 	}
-
-	var deleted []model.MessageSummary
-	for _, m := range messages {
-		if m.Deleted {
-			deleted = append(deleted, pltMessageToSummary(m))
-		}
+	total, err := s.repo.CountDeletedMessages(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("count deleted messages: %w", err)
 	}
-
-	if deleted == nil {
-		deleted = []model.MessageSummary{}
+	deleted := make([]model.MessageSummary, len(messages))
+	for i, message := range messages {
+		deleted[i] = pltMessageToSummary(message)
 	}
 
 	return &model.PagedResult[model.MessageSummary]{
 		Items:    deleted,
-		Metadata: model.NewPaginationMetadata(int(offset)/int(limit)+1, int(limit), int64(len(deleted))),
+		Metadata: model.NewPaginationMetadata(int(offset)/int(limit)+1, int(limit), total),
 	}, nil
 }
 

@@ -53,6 +53,21 @@ func (s *ContactService) CountContacts(ctx context.Context) (int64, error) {
 	return s.repo.CountContacts(ctx)
 }
 
+func (s *ContactService) ListDeletedContacts(ctx context.Context, limit, offset int32) ([]model.ContactSummary, error) {
+	contacts, err := s.repo.ListDeletedContacts(ctx, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("list deleted contacts: %w", err)
+	}
+	summaries := make([]model.ContactSummary, len(contacts))
+	for i, contact := range contacts {
+		emails, _ := s.repo.ListContactEmails(ctx, contact.ID)
+		phones, _ := s.repo.ListContactPhones(ctx, contact.ID)
+		socials, _ := s.repo.ListContactSocials(ctx, contact.ID)
+		summaries[i] = pltContactToSummary(contact, emails, phones, socials)
+	}
+	return summaries, nil
+}
+
 func (s *ContactService) GetContactBySyncID(ctx context.Context, syncID string) (*model.StoredContact, error) {
 	c, err := s.repo.FindBySyncID(ctx, syncID)
 	if err != nil {
@@ -122,6 +137,14 @@ func (s *ContactService) DeleteContact(ctx context.Context, syncID string) error
 	_, err := s.repo.SoftDeleteContact(ctx, syncID)
 	if err != nil {
 		return fmt.Errorf("delete contact: %w", err)
+	}
+	s.eventPub.PublishRefresh("contacts")
+	return nil
+}
+
+func (s *ContactService) RestoreContact(ctx context.Context, syncID string) error {
+	if _, err := s.repo.RestoreContact(ctx, syncID); err != nil {
+		return fmt.Errorf("restore contact: %w", err)
 	}
 	s.eventPub.PublishRefresh("contacts")
 	return nil
