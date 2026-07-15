@@ -3,26 +3,33 @@ package security
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/patrickmn/go-cache"
 
 	"github.com/rygel/gouterstellar-platform/internal/config"
 	"github.com/rygel/gouterstellar-platform/internal/model"
 )
 
+// jwtCacheTTL bounds how long a parsed token's claims stay cached so a
+// re-presentation of the same token skips signature verification. Short on
+// purpose: the JWT itself already carries an exp claim.
+const jwtCacheTTL = 60 * time.Second
+
+type jwtCacheEntry struct {
+	claims    jwtClaims
+	expiresAt time.Time
+}
+
 type JwtService struct {
 	cfg   config.JwtConfig
-	cache *cache.Cache
+	cache sync.Map
 }
 
 func NewJwtService(cfg config.JwtConfig) *JwtService {
-	return &JwtService{
-		cfg:   cfg,
-		cache: cache.New(60*time.Second, 120*time.Second),
-	}
+	return &JwtService{cfg: cfg}
 }
 
 func (s *JwtService) IsEnabled() bool {
@@ -60,19 +67,20 @@ func (s *JwtService) GenerateToken(user *model.User) (string, error) {
 		return "", fmt.Errorf("failed to sign JWT: %w", err)
 	}
 
-	s.cache.Set(signed, claims, cache.DefaultExpiration)
+	s.cache.Store(signed, jwtCacheEntry{claims: claims, expiresAt: time.Now().Add(jwtCacheTTL)})
 	return signed, nil
 }
 
 func (s *JwtService) ExtractClaims(tokenStr string) (userID uuid.UUID, isAdmin bool, err error) {
-	if cached, found := s.cache.Get(tokenStr); found {
-		if c, ok := cached.(jwtClaims); ok {
-			uid, parseErr := uuid.Parse(c.Subject)
+	if cached, ok := s.cache.Load(tokenStr); ok {
+		if entry, ok := cached.(jwtCacheEntry); ok && time.Now().Before(entry.expiresAt) {
+			uid, parseErr := uuid.Parse(entry.claims.Subject)
 			if parseErr != nil {
 				return uuid.Nil, false, fmt.Errorf("invalid subject in cached claims: %w", parseErr)
 			}
-			return uid, c.Admin, nil
+			return uid, entry.claims.Admin, nil
 		}
+		s.cache.Delete(tokenStr)
 	}
 
 	token, err := jwt.ParseWithClaims(tokenStr, &jwtClaims{}, func(t *jwt.Token) (interface{}, error) {
@@ -95,7 +103,7 @@ func (s *JwtService) ExtractClaims(tokenStr string) (userID uuid.UUID, isAdmin b
 		return uuid.Nil, false, fmt.Errorf("invalid subject in JWT claims: %w", err)
 	}
 
-	s.cache.Set(tokenStr, *claims, cache.DefaultExpiration)
+	s.cache.Store(tokenStr, jwtCacheEntry{claims: *claims, expiresAt: time.Now().Add(jwtCacheTTL)})
 	return uid, claims.Admin, nil
 }
 
