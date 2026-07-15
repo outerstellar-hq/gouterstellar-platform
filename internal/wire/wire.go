@@ -77,7 +77,6 @@ type services struct {
 	emailSvc          service.EmailService
 	analytics         service.AnalyticsService
 	jwtSvc            *security.JwtService
-	activityUpdater   *security.AsyncActivityUpdater
 	permissionResolver security.PermissionResolver
 	wsPublisher       *service.WsEventPublisher
 }
@@ -94,7 +93,6 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 
 	passwordEncoder := security.NewBCryptPasswordEncoder(12)
 	jwtSvc := security.NewJwtService(cfg.JWT)
-	activityUpdater := security.NewAsyncActivityUpdater(r.userRepo)
 	permissionResolver := security.NewRoleBasedPermissionResolver()
 
 	notificationSvc := service.NewNotificationService(r.notificationRepo)
@@ -156,7 +154,6 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 		emailSvc:          emailSvc,
 		analytics:         analytics,
 		jwtSvc:            jwtSvc,
-		activityUpdater:   activityUpdater,
 		permissionResolver: permissionResolver,
 		wsPublisher:       wsPublisher,
 	}, nil
@@ -261,7 +258,6 @@ type App struct {
 	EmailService          service.EmailService
 	Analytics             service.AnalyticsService
 	I18n                  *i18n.I18nService
-	ActivityUpdater       *security.AsyncActivityUpdater
 	JwtService            *security.JwtService
 	PermissionResolver    security.PermissionResolver
 	ServiceBag            extplatform.ServiceBag
@@ -362,7 +358,6 @@ func buildApp(cfg *config.Config, r repos, svcs *services, templateFS fs.FS, reg
 		EmailService:          svcs.emailSvc,
 		Analytics:             svcs.analytics,
 		I18n:                  i18nSvc,
-		ActivityUpdater:       svcs.activityUpdater,
 		JwtService:            svcs.jwtSvc,
 		PermissionResolver:    svcs.permissionResolver,
 		ServiceBag:            svcBag,

@@ -158,29 +158,28 @@ func main() {
 		}
 	}()
 
-	// workerCtx is cancelled when shutdown begins so that background workers
-	// (outbox processor, activity flush, session cleanup) stop promptly instead
-	// of running until process exit.
-	workerCtx, workerCancel := context.WithCancel(context.Background())
+		// workerCtx is cancelled when shutdown begins so that background workers
+		// (outbox processor, session cleanup) stop promptly instead of running
+		// until process exit.
+		workerCtx, workerCancel := context.WithCancel(context.Background())
 
-	go func() {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				if err := app.OutboxProcessor.ProcessPending(workerCtx); err != nil {
-					slog.Error("Outbox processing failed", "error", err)
+		go func() {
+			ticker := time.NewTicker(30 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					if err := app.OutboxProcessor.ProcessPending(workerCtx); err != nil {
+						slog.Error("Outbox processing failed", "error", err)
+					}
+					if err := app.SecurityService.DeleteExpiredSessions(workerCtx); err != nil {
+						slog.Error("Session cleanup failed", "error", err)
+					}
+				case <-workerCtx.Done():
+					return
 				}
-				app.ActivityUpdater.Flush()
-				if err := app.SecurityService.DeleteExpiredSessions(workerCtx); err != nil {
-					slog.Error("Session cleanup failed", "error", err)
-				}
-			case <-workerCtx.Done():
-				return
 			}
-		}
-	}()
+		}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
