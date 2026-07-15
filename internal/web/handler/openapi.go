@@ -174,6 +174,30 @@ func buildOpenAPISpec() map[string]interface{} {
 					"403": map[string]interface{}{"description": "Forbidden"},
 				}),
 			},
+			"/admin/export/message/csv": map[string]interface{}{
+				"get": op("Export messages as CSV (admin only)", true, map[string]interface{}{
+					"200": map[string]interface{}{"description": "CSV download"},
+					"403": map[string]interface{}{"description": "Forbidden"},
+				}),
+			},
+			"/admin/export/message/json": map[string]interface{}{
+				"get": op("Export messages as JSON (admin only)", true, map[string]interface{}{
+					"200": map[string]interface{}{"description": "JSON download"},
+					"403": map[string]interface{}{"description": "Forbidden"},
+				}),
+			},
+			"/admin/export/contact/csv": map[string]interface{}{
+				"get": op("Export contacts as CSV (admin only)", true, map[string]interface{}{
+					"200": map[string]interface{}{"description": "CSV download"},
+					"403": map[string]interface{}{"description": "Forbidden"},
+				}),
+			},
+			"/admin/export/contact/json": map[string]interface{}{
+				"get": op("Export contacts as JSON (admin only)", true, map[string]interface{}{
+					"200": map[string]interface{}{"description": "JSON download"},
+					"403": map[string]interface{}{"description": "Forbidden"},
+				}),
+			},
 			// Notifications
 			"/notifications": map[string]interface{}{
 				"get": op("List notifications", true, ok("Notification list")),

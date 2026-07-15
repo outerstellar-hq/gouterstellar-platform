@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -59,32 +58,29 @@ func (s *MessageService) ListMessages(ctx context.Context, limit, offset int32) 
 	}
 
 	cacheKey := fmt.Sprintf("messages:list:%d:%d", limit, offset)
-	cached := s.cache.GetOrSet(cacheKey, func() interface{} {
-		messages, err := s.repo.ListMessages(ctx, limit, offset)
-		if err != nil {
-			slog.Error("Failed to list messages", "error", err)
-			return nil
-		}
-		summaries := make([]model.MessageSummary, len(messages))
-		for i, m := range messages {
-			summaries[i] = pltMessageToSummary(m)
-		}
-		return summaries
-	})
-
-	if cached == nil {
-		return &model.PagedResult[model.MessageSummary]{
-			Items:    []model.MessageSummary{},
-			Metadata: model.NewPaginationMetadata(1, int(limit), 0),
-		}, nil
+	if cached, found := s.cache.Get(cacheKey); found {
+		return messagePage(cached.([]model.MessageSummary), limit, offset, total), nil
 	}
 
-	summaries := cached.([]model.MessageSummary)
+	messages, err := s.repo.ListMessages(ctx, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("list messages: %w", err)
+	}
+	summaries := make([]model.MessageSummary, len(messages))
+	for i, m := range messages {
+		summaries[i] = pltMessageToSummary(m)
+	}
+	s.cache.Set(cacheKey, summaries)
+
+	return messagePage(summaries, limit, offset, total), nil
+}
+
+func messagePage(items []model.MessageSummary, limit, offset int32, total int64) *model.PagedResult[model.MessageSummary] {
 	page := int(offset)/int(limit) + 1
 	return &model.PagedResult[model.MessageSummary]{
-		Items:    summaries,
+		Items:    items,
 		Metadata: model.NewPaginationMetadata(page, int(limit), total),
-	}, nil
+	}
 }
 
 // SearchMessages returns a page of non-deleted messages whose content or author

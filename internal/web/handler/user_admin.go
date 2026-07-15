@@ -239,7 +239,9 @@ func (h *UserAdminHandler) ExportUsers(w http.ResponseWriter, r *http.Request) {
 		rows[i] = []string{u.Username, u.Email, string(u.Role), strconv.FormatBool(u.Enabled)}
 	}
 
-	writeCSV(w, "users.csv", headers, rows)
+	if err := writeCSV(w, "users.csv", headers, rows); err != nil {
+		handleServiceError(w, err)
+	}
 }
 
 func (h *UserAdminHandler) ExportAudit(w http.ResponseWriter, r *http.Request) {
@@ -267,7 +269,9 @@ func (h *UserAdminHandler) ExportAudit(w http.ResponseWriter, r *http.Request) {
 		rows[i] = []string{actor, target, e.Action, detail, e.CreatedAt.Format("2006-01-02 15:04:05")}
 	}
 
-	writeCSV(w, "audit_log.csv", headers, rows)
+	if err := writeCSV(w, "audit_log.csv", headers, rows); err != nil {
+		handleServiceError(w, err)
+	}
 }
 
 func (h *UserAdminHandler) renderError(w http.ResponseWriter, r *http.Request, message string, status int) {

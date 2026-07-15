@@ -65,22 +65,22 @@ func buildRepos(pool *pgxpool.Pool) repos {
 // the config and repos. Handler construction (buildApp) reads from this struct
 // so the handler layer never re-derives services itself.
 type services struct {
-	messageSvc        *service.MessageService
-	contactSvc        *service.ContactService
-	securitySvc       *service.SecurityService
-	totpSvc           *service.TOTPService
-	notificationSvc   *service.NotificationService
-	outboxProcessor   *service.OutboxProcessor
-	passwordResetSvc  *service.PasswordResetService
-	apiKeySvc         *security.ApiKeyService
-	oauthSvc          *security.OAuthService
-	googleProvider    *security.GoogleOAuthProvider
-	realms            []security.AuthRealm
-	emailSvc          service.EmailService
-	analytics         service.AnalyticsService
-	jwtSvc            *security.JwtService
+	messageSvc         *service.MessageService
+	contactSvc         *service.ContactService
+	securitySvc        *service.SecurityService
+	totpSvc            *service.TOTPService
+	notificationSvc    *service.NotificationService
+	outboxProcessor    *service.OutboxProcessor
+	passwordResetSvc   *service.PasswordResetService
+	apiKeySvc          *security.ApiKeyService
+	oauthSvc           *security.OAuthService
+	googleProvider     *security.GoogleOAuthProvider
+	realms             []security.AuthRealm
+	emailSvc           service.EmailService
+	analytics          service.AnalyticsService
+	jwtSvc             *security.JwtService
 	permissionResolver security.PermissionResolver
-	wsPublisher       *service.WsEventPublisher
+	wsPublisher        *service.WsEventPublisher
 }
 
 // buildServices constructs the service layer plus the shared cross-cutting
@@ -154,22 +154,22 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 	passwordResetSvc := service.NewPasswordResetService(r.userRepo, passwordEncoder, r.passwordResetRepo, emailSvc, service.NewAuditService(r.auditRepo), cfg.AppBaseURL)
 
 	return &services{
-		messageSvc:        messageSvc,
-		contactSvc:        contactSvc,
-		securitySvc:       securitySvc,
-		totpSvc:           totpSvc,
-		notificationSvc:   notificationSvc,
-		outboxProcessor:   outboxProcessor,
-		passwordResetSvc:  passwordResetSvc,
-		apiKeySvc:         apiKeySvc,
-		oauthSvc:          oauthSvc,
-		googleProvider:    googleProvider,
-		realms:            realms,
-		emailSvc:          emailSvc,
-		analytics:         analytics,
-		jwtSvc:            jwtSvc,
+		messageSvc:         messageSvc,
+		contactSvc:         contactSvc,
+		securitySvc:        securitySvc,
+		totpSvc:            totpSvc,
+		notificationSvc:    notificationSvc,
+		outboxProcessor:    outboxProcessor,
+		passwordResetSvc:   passwordResetSvc,
+		apiKeySvc:          apiKeySvc,
+		oauthSvc:           oauthSvc,
+		googleProvider:     googleProvider,
+		realms:             realms,
+		emailSvc:           emailSvc,
+		analytics:          analytics,
+		jwtSvc:             jwtSvc,
 		permissionResolver: permissionResolver,
-		wsPublisher:       wsPublisher,
+		wsPublisher:        wsPublisher,
 	}, nil
 }
 
@@ -242,6 +242,7 @@ type App struct {
 	ContactsHandler       *handler.ContactsHandler
 	UserAdminHandler      *handler.UserAdminHandler
 	UserAdminAPI          *handler.UserAdminAPI
+	DataExportHandler     *handler.DataExportHandler
 	NotificationsHandler  *handler.NotificationsHandler
 	NotificationAPI       *handler.NotificationAPI
 	DeviceRegistrationAPI *handler.DeviceRegistrationAPI
@@ -300,6 +301,7 @@ func buildApp(cfg *config.Config, r repos, svcs *services, templateFS fs.FS, reg
 	contactsHandler := handler.NewContactsHandler(svcs.contactSvc, renderer)
 	userAdminHandler := handler.NewUserAdminHandler(svcs.securitySvc, renderer)
 	userAdminAPI := handler.NewUserAdminAPI(svcs.securitySvc)
+	dataExportHandler := handler.NewDataExportHandler(svcs.messageSvc, svcs.contactSvc)
 	notificationsHandler := handler.NewNotificationsHandler(svcs.notificationSvc, renderer)
 	notificationAPI := handler.NewNotificationAPI(svcs.notificationSvc)
 	deviceRegistrationAPI := handler.NewDeviceRegistrationAPI(r.deviceTokenRepo)
@@ -344,6 +346,7 @@ func buildApp(cfg *config.Config, r repos, svcs *services, templateFS fs.FS, reg
 		ContactsHandler:       contactsHandler,
 		UserAdminHandler:      userAdminHandler,
 		UserAdminAPI:          userAdminAPI,
+		DataExportHandler:     dataExportHandler,
 		NotificationsHandler:  notificationsHandler,
 		NotificationAPI:       notificationAPI,
 		DeviceRegistrationAPI: deviceRegistrationAPI,
@@ -382,6 +385,7 @@ func BuildCoreExtension(app *App) *core.Extension {
 		app.SyncAPI,
 		app.NotificationAPI,
 		app.UserAdminAPI,
+		app.DataExportHandler,
 		app.DeviceRegistrationAPI,
 		app.HomeHandler,
 		app.MessagesHandler,
