@@ -133,6 +133,11 @@ main {
     font-weight: 600;
 }
 
+.export-actions {
+    display: flex;
+    gap: 8px;
+}
+
 .stat-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

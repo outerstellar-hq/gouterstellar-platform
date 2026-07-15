@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -14,6 +15,11 @@ import (
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
 	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
+)
+
+const (
+	adminExportPageSize   int32 = 500
+	adminAuditExportLimit int   = 10000
 )
 
 type UserAdminHandler struct {
@@ -35,8 +41,10 @@ func (h *UserAdminHandler) ContributeRoutes(ctx *extplatform.ContributionContext
 	ctx.Routes.Admin(http.MethodPost, "/admin/users/{id}/role", "Set user role", http.HandlerFunc(h.SetRole))
 	ctx.Routes.Admin(http.MethodPost, "/admin/users/{id}/unlock", "Unlock user", http.HandlerFunc(h.Unlock))
 	ctx.Routes.Admin(http.MethodGet, "/admin/users/export", "Export users", http.HandlerFunc(h.ExportUsers))
+	ctx.Routes.Admin(http.MethodGet, "/admin/users/export/json", "Export users as JSON", http.HandlerFunc(h.ExportUsersJSON))
 	ctx.Routes.Admin(http.MethodGet, "/admin/audit", "Audit log", http.HandlerFunc(h.ShowAudit))
 	ctx.Routes.Admin(http.MethodGet, "/admin/audit/export", "Export audit", http.HandlerFunc(h.ExportAudit))
+	ctx.Routes.Admin(http.MethodGet, "/admin/audit/export/json", "Export audit as JSON", http.HandlerFunc(h.ExportAuditJSON))
 	return nil
 }
 
@@ -227,7 +235,7 @@ func (h *UserAdminHandler) ShowAudit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UserAdminHandler) ExportUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := h.securityService.ListUsersPaged(r.Context(), 10000, 0)
+	users, err := h.allUsersForExport(r.Context())
 	if err != nil {
 		h.renderError(w, r, "Failed to export users", http.StatusInternalServerError)
 		return
@@ -244,8 +252,31 @@ func (h *UserAdminHandler) ExportUsers(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type userJSONExportRow struct {
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Role     string `json:"role"`
+	Enabled  bool   `json:"enabled"`
+}
+
+func (h *UserAdminHandler) ExportUsersJSON(w http.ResponseWriter, r *http.Request) {
+	users, err := h.allUsersForExport(r.Context())
+	if err != nil {
+		h.renderError(w, r, "Failed to export users", http.StatusInternalServerError)
+		return
+	}
+
+	rows := make([]userJSONExportRow, len(users))
+	for i, user := range users {
+		rows[i] = userJSONExportRow{Username: user.Username, Email: user.Email, Role: user.Role, Enabled: user.Enabled}
+	}
+	if err := writeJSONDownload(w, "users.json", rows); err != nil {
+		handleServiceError(w, err)
+	}
+}
+
 func (h *UserAdminHandler) ExportAudit(w http.ResponseWriter, r *http.Request) {
-	entries, err := h.securityService.GetAuditLogPaged(r.Context(), 10000, 0)
+	entries, err := h.auditEntriesForExport(r.Context())
 	if err != nil {
 		h.renderError(w, r, "Failed to export audit log", http.StatusInternalServerError)
 		return
@@ -272,6 +303,77 @@ func (h *UserAdminHandler) ExportAudit(w http.ResponseWriter, r *http.Request) {
 	if err := writeCSV(w, "audit_log.csv", headers, rows); err != nil {
 		handleServiceError(w, err)
 	}
+}
+
+type auditJSONExportRow struct {
+	Timestamp time.Time `json:"timestamp"`
+	Actor     string    `json:"actor"`
+	Action    string    `json:"action"`
+	Target    string    `json:"target"`
+	Detail    string    `json:"detail"`
+}
+
+func (h *UserAdminHandler) ExportAuditJSON(w http.ResponseWriter, r *http.Request) {
+	entries, err := h.auditEntriesForExport(r.Context())
+	if err != nil {
+		h.renderError(w, r, "Failed to export audit log", http.StatusInternalServerError)
+		return
+	}
+
+	rows := make([]auditJSONExportRow, len(entries))
+	for i, entry := range entries {
+		actor := ""
+		if entry.ActorUsername != nil {
+			actor = *entry.ActorUsername
+		}
+		target := ""
+		if entry.TargetUsername != nil {
+			target = *entry.TargetUsername
+		}
+		detail := ""
+		if entry.Detail != nil {
+			detail = *entry.Detail
+		}
+		rows[i] = auditJSONExportRow{
+			Timestamp: entry.CreatedAt, Actor: actor, Action: entry.Action, Target: target, Detail: detail,
+		}
+	}
+	if err := writeJSONDownload(w, "audit.json", rows); err != nil {
+		handleServiceError(w, err)
+	}
+}
+
+func (h *UserAdminHandler) allUsersForExport(ctx context.Context) ([]model.UserSummary, error) {
+	var users []model.UserSummary
+	for offset := int32(0); ; offset += adminExportPageSize {
+		page, err := h.securityService.ListUsersPaged(ctx, adminExportPageSize, offset)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, page...)
+		if len(page) < int(adminExportPageSize) {
+			return users, nil
+		}
+	}
+}
+
+func (h *UserAdminHandler) auditEntriesForExport(ctx context.Context) ([]model.AuditEntry, error) {
+	entries := make([]model.AuditEntry, 0, adminAuditExportLimit)
+	for offset := int32(0); len(entries) < adminAuditExportLimit; offset += adminExportPageSize {
+		page, err := h.securityService.GetAuditLogPaged(ctx, adminExportPageSize, offset)
+		if err != nil {
+			return nil, err
+		}
+		remaining := adminAuditExportLimit - len(entries)
+		if len(page) > remaining {
+			page = page[:remaining]
+		}
+		entries = append(entries, page...)
+		if len(page) < int(adminExportPageSize) {
+			break
+		}
+	}
+	return entries, nil
 }
 
 func (h *UserAdminHandler) renderError(w http.ResponseWriter, r *http.Request, message string, status int) {

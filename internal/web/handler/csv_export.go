@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -33,6 +34,21 @@ func writeCSV(w http.ResponseWriter, filename string, headers []string, rows [][
 	w.Header().Set("Cache-Control", "no-store")
 	if _, err := body.WriteTo(w); err != nil {
 		return fmt.Errorf("send CSV: %w", err)
+	}
+	return nil
+}
+
+func writeJSONDownload(w http.ResponseWriter, filename string, value any) error {
+	body, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("encode JSON download: %w", err)
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
+	w.Header().Set("Cache-Control", "no-store")
+	if _, err := w.Write(body); err != nil {
+		return fmt.Errorf("send JSON download: %w", err)
 	}
 	return nil
 }

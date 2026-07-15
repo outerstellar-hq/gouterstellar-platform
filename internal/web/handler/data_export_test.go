@@ -68,6 +68,33 @@ func TestAdminAPIRoutesRejectNonAdmins(t *testing.T) {
 	}
 }
 
+func TestAdminJSONDownloadUsesMinimalShapeAndPrivateHeaders(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	err := writeJSONDownload(recorder, "users.json", []userJSONExportRow{{
+		Username: "alice", Email: "alice@example.com", Role: "ADMIN", Enabled: true,
+	}})
+
+	require.NoError(t, err)
+	assert.Equal(t, "application/json; charset=utf-8", recorder.Header().Get("Content-Type"))
+	assert.Equal(t, `attachment; filename="users.json"`, recorder.Header().Get("Content-Disposition"))
+	assert.Equal(t, "no-store", recorder.Header().Get("Cache-Control"))
+	assert.JSONEq(t, `[{"username":"alice","email":"alice@example.com","role":"ADMIN","enabled":true}]`, recorder.Body.String())
+	assert.NotContains(t, recorder.Body.String(), "password")
+	assert.NotContains(t, recorder.Body.String(), "locked")
+}
+
+func TestAdminUIRegistersJSONExportRoutes(t *testing.T) {
+	ctx := extplatform.NewContributionContext("platform-core")
+	require.NoError(t, NewUserAdminHandler(nil, nil).ContributeRoutes(ctx))
+
+	patterns := make([]string, 0, len(ctx.Routes.All()))
+	for _, route := range ctx.Routes.All() {
+		patterns = append(patterns, route.Pattern)
+	}
+	assert.Contains(t, patterns, "/admin/users/export/json")
+	assert.Contains(t, patterns, "/admin/audit/export/json")
+}
+
 func TestMessageCSVExportPaginatesAndNeutralizesFormulas(t *testing.T) {
 	firstPage := make([]model.MessageSummary, exportPageSize)
 	firstPage[0] = model.MessageSummary{
