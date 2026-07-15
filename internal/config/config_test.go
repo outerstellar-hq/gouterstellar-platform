@@ -14,6 +14,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.False(t, cfg.SessionCookieSecure)
 	assert.Equal(t, 30, cfg.SessionTimeoutMinutes)
 	assert.Equal(t, 1440, cfg.SessionAbsoluteMinutes)
+	assert.True(t, cfg.RegistrationEnabled)
 	assert.Equal(t, int32(10), cfg.MaxFailedLoginAttempts)
 	assert.Equal(t, int64(900), cfg.LockoutDurationSeconds)
 	assert.True(t, cfg.CSRFEnabled)
@@ -26,14 +27,17 @@ func TestLoadConfigFromEnv(t *testing.T) {
 	os.Setenv("PORT", "9090")
 	os.Setenv("SESSION_TIMEOUT_MINUTES", "60")
 	os.Setenv("SESSION_ABSOLUTE_TIMEOUT_MINUTES", "720")
+	os.Setenv("REGISTRATION_ENABLED", "false")
 	defer os.Unsetenv("PORT")
 	defer os.Unsetenv("SESSION_TIMEOUT_MINUTES")
 	defer os.Unsetenv("SESSION_ABSOLUTE_TIMEOUT_MINUTES")
+	defer os.Unsetenv("REGISTRATION_ENABLED")
 
 	cfg := Load()
 	assert.Equal(t, 9090, cfg.Port)
 	assert.Equal(t, 60, cfg.SessionTimeoutMinutes)
 	assert.Equal(t, 720, cfg.SessionAbsoluteMinutes)
+	assert.False(t, cfg.RegistrationEnabled)
 }
 
 func TestJwtConfigDefaults(t *testing.T) {

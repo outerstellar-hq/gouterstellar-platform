@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -202,6 +201,7 @@ func testSecurityConfig() SecurityConfig {
 		SessionAbsoluteTimeout: 24 * time.Hour,
 		MaxFailedLoginAttempts: 10,
 		LockoutDuration:        15 * time.Minute,
+		RegistrationEnabled:    true,
 	}
 }
 
@@ -465,15 +465,16 @@ func TestRegister_Success(t *testing.T) {
 
 	svc := newTestSecurityService(userRepo, encoder, sessionRepo, auditRepo)
 
-	userRepo.On("FindByUsername", mock.Anything, "newuser").Return(db.PltUser{}, fmt.Errorf("not found"))
-	encoder.On("Encode", "password123").Return("hashed", nil)
+	userRepo.On("FindByUsername", mock.Anything, "newuser").Return(db.PltUser{}, pgx.ErrNoRows)
+	encoder.On("Encode", "Password123!").Return("hashed", nil)
 	userRepo.On("CreateUser", mock.Anything, mock.AnythingOfType("uuid.UUID"), "newuser", "", "hashed", "USER", true).Return(makeTestUser("newuser", "USER", true), nil)
 	auditRepo.On("LogAudit", mock.Anything, mock.AnythingOfType("*uuid.UUID"), mock.AnythingOfType("*string"), (*uuid.UUID)(nil), (*string)(nil), "USER_REGISTER", "New user registered").Return(db.PltAuditLog{}, nil)
 
-	user, err := svc.Register(context.Background(), "newuser", "password123")
+	user, err := svc.Register(context.Background(), "newuser", "Password123!")
 
-	assert.NoError(t, err)
-	assert.Equal(t, "newuser", user.Username)
+	if assert.NoError(t, err) {
+		assert.Equal(t, "newuser", user.Username)
+	}
 	userRepo.AssertExpectations(t)
 }
 
@@ -500,7 +501,61 @@ func TestRegister_DuplicateUsername(t *testing.T) {
 
 	userRepo.On("FindByUsername", mock.Anything, "existing").Return(makeTestUser("existing", "USER", true), nil)
 
-	_, err := svc.Register(context.Background(), "existing", "password123")
+	_, err := svc.Register(context.Background(), "existing", "Password123!")
 
 	assert.Error(t, err)
+}
+
+func TestRegister_Disabled(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	svc := newTestSecurityService(userRepo, new(mockPasswordEncoder), new(mockSessionRepo), new(mockAuditRepo))
+	svc.config.RegistrationEnabled = false
+
+	_, err := svc.Register(context.Background(), "newuser", "Password123!")
+
+	var disabled *model.RegistrationDisabledError
+	assert.ErrorAs(t, err, &disabled)
+	userRepo.AssertNotCalled(t, "FindByUsername", mock.Anything, mock.Anything)
+}
+
+func TestRegister_FailsClosedWhenAvailabilityLookupFails(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	svc := newTestSecurityService(userRepo, new(mockPasswordEncoder), new(mockSessionRepo), new(mockAuditRepo))
+	lookupErr := errors.New("database unavailable")
+	userRepo.On("FindByUsername", mock.Anything, "newuser").Return(db.PltUser{}, lookupErr)
+
+	_, err := svc.Register(context.Background(), "newuser", "Password123!")
+
+	assert.ErrorIs(t, err, lookupErr)
+	userRepo.AssertExpectations(t)
+}
+
+func TestChangePasswordUsesSharedPasswordPolicy(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	encoder := new(mockPasswordEncoder)
+	svc := newTestSecurityService(userRepo, encoder, new(mockSessionRepo), new(mockAuditRepo))
+	user := makeTestUser("alice", "USER", true)
+	userRepo.On("FindByID", mock.Anything, user.ID).Return(user, nil)
+	encoder.On("Matches", "Current1!", user.PasswordHash).Return(true)
+
+	err := svc.ChangePassword(context.Background(), user.ID, "Current1!", "password1!")
+
+	var weak *model.WeakPasswordError
+	assert.ErrorAs(t, err, &weak)
+	assert.ErrorContains(t, err, "uppercase")
+	userRepo.AssertNotCalled(t, "UpdatePasswordHash", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestChangePasswordReturnsTypedCurrentPasswordError(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	encoder := new(mockPasswordEncoder)
+	svc := newTestSecurityService(userRepo, encoder, new(mockSessionRepo), new(mockAuditRepo))
+	user := makeTestUser("alice", "USER", true)
+	userRepo.On("FindByID", mock.Anything, user.ID).Return(user, nil)
+	encoder.On("Matches", "wrong", user.PasswordHash).Return(false)
+
+	err := svc.ChangePassword(context.Background(), user.ID, "wrong", "Password1!")
+
+	var invalid *model.InvalidPasswordError
+	assert.ErrorAs(t, err, &invalid)
 }

@@ -47,9 +47,12 @@ type ContactItem struct {
 
 type AuthPage struct {
 	ReturnTo           string
+	Username           string
 	Error              string
 	CSRFToken          string
 	GoogleLoginEnabled bool
+	RegistrationEnabled bool
+	RegisterMode       bool
 	TOTPRequired       bool
 	PartialToken       string
 }

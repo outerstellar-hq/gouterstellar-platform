@@ -92,6 +92,8 @@ func buildOpenAPISpec() map[string]interface{} {
 			"/auth/register": map[string]interface{}{
 				"post": op("Register a new user account", false, map[string]interface{}{
 					"201": map[string]interface{}{"description": "Account created"},
+					"400": map[string]interface{}{"description": "Invalid username or password"},
+					"403": map[string]interface{}{"description": "Registration disabled"},
 					"409": map[string]interface{}{"description": "Username taken"},
 				}),
 			},

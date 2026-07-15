@@ -96,6 +96,14 @@ type WeakPasswordError struct {
 
 func (e *WeakPasswordError) Error() string { return e.Message }
 
+type RegistrationDisabledError struct{}
+
+func (e *RegistrationDisabledError) Error() string { return "Registration is currently disabled" }
+
+type InvalidPasswordError struct{}
+
+func (e *InvalidPasswordError) Error() string { return "Current password is incorrect" }
+
 type UserNotFoundError struct {
 	UserID string
 }

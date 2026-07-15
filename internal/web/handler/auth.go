@@ -63,10 +63,17 @@ func (h *AuthHandler) ContributeRoutes(ctx *extplatform.ContributionContext) err
 
 func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 	returnTo := r.URL.Query().Get("returnTo")
+	registrationEnabled := h.securityService.RegistrationEnabled()
+	registerRequested := r.URL.Query().Get("mode") == "register"
 	page := viewmodel.AuthPage{
-		ReturnTo:           returnTo,
-		CSRFToken:          web.CSRFTokenFromRequest(r),
-		GoogleLoginEnabled: h.googleLoginEnabled,
+		ReturnTo:            returnTo,
+		CSRFToken:           web.CSRFTokenFromRequest(r),
+		GoogleLoginEnabled:  h.googleLoginEnabled,
+		RegistrationEnabled: registrationEnabled,
+		RegisterMode:        registerRequested && registrationEnabled,
+	}
+	if registerRequested && !registrationEnabled {
+		page.Error = "Registration is currently disabled"
 	}
 	if err := h.renderer.RenderPage(w, r, "auth_login", page); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
@@ -144,10 +151,14 @@ func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 
 	username := r.FormValue("username")
 	password := r.FormValue("password")
+	if password != r.FormValue("confirmPassword") {
+		h.renderAuthError(w, r, "Password and confirmation do not match")
+		return
+	}
 
 	user, err := h.securityService.Register(r.Context(), username, password)
 	if err != nil {
-		h.renderAuthError(w, r, err.Error())
+		h.renderAuthError(w, r, registrationErrorMessage(err))
 		return
 	}
 
@@ -164,6 +175,22 @@ func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	})
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func registrationErrorMessage(err error) string {
+	var disabled *model.RegistrationDisabledError
+	var weak *model.WeakPasswordError
+	var duplicate *model.UsernameAlreadyExistsError
+	var validation *model.ValidationError
+	switch {
+	case errors.As(err, &disabled), errors.As(err, &weak), errors.As(err, &duplicate):
+		return err.Error()
+	case errors.As(err, &validation):
+		return strings.Join(validation.Errors, ". ")
+	default:
+		slog.Error("Registration failed", "error", err)
+		return "Registration failed. Please try again."
+	}
 }
 
 func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
@@ -312,11 +339,14 @@ func (h *AuthHandler) renderAuthError(w http.ResponseWriter, r *http.Request, er
 		returnTo = r.FormValue("returnTo")
 	}
 	page := viewmodel.AuthPage{
-		ReturnTo:           returnTo,
-		Error:              errMsg,
-		CSRFToken:          web.CSRFTokenFromRequest(r),
-		GoogleLoginEnabled: h.googleLoginEnabled,
+		ReturnTo:            returnTo,
+		Username:            r.FormValue("username"),
+		Error:               errMsg,
+		CSRFToken:           web.CSRFTokenFromRequest(r),
+		GoogleLoginEnabled:  h.googleLoginEnabled,
+		RegistrationEnabled: h.securityService.RegistrationEnabled(),
 	}
+	page.RegisterMode = r.URL.Path == "/auth/register" && page.RegistrationEnabled
 	_ = h.renderer.RenderWithStatus(w, r, "auth_login", page, http.StatusBadRequest)
 }
 

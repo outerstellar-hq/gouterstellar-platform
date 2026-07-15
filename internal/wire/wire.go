@@ -109,6 +109,7 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 		SessionAbsoluteTimeout: time.Duration(cfg.SessionAbsoluteMinutes) * time.Minute,
 		MaxFailedLoginAttempts: cfg.MaxFailedLoginAttempts,
 		LockoutDuration:        time.Duration(cfg.LockoutDurationSeconds) * time.Second,
+		RegistrationEnabled:    cfg.RegistrationEnabled,
 	}
 	totpSvc := service.NewTOTPService(r.totpRepo, r.userRepo, passwordEncoder, service.NewAuditService(r.auditRepo), securityConfig)
 	securitySvc := service.NewSecurityService(

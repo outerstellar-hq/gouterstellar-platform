@@ -29,6 +29,7 @@ type SecurityConfig struct {
 	SessionAbsoluteTimeout time.Duration
 	MaxFailedLoginAttempts int32
 	LockoutDuration        time.Duration
+	RegistrationEnabled    bool
 }
 
 type SecurityDependencies struct {
@@ -42,7 +43,6 @@ type SecurityDependencies struct {
 }
 
 const (
-	MinPasswordLength     = 8
 	MaxUsernameLength     = 50
 	SessionTokenHexLength = 48
 	MaxPageLimit          = 1000
@@ -192,6 +192,10 @@ func (s *SecurityService) UnlockAccount(ctx context.Context, adminID, targetID u
 }
 
 func (s *SecurityService) Register(ctx context.Context, username, password string) (*model.User, error) {
+	if !s.config.RegistrationEnabled {
+		return nil, &model.RegistrationDisabledError{}
+	}
+
 	var validationErrors []string
 
 	if strings.TrimSpace(username) == "" {
@@ -200,16 +204,19 @@ func (s *SecurityService) Register(ctx context.Context, username, password strin
 	if len(username) > MaxUsernameLength {
 		validationErrors = append(validationErrors, fmt.Sprintf("Username must be at most %d characters", MaxUsernameLength))
 	}
-	if len(password) < MinPasswordLength {
-		validationErrors = append(validationErrors, fmt.Sprintf("Password must be at least %d characters", MinPasswordLength))
-	}
 	if len(validationErrors) > 0 {
 		return nil, &model.ValidationError{Errors: validationErrors}
+	}
+	if err := validatePassword(password); err != nil {
+		return nil, err
 	}
 
 	_, err := s.userRepo.FindByUsername(ctx, username)
 	if err == nil {
 		return nil, &model.UsernameAlreadyExistsError{Username: username}
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("check username availability: %w", err)
 	}
 
 	hash, err := s.passwordEncoder.Encode(password)
@@ -249,11 +256,11 @@ func (s *SecurityService) ChangePassword(ctx context.Context, userID uuid.UUID, 
 	user := security.PltUserToModel(pltUser)
 
 	if !s.passwordEncoder.Matches(currentPassword, user.PasswordHash) {
-		return fmt.Errorf("current password is incorrect")
+		return &model.InvalidPasswordError{}
 	}
 
-	if len(newPassword) < MinPasswordLength {
-		return &model.WeakPasswordError{Message: fmt.Sprintf("Password must be at least %d characters", MinPasswordLength)}
+	if err := validatePassword(newPassword); err != nil {
+		return err
 	}
 
 	hash, err := s.passwordEncoder.Encode(newPassword)
@@ -270,6 +277,10 @@ func (s *SecurityService) ChangePassword(ctx context.Context, userID uuid.UUID, 
 	s.auditLog(ctx, actorID, actorName, actorID, actorName, "PASSWORD_CHANGE", "Password changed")
 
 	return nil
+}
+
+func (s *SecurityService) RegistrationEnabled() bool {
+	return s.config.RegistrationEnabled
 }
 
 func (s *SecurityService) ListUsers(ctx context.Context) ([]model.UserSummary, error) {

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 
 	extplatform "github.com/rygel/gouterstellar-platform/platform"
 
+	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/security"
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
@@ -61,7 +63,7 @@ func (h *SettingsHandler) renderSettings(w http.ResponseWriter, r *http.Request,
 	}
 
 	activeTab := r.URL.Query().Get("tab")
-	if setup != nil || backupCodes != nil || message != "" {
+	if setup != nil || backupCodes != nil || (message != "" && activeTab == "") {
 		activeTab = "security"
 	}
 	if activeTab == "" {
@@ -119,7 +121,7 @@ func (h *SettingsHandler) renderSettings(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	if err := h.renderer.RenderPage(w, r, "settings", viewmodel.SettingsPage{
+	page := viewmodel.SettingsPage{
 		ActiveTab:                activeTab,
 		Profile:                  profile,
 		ApiKeys:                  apiKeys,
@@ -132,7 +134,14 @@ func (h *SettingsHandler) renderSettings(w http.ResponseWriter, r *http.Request,
 		TOTPSetup:                setup,
 		TOTPBackupCodes:          backupCodes,
 		Error:                    message,
-	}); err != nil {
+	}
+	var renderErr error
+	if message != "" {
+		renderErr = h.renderer.RenderWithStatus(w, r, "settings", page, http.StatusBadRequest)
+	} else {
+		renderErr = h.renderer.RenderPage(w, r, "settings", page)
+	}
+	if renderErr != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
 }
@@ -253,7 +262,7 @@ func (h *SettingsHandler) ChangePassword(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := r.ParseForm(); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid form submission")
+		h.renderPasswordError(w, r, "Invalid form submission")
 		return
 	}
 
@@ -262,17 +271,32 @@ func (h *SettingsHandler) ChangePassword(w http.ResponseWriter, r *http.Request)
 	confirmPassword := r.FormValue("confirmPassword")
 
 	if newPassword != confirmPassword {
-		writeError(w, http.StatusBadRequest, "New password and confirmation do not match")
+		h.renderPasswordError(w, r, "New password and confirmation do not match")
 		return
 	}
 
 	err := h.securityService.ChangePassword(r.Context(), user.ID, currentPassword, newPassword)
 	if err != nil {
-		handleServiceError(w, err)
+		message := "Unable to change password. Please try again."
+		var weak *model.WeakPasswordError
+		var invalid *model.InvalidPasswordError
+		if errors.As(err, &weak) || errors.As(err, &invalid) {
+			message = err.Error()
+		} else {
+			slog.Error("Password change failed", "userID", user.ID, "error", err)
+		}
+		h.renderPasswordError(w, r, message)
 		return
 	}
 
 	http.Redirect(w, r, "/settings?tab=password", http.StatusSeeOther)
+}
+
+func (h *SettingsHandler) renderPasswordError(w http.ResponseWriter, r *http.Request, message string) {
+	query := r.URL.Query()
+	query.Set("tab", "password")
+	r.URL.RawQuery = query.Encode()
+	h.renderSettings(w, r, nil, nil, message)
 }
 
 func (h *SettingsHandler) UpdateNotificationPrefs(w http.ResponseWriter, r *http.Request) {

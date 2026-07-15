@@ -61,6 +61,8 @@ func handleServiceError(w http.ResponseWriter, err error) {
 	var usernameExists *model.UsernameAlreadyExistsError
 	var insufficientPerm *model.InsufficientPermissionError
 	var validationErr *model.ValidationError
+	var registrationDisabled *model.RegistrationDisabledError
+	var invalidPassword *model.InvalidPasswordError
 	var messageNotFound *model.MessageNotFoundError
 	var contactNotFound *model.ContactNotFoundError
 
@@ -75,6 +77,10 @@ func handleServiceError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusForbidden, err.Error())
 	case errors.As(err, &validationErr):
 		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.As(err, &registrationDisabled):
+		writeError(w, http.StatusForbidden, err.Error())
+	case errors.As(err, &invalidPassword):
+		writeError(w, http.StatusUnauthorized, err.Error())
 	case errors.As(err, &messageNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
 	case errors.As(err, &contactNotFound):

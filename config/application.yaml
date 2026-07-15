@@ -6,6 +6,7 @@ dev_mode: false
 session_cookie_secure: false
 session_timeout_minutes: 30
 session_absolute_timeout_minutes: 1440
+registration_enabled: true
 max_failed_login_attempts: 10
 lockout_duration_seconds: 900
 cors_origins: "*"

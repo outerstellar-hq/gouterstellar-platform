@@ -111,6 +111,30 @@ func TestLoginRendersTOTPChallenge(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "autocomplete=\"one-time-code\"")
 }
 
+func TestLoginRendersRegistrationOnlyWhenEnabled(t *testing.T) {
+	r, err := NewRenderer(TemplateFS(), TemplateFuncMap(), "1.0.0")
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodGet, "/auth?mode=register", nil)
+
+	registerRec := httptest.NewRecorder()
+	err = r.RenderPage(registerRec, req, "auth_login", viewmodel.AuthPage{
+		RegistrationEnabled: true,
+		RegisterMode:        true,
+		Username:            "alice",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, registerRec.Body.String(), "action=\"/auth/register\"")
+	assert.Contains(t, registerRec.Body.String(), "value=\"alice\"")
+	assert.Contains(t, registerRec.Body.String(), "Passwords are limited to 72 UTF-8 bytes.")
+	assert.Contains(t, registerRec.Body.String(), "autocomplete=\"new-password\"")
+
+	disabledRec := httptest.NewRecorder()
+	err = r.RenderPage(disabledRec, req, "auth_login", viewmodel.AuthPage{})
+	require.NoError(t, err)
+	assert.NotContains(t, disabledRec.Body.String(), "/auth?mode=register")
+	assert.NotContains(t, disabledRec.Body.String(), "action=\"/auth/register\"")
+}
+
 func TestSettingsRendersTOTPEnrollmentAndBackupCodes(t *testing.T) {
 	r, err := NewRenderer(TemplateFS(), TemplateFuncMap(), "1.0.0")
 	require.NoError(t, err)

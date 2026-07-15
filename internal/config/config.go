@@ -54,6 +54,7 @@ type Config struct {
 	SessionCookieSecure    bool          `yaml:"session_cookie_secure"`
 	SessionTimeoutMinutes  int           `yaml:"session_timeout_minutes"`
 	SessionAbsoluteMinutes int           `yaml:"session_absolute_timeout_minutes"`
+	RegistrationEnabled    bool          `yaml:"registration_enabled"`
 	MaxFailedLoginAttempts int32         `yaml:"max_failed_login_attempts"`
 	LockoutDurationSeconds int64         `yaml:"lockout_duration_seconds"`
 	CORSOrigins            string        `yaml:"cors_origins"`
@@ -79,6 +80,7 @@ func defaults() *Config {
 		SessionCookieSecure:    false,
 		SessionTimeoutMinutes:  30,
 		SessionAbsoluteMinutes: 1440,
+		RegistrationEnabled:    true,
 		MaxFailedLoginAttempts: 10,
 		LockoutDurationSeconds: 900,
 		CORSOrigins:            "*",
@@ -181,6 +183,11 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("SESSION_ABSOLUTE_TIMEOUT_MINUTES"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			cfg.SessionAbsoluteMinutes = n
+		}
+	}
+	if v := os.Getenv("REGISTRATION_ENABLED"); v != "" {
+		if enabled, err := strconv.ParseBool(v); err == nil {
+			cfg.RegistrationEnabled = enabled
 		}
 	}
 	if v := os.Getenv("MAX_FAILED_LOGIN_ATTEMPTS"); v != "" {

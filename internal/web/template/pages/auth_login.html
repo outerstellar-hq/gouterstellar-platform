@@ -20,6 +20,28 @@
             <button type="submit" class="btn btn-primary">Verify</button>
         </form>
         <a href="/auth">Use a different account</a>
+        {{ else if .BodyData.RegisterMode }}
+        <form method="POST" action="/auth/register">
+            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+            {{ if .BodyData.ReturnTo }}
+            <input type="hidden" name="returnTo" value="{{ .BodyData.ReturnTo }}">
+            {{ end }}
+            <div class="form-group">
+                <label for="register-username">Username</label>
+                <input type="text" id="register-username" name="username" value="{{ .BodyData.Username }}" autocomplete="username" required autofocus>
+            </div>
+            <div class="form-group">
+                <label for="register-password">Password</label>
+                <input type="password" id="register-password" name="password" autocomplete="new-password" minlength="8" maxlength="72" aria-describedby="register-password-requirements" required>
+                <p id="register-password-requirements">Use at least 8 characters with uppercase, lowercase, a number, and a special character. Passwords are limited to 72 UTF-8 bytes.</p>
+            </div>
+            <div class="form-group">
+                <label for="register-confirm-password">Confirm password</label>
+                <input type="password" id="register-confirm-password" name="confirmPassword" autocomplete="new-password" minlength="8" maxlength="72" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Create Account</button>
+        </form>
+        <a href="/auth">Already have an account? Sign in</a>
         {{ else }}
         <form method="POST" action="/auth/login">
             <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
@@ -28,17 +50,20 @@
             {{ end }}
             <div class="form-group">
                 <label for="username">Username</label>
-                <input type="text" id="username" name="username" required autofocus>
+                <input type="text" id="username" name="username" value="{{ .BodyData.Username }}" autocomplete="username" required autofocus>
             </div>
             <div class="form-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" name="password" required>
+                <input type="password" id="password" name="password" autocomplete="current-password" required>
             </div>
             <button type="submit" class="btn btn-primary">Sign In</button>
         </form>
         {{ if .BodyData.GoogleLoginEnabled }}
         <div class="auth-divider"><span>or</span></div>
         <a href="/auth/oauth/google" class="btn btn-oauth">Sign in with Google</a>
+        {{ end }}
+        {{ if .BodyData.RegistrationEnabled }}
+        <a href="/auth?mode=register">Create an account</a>
         {{ end }}
         {{ end }}
     </div>
