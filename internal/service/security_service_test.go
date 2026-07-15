@@ -199,9 +199,79 @@ func makeTestUser(username, role string, enabled bool) db.PltUser {
 func testSecurityConfig() SecurityConfig {
 	return SecurityConfig{
 		SessionTimeout:         time.Hour,
+		SessionAbsoluteTimeout: 24 * time.Hour,
 		MaxFailedLoginAttempts: 10,
 		LockoutDuration:        15 * time.Minute,
 	}
+}
+
+func TestLookupSession_ExpiresAtAbsoluteDeadline(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	sessionRepo := new(mockSessionRepo)
+	svc := newTestSecurityService(userRepo, new(mockPasswordEncoder), sessionRepo, new(mockAuditRepo))
+	now := time.Date(2026, time.July, 15, 12, 0, 0, 0, time.UTC)
+	svc.now = func() time.Time { return now }
+
+	rawToken := "oss_absolute_expiry"
+	tokenHash := hashToken(rawToken)
+	sessionRepo.On("FindByTokenHash", mock.Anything, tokenHash).Return(db.PltSession{
+		TokenHash: tokenHash,
+		UserID:    uuid.New(),
+		CreatedAt: pgtype.Timestamp{Time: now.Add(-24 * time.Hour), Valid: true},
+		ExpiresAt: pgtype.Timestamp{Time: now.Add(30 * time.Minute), Valid: true},
+	}, nil)
+	sessionRepo.On("DeleteByTokenHash", mock.Anything, tokenHash).Return(nil)
+
+	result := svc.LookupSession(context.Background(), rawToken)
+
+	assert.IsType(t, model.SessionExpired{}, result)
+	sessionRepo.AssertNotCalled(t, "UpdateExpiresAt", mock.Anything, mock.Anything, mock.Anything)
+	userRepo.AssertNotCalled(t, "FindByID", mock.Anything, mock.Anything)
+	sessionRepo.AssertExpectations(t)
+}
+
+func TestLookupSession_CapsSlidingExpiryAtAbsoluteDeadline(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	sessionRepo := new(mockSessionRepo)
+	svc := newTestSecurityService(userRepo, new(mockPasswordEncoder), sessionRepo, new(mockAuditRepo))
+	svc.config.SessionAbsoluteTimeout = 2 * time.Hour
+	now := time.Date(2026, time.July, 15, 12, 0, 0, 0, time.UTC)
+	svc.now = func() time.Time { return now }
+
+	rawToken := "oss_bounded_renewal"
+	tokenHash := hashToken(rawToken)
+	user := makeTestUser("alice", "USER", true)
+	absoluteDeadline := now.Add(30 * time.Minute)
+	sessionRepo.On("FindByTokenHash", mock.Anything, tokenHash).Return(db.PltSession{
+		TokenHash: tokenHash,
+		UserID:    user.ID,
+		CreatedAt: pgtype.Timestamp{Time: now.Add(-90 * time.Minute), Valid: true},
+		ExpiresAt: pgtype.Timestamp{Time: now.Add(10 * time.Minute), Valid: true},
+	}, nil)
+	userRepo.On("FindByID", mock.Anything, user.ID).Return(user, nil)
+	sessionRepo.On("UpdateExpiresAt", mock.Anything, tokenHash, absoluteDeadline).Return(db.PltSession{}, nil)
+	userRepo.On("UpdateLastActivity", mock.Anything, user.ID).Return(nil)
+
+	result := svc.LookupSession(context.Background(), rawToken)
+
+	active := result.(model.SessionActive)
+	assert.Equal(t, user.ID, active.User.ID)
+	userRepo.AssertExpectations(t)
+	sessionRepo.AssertExpectations(t)
+}
+
+func TestLookupSession_RecognizesStoredExpiredSession(t *testing.T) {
+	sessionRepo := new(mockSessionRepo)
+	svc := newTestSecurityService(new(mockUserRepo), new(mockPasswordEncoder), sessionRepo, new(mockAuditRepo))
+	rawToken := "oss_expired"
+	tokenHash := hashToken(rawToken)
+	sessionRepo.On("FindByTokenHash", mock.Anything, tokenHash).Return(db.PltSession{}, pgx.ErrNoRows)
+	sessionRepo.On("FindByTokenHashIncludingExpired", mock.Anything, tokenHash).Return(db.PltSession{TokenHash: tokenHash}, nil)
+
+	result := svc.LookupSession(context.Background(), rawToken)
+
+	assert.IsType(t, model.SessionExpired{}, result)
+	sessionRepo.AssertExpectations(t)
 }
 
 func newTestSecurityService(userRepo *mockUserRepo, encoder *mockPasswordEncoder, sessionRepo *mockSessionRepo, auditRepo *mockAuditRepo) *SecurityService {
@@ -211,6 +281,25 @@ func newTestSecurityService(userRepo *mockUserRepo, encoder *mockPasswordEncoder
 		SessionRepository: sessionRepo,
 		AuditRepository:   auditRepo,
 	}, testSecurityConfig())
+}
+
+func TestCreateSession_CapsInitialExpiryAtAbsoluteDeadline(t *testing.T) {
+	sessionRepo := new(mockSessionRepo)
+	svc := newTestSecurityService(new(mockUserRepo), new(mockPasswordEncoder), sessionRepo, new(mockAuditRepo))
+	svc.config.SessionTimeout = 2 * time.Hour
+	svc.config.SessionAbsoluteTimeout = time.Hour
+	now := time.Date(2026, time.July, 15, 12, 0, 0, 0, time.UTC)
+	svc.now = func() time.Time { return now }
+	userID := uuid.New()
+	sessionRepo.On("CreateSession", mock.Anything, mock.MatchedBy(func(tokenHash string) bool {
+		return len(tokenHash) == 64
+	}), userID, now.Add(time.Hour)).Return(db.PltSession{}, nil)
+
+	rawToken, err := svc.CreateSession(context.Background(), userID)
+
+	assert.NoError(t, err)
+	assert.Contains(t, rawToken, "oss_")
+	sessionRepo.AssertExpectations(t)
 }
 
 func TestAuthenticate_Success(t *testing.T) {

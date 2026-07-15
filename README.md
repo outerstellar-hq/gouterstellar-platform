@@ -35,7 +35,8 @@ Key settings:
 | `dev_mode` | `false` | Enable development mode |
 | `csrf_enabled` | `true` | Enable CSRF protection |
 | `session_cookie_secure` | `false` | Set Secure flag on session cookies |
-| `session_timeout_minutes` | `30` | Session timeout |
+| `session_timeout_minutes` | `30` | Sliding session timeout |
+| `session_absolute_timeout_minutes` | `1440` | Maximum session lifetime, regardless of activity |
 | `max_failed_login_attempts` | `10` | Failed logins before a timed account lockout |
 | `lockout_duration_seconds` | `900` | Account lockout duration |
 | `jwt.enabled` | `false` | Enable JWT token auth |

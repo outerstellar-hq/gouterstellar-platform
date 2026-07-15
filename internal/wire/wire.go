@@ -106,6 +106,7 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 
 	securityConfig := service.SecurityConfig{
 		SessionTimeout:         time.Duration(cfg.SessionTimeoutMinutes) * time.Minute,
+		SessionAbsoluteTimeout: time.Duration(cfg.SessionAbsoluteMinutes) * time.Minute,
 		MaxFailedLoginAttempts: cfg.MaxFailedLoginAttempts,
 		LockoutDuration:        time.Duration(cfg.LockoutDurationSeconds) * time.Second,
 	}
@@ -137,7 +138,7 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 		)
 	}
 
-	realms := buildRealms(r, jwtSvc, apiKeySvc)
+	realms := buildRealms(r, securitySvc, jwtSvc, apiKeySvc)
 
 	var analytics service.AnalyticsService
 	if cfg.Segment.Enabled && cfg.Segment.WriteKey != "" {
@@ -191,28 +192,15 @@ func buildEmailService(cfg *config.Config) (service.EmailService, error) {
 	return &service.NoOpEmailService{}, nil
 }
 
-// buildRealms assembles the three authentication realms (session cookie, API
-// key, JWT) from the repositories and helper services. Each realm closes over
-// its repo so callers only need the realm interface.
-func buildRealms(r repos, jwtSvc *security.JwtService, apiKeySvc *security.ApiKeyService) []security.AuthRealm {
-	sessionRealm := security.NewSessionRealm(func(ctx context.Context, tokenHash string) model.SessionLookup {
-		session, err := r.sessionRepo.FindByTokenHash(ctx, tokenHash)
-		if err != nil {
-			return model.SessionNotFound{}
-		}
-		if session.ExpiresAt.Time.Before(time.Now()) {
-			return model.SessionExpired{}
-		}
-		pltUser, err := r.userRepo.FindByID(ctx, session.UserID)
-		if err != nil {
-			return model.SessionNotFound{}
-		}
-		user := security.PltUserToModel(pltUser)
-		if !user.Enabled {
-			return model.SessionNotFound{}
-		}
-		return model.SessionActive{User: user}
-	})
+// buildRealms assembles session, API-key, and JWT authentication. Session
+// tokens use the same service policy as cookie authentication.
+func buildRealms(
+	r repos,
+	securitySvc *service.SecurityService,
+	jwtSvc *security.JwtService,
+	apiKeySvc *security.ApiKeyService,
+) []security.AuthRealm {
+	sessionRealm := security.NewSessionRealm(securitySvc.LookupSession)
 
 	apiKeyRealm := security.NewApiKeyRealm(func(ctx context.Context, rawKey string) *model.User {
 		user, err := apiKeySvc.AuthenticateApiKey(ctx, rawKey)

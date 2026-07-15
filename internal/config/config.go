@@ -53,6 +53,7 @@ type Config struct {
 	DevMode                bool          `yaml:"dev_mode"`
 	SessionCookieSecure    bool          `yaml:"session_cookie_secure"`
 	SessionTimeoutMinutes  int           `yaml:"session_timeout_minutes"`
+	SessionAbsoluteMinutes int           `yaml:"session_absolute_timeout_minutes"`
 	MaxFailedLoginAttempts int32         `yaml:"max_failed_login_attempts"`
 	LockoutDurationSeconds int64         `yaml:"lockout_duration_seconds"`
 	CORSOrigins            string        `yaml:"cors_origins"`
@@ -77,6 +78,7 @@ func defaults() *Config {
 		DevMode:                false,
 		SessionCookieSecure:    false,
 		SessionTimeoutMinutes:  30,
+		SessionAbsoluteMinutes: 1440,
 		MaxFailedLoginAttempts: 10,
 		LockoutDurationSeconds: 900,
 		CORSOrigins:            "*",
@@ -176,6 +178,11 @@ func applyEnvOverrides(cfg *Config) {
 			cfg.SessionTimeoutMinutes = n
 		}
 	}
+	if v := os.Getenv("SESSION_ABSOLUTE_TIMEOUT_MINUTES"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.SessionAbsoluteMinutes = n
+		}
+	}
 	if v := os.Getenv("MAX_FAILED_LOGIN_ATTEMPTS"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 32); err == nil {
 			cfg.MaxFailedLoginAttempts = int32(n)
@@ -223,6 +230,9 @@ func (c *Config) Validate() error {
 	}
 	if c.SessionTimeoutMinutes < 1 {
 		return fmt.Errorf("session_timeout_minutes must be at least 1, got %d", c.SessionTimeoutMinutes)
+	}
+	if c.SessionAbsoluteMinutes < 1 {
+		return fmt.Errorf("session_absolute_timeout_minutes must be at least 1, got %d", c.SessionAbsoluteMinutes)
 	}
 	if c.MaxFailedLoginAttempts < 1 {
 		return fmt.Errorf("max_failed_login_attempts must be positive, got %d", c.MaxFailedLoginAttempts)

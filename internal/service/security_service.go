@@ -26,6 +26,7 @@ var errInvalidCredentials = errors.New("invalid credentials")
 
 type SecurityConfig struct {
 	SessionTimeout         time.Duration
+	SessionAbsoluteTimeout time.Duration
 	MaxFailedLoginAttempts int32
 	LockoutDuration        time.Duration
 }
@@ -442,7 +443,12 @@ func (s *SecurityService) CreateSession(ctx context.Context, userID uuid.UUID) (
 
 	tokenHash := hashToken(rawToken)
 
-	expiresAt := s.now().Add(s.config.SessionTimeout)
+	now := s.now()
+	expiresAt := now.Add(s.config.SessionTimeout)
+	absoluteDeadline := now.Add(s.config.SessionAbsoluteTimeout)
+	if expiresAt.After(absoluteDeadline) {
+		expiresAt = absoluteDeadline
+	}
 
 	_, err := s.sessionRepo.CreateSession(ctx, tokenHash, userID, expiresAt)
 	if err != nil {
@@ -457,19 +463,31 @@ func (s *SecurityService) LookupSession(ctx context.Context, rawToken string) mo
 
 	session, err := s.sessionRepo.FindByTokenHash(ctx, tokenHash)
 	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			slog.Error("Failed to look up session", "error", err)
+			return model.SessionNotFound{}
+		}
+		if _, expiredErr := s.sessionRepo.FindByTokenHashIncludingExpired(ctx, tokenHash); expiredErr == nil {
+			return model.SessionExpired{}
+		} else if !errors.Is(expiredErr, pgx.ErrNoRows) {
+			slog.Error("Failed to check expired session", "error", expiredErr)
+		}
 		return model.SessionNotFound{}
 	}
 
 	sess := pltSessionToModel(session)
+	now := s.now()
 
-	if sess.ExpiresAt.Before(s.now()) {
+	if !sess.ExpiresAt.After(now) {
 		return model.SessionExpired{}
 	}
 
-	newExpiresAt := s.now().Add(s.config.SessionTimeout)
-	_, err = s.sessionRepo.UpdateExpiresAt(ctx, tokenHash, newExpiresAt)
-	if err != nil {
-		slog.Warn("Failed to extend session expiry", "error", err)
+	absoluteDeadline := sess.CreatedAt.Add(s.config.SessionAbsoluteTimeout)
+	if !now.Before(absoluteDeadline) {
+		if err := s.sessionRepo.DeleteByTokenHash(ctx, tokenHash); err != nil {
+			slog.Error("Failed to delete session after absolute expiry", "error", err)
+		}
+		return model.SessionExpired{}
 	}
 
 	pltUser, err := s.userRepo.FindByID(ctx, sess.UserID)
@@ -481,6 +499,14 @@ func (s *SecurityService) LookupSession(ctx context.Context, rawToken string) mo
 
 	if !user.Enabled {
 		return model.SessionNotFound{}
+	}
+
+	newExpiresAt := now.Add(s.config.SessionTimeout)
+	if newExpiresAt.After(absoluteDeadline) {
+		newExpiresAt = absoluteDeadline
+	}
+	if _, err = s.sessionRepo.UpdateExpiresAt(ctx, tokenHash, newExpiresAt); err != nil {
+		slog.Warn("Failed to extend session expiry", "error", err)
 	}
 
 	if err := s.userRepo.UpdateLastActivity(ctx, user.ID); err != nil {
