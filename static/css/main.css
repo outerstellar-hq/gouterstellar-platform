@@ -182,6 +182,89 @@ main {
     border-bottom: none;
 }
 
+.trash-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 32px;
+    padding: 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+
+.trash-header h1,
+.trash-section h2 {
+    margin: 0;
+}
+
+.trash-header p:not(.trash-eyebrow) {
+    margin: 6px 0 0;
+    color: var(--text-secondary);
+}
+
+.trash-eyebrow {
+    margin: 0 0 4px;
+    color: var(--color-error-text);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.trash-total {
+    display: grid;
+    flex: 0 0 auto;
+    text-align: right;
+}
+
+.trash-total strong {
+    color: var(--color-error-text);
+    font-size: 28px;
+    line-height: 1;
+}
+
+.trash-total span,
+.trash-section-header span,
+.trash-limit-note {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.trash-section + .trash-section {
+    margin-top: 32px;
+}
+
+.trash-section-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 10px;
+}
+
+.trash-row {
+    position: relative;
+    align-items: center;
+    border-left: 3px solid var(--color-error);
+}
+
+.trash-row > .inline-form {
+    flex: 0 0 auto;
+}
+
+.trash-contact-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.trash-limit-note {
+    margin: 8px 0 0;
+    text-align: right;
+}
+
 .message-body {
     flex: 1;
     min-width: 0;
@@ -986,6 +1069,24 @@ footer {
         flex-direction: column;
         align-items: flex-start;
         gap: 12px;
+    }
+
+    .trash-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .trash-total {
+        text-align: left;
+    }
+
+    .trash-row {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .trash-row > .inline-form .btn {
+        width: 100%;
     }
 
     .auth-card {

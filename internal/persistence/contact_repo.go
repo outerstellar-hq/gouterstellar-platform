@@ -50,6 +50,14 @@ func (r *contactRepo) CountContacts(ctx context.Context) (int64, error) {
 	return r.q.CountContacts(ctx)
 }
 
+func (r *contactRepo) ListDeletedContacts(ctx context.Context, limit, offset int32) ([]db.PltContact, error) {
+	return r.q.ListDeletedContacts(ctx, db.ListDeletedContactsParams{Limit: limit, Offset: offset})
+}
+
+func (r *contactRepo) CountDeletedContacts(ctx context.Context) (int64, error) {
+	return r.q.CountDeletedContacts(ctx)
+}
+
 func (r *contactRepo) ListDirtyContacts(ctx context.Context) ([]db.PltContact, error) {
 	return r.q.ListDirtyContacts(ctx)
 }

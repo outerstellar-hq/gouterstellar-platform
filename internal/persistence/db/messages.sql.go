@@ -9,6 +9,17 @@ import (
 	"context"
 )
 
+const countDeletedMessages = `-- name: CountDeletedMessages :one
+SELECT COUNT(*) FROM plt_messages WHERE deleted = true
+`
+
+func (q *Queries) CountDeletedMessages(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countDeletedMessages)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countDirtyMessages = `-- name: CountDirtyMessages :one
 SELECT COUNT(*) FROM plt_messages WHERE dirty = true AND deleted = false
 `
@@ -165,6 +176,51 @@ ORDER BY updated_at_epoch_ms ASC
 
 func (q *Queries) FindChangesSince(ctx context.Context, updatedAtEpochMs int64) ([]PltMessage, error) {
 	rows, err := q.db.Query(ctx, findChangesSince, updatedAtEpochMs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PltMessage{}
+	for rows.Next() {
+		var i PltMessage
+		if err := rows.Scan(
+			&i.ID,
+			&i.SyncID,
+			&i.Author,
+			&i.Content,
+			&i.CreatedAt,
+			&i.UpdatedAtEpochMs,
+			&i.Deleted,
+			&i.Dirty,
+			&i.DeletedAt,
+			&i.Version,
+			&i.SyncConflict,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDeletedMessages = `-- name: ListDeletedMessages :many
+SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
+FROM plt_messages
+WHERE deleted = true
+ORDER BY updated_at_epoch_ms DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListDeletedMessagesParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+func (q *Queries) ListDeletedMessages(ctx context.Context, arg ListDeletedMessagesParams) ([]PltMessage, error) {
+	rows, err := q.db.Query(ctx, listDeletedMessages, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

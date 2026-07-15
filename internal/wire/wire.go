@@ -254,6 +254,7 @@ type App struct {
 	HomeHandler           *handler.HomeHandler
 	MessagesHandler       *handler.MessagesHandler
 	ContactsHandler       *handler.ContactsHandler
+	TrashHandler          *handler.TrashHandler
 	UserAdminHandler      *handler.UserAdminHandler
 	UserAdminAPI          *handler.UserAdminAPI
 	DataExportHandler     *handler.DataExportHandler
@@ -315,6 +316,7 @@ func buildApp(cfg *config.Config, r repos, svcs *services, templateFS fs.FS, reg
 	homeHandler := handler.NewHomeHandler(svcs.messageSvc, svcs.contactSvc, svcs.securitySvc, renderer, cfg.Version)
 	messagesHandler := handler.NewMessagesHandler(svcs.messageSvc, svcs.voteSvc, renderer)
 	contactsHandler := handler.NewContactsHandler(svcs.contactSvc, renderer)
+	trashHandler := handler.NewTrashHandler(svcs.messageSvc, svcs.contactSvc, renderer)
 	userAdminHandler := handler.NewUserAdminHandler(svcs.securitySvc, renderer)
 	userAdminAPI := handler.NewUserAdminAPI(svcs.securitySvc)
 	dataExportHandler := handler.NewDataExportHandler(svcs.messageSvc, svcs.contactSvc)
@@ -364,6 +366,7 @@ func buildApp(cfg *config.Config, r repos, svcs *services, templateFS fs.FS, reg
 		HomeHandler:           homeHandler,
 		MessagesHandler:       messagesHandler,
 		ContactsHandler:       contactsHandler,
+		TrashHandler:          trashHandler,
 		UserAdminHandler:      userAdminHandler,
 		UserAdminAPI:          userAdminAPI,
 		DataExportHandler:     dataExportHandler,
@@ -412,6 +415,7 @@ func BuildCoreExtension(app *App) *core.Extension {
 		app.HomeHandler,
 		app.MessagesHandler,
 		app.ContactsHandler,
+		app.TrashHandler,
 		app.SearchHandler,
 		app.SettingsHandler,
 		app.NotificationsHandler,

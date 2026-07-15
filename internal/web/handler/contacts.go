@@ -34,6 +34,7 @@ func (h *ContactsHandler) ContributeRoutes(ctx *extplatform.ContributionContext)
 	ctx.Routes.Protected(http.MethodPost, "/contacts/create", "Create contact", http.HandlerFunc(h.Create))
 	ctx.Routes.Protected(http.MethodPost, "/contacts/{syncId}/update", "Update contact", http.HandlerFunc(h.Update))
 	ctx.Routes.Protected(http.MethodPost, "/contacts/{syncId}/delete", "Delete contact", http.HandlerFunc(h.Delete))
+	ctx.Routes.Protected(http.MethodPost, "/contacts/{syncId}/restore", "Restore contact", http.HandlerFunc(h.Restore))
 	return nil
 }
 
@@ -194,6 +195,17 @@ func (h *ContactsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/contacts", http.StatusSeeOther)
+}
+
+func (h *ContactsHandler) Restore(w http.ResponseWriter, r *http.Request) {
+	syncID := chi.URLParam(r, "syncId")
+
+	if err := h.contactService.RestoreContact(r.Context(), syncID); err != nil {
+		handleServiceError(w, err)
+		return
+	}
+
+	http.Redirect(w, r, "/messages/trash", http.StatusSeeOther)
 }
 
 func formatEpochMs(ms int64) string {

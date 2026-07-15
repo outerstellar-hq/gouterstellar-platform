@@ -20,6 +20,17 @@ func (q *Queries) CountContacts(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countDeletedContacts = `-- name: CountDeletedContacts :one
+SELECT COUNT(*) FROM plt_contacts WHERE deleted = true
+`
+
+func (q *Queries) CountDeletedContacts(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countDeletedContacts)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countSearchContacts = `-- name: CountSearchContacts :one
 SELECT COUNT(*) FROM plt_contacts
 WHERE deleted = false
@@ -384,6 +395,52 @@ type ListContactsParams struct {
 
 func (q *Queries) ListContacts(ctx context.Context, arg ListContactsParams) ([]PltContact, error) {
 	rows, err := q.db.Query(ctx, listContacts, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PltContact{}
+	for rows.Next() {
+		var i PltContact
+		if err := rows.Scan(
+			&i.ID,
+			&i.SyncID,
+			&i.Name,
+			&i.Company,
+			&i.CompanyAddress,
+			&i.Department,
+			&i.CreatedAt,
+			&i.UpdatedAtEpochMs,
+			&i.Deleted,
+			&i.Dirty,
+			&i.Version,
+			&i.SyncConflict,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDeletedContacts = `-- name: ListDeletedContacts :many
+SELECT id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict
+FROM plt_contacts
+WHERE deleted = true
+ORDER BY updated_at_epoch_ms DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListDeletedContactsParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+func (q *Queries) ListDeletedContacts(ctx context.Context, arg ListDeletedContactsParams) ([]PltContact, error) {
+	rows, err := q.db.Query(ctx, listDeletedContacts, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

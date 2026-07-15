@@ -8,6 +8,14 @@ type MessagesPage struct {
 	Years      []int
 }
 
+type TrashPage struct {
+	Messages     []MessageItem
+	Contacts     []ContactItem
+	MessageTotal int64
+	ContactTotal int64
+	DeletedTotal int64
+}
+
 type MessageItem struct {
 	SyncID       string
 	Author       string

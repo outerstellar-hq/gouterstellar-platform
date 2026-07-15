@@ -38,6 +38,16 @@ func (m *mockContactRepo) CountContacts(ctx context.Context) (int64, error) {
 	return args.Get(0).(int64), args.Error(1)
 }
 
+func (m *mockContactRepo) ListDeletedContacts(ctx context.Context, limit, offset int32) ([]db.PltContact, error) {
+	args := m.Called(ctx, limit, offset)
+	return args.Get(0).([]db.PltContact), args.Error(1)
+}
+
+func (m *mockContactRepo) CountDeletedContacts(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func (m *mockContactRepo) ListDirtyContacts(ctx context.Context) ([]db.PltContact, error) {
 	args := m.Called(ctx)
 	return args.Get(0).([]db.PltContact), args.Error(1)
@@ -261,16 +271,11 @@ func TestDeleteContact_Success(t *testing.T) {
 
 	// WithTx returns the same mock so the tx-bound reads/writes use the same stubs.
 	repo.On("WithTx", mock.Anything).Return(repo)
-	repo.On("FindBySyncID", mock.Anything, "srv_test").Return(db.PltContact{
-		ID:               1,
-		SyncID:           "srv_test",
-		Name:             "Alice",
-		UpdatedAtEpochMs: 1000,
-		Version:          1,
-	}, nil)
 	repo.On("SoftDeleteContact", mock.Anything, "srv_test").Return(db.PltContact{
-		ID:     1,
-		SyncID: "srv_test",
+		ID:      1,
+		SyncID:  "srv_test",
+		Name:    "Alice",
+		Deleted: true,
 	}, nil)
 	repo.On("ListContactEmails", mock.Anything, int64(1)).Return([]string{}, nil)
 	repo.On("ListContactPhones", mock.Anything, int64(1)).Return([]string{}, nil)

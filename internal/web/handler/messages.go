@@ -153,7 +153,7 @@ func (h *MessagesHandler) Restore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/messages", http.StatusSeeOther)
+	http.Redirect(w, r, "/messages/trash", http.StatusSeeOther)
 }
 
 // ResolveConflict resolves a sync conflict on the message identified by the

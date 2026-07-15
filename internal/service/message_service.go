@@ -152,25 +152,24 @@ func (s *MessageService) GetMessageYears(ctx context.Context) ([]int, error) {
 }
 
 func (s *MessageService) ListDeletedMessages(ctx context.Context, limit, offset int32) (*model.PagedResult[model.MessageSummary], error) {
-	messages, err := s.repo.ListMessages(ctx, limit, offset)
+	total, err := s.repo.CountDeletedMessages(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("list messages: %w", err)
+		return nil, fmt.Errorf("count deleted messages: %w", err)
 	}
 
-	var deleted []model.MessageSummary
-	for _, m := range messages {
-		if m.Deleted {
-			deleted = append(deleted, pltMessageToSummary(m))
-		}
+	messages, err := s.repo.ListDeletedMessages(ctx, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("list deleted messages: %w", err)
 	}
 
-	if deleted == nil {
-		deleted = []model.MessageSummary{}
+	deleted := make([]model.MessageSummary, len(messages))
+	for i, m := range messages {
+		deleted[i] = pltMessageToSummary(m)
 	}
 
 	return &model.PagedResult[model.MessageSummary]{
 		Items:    deleted,
-		Metadata: model.NewPaginationMetadata(int(offset)/int(limit)+1, int(limit), int64(len(deleted))),
+		Metadata: model.NewPaginationMetadata(int(offset)/int(limit)+1, int(limit), total),
 	}, nil
 }
 
@@ -343,9 +342,15 @@ func (s *MessageService) ProcessPushRequest(ctx context.Context, req *model.Sync
 }
 
 func (s *MessageService) Restore(ctx context.Context, syncID string) error {
-	_, err := s.repo.RestoreMessage(ctx, syncID)
+	err := s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
+		restored, err := s.repo.WithTx(tx).RestoreMessage(ctx, syncID)
+		if err != nil {
+			return fmt.Errorf("restore message: %w", err)
+		}
+		return s.saveOutboxEntryTx(ctx, tx, syncID, restored)
+	})
 	if err != nil {
-		return fmt.Errorf("restore message: %w", err)
+		return err
 	}
 	s.pipeline.AfterMessageChange(ctx, syncID)
 	return nil
