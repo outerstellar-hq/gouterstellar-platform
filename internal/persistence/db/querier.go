@@ -59,6 +59,7 @@ type Querier interface {
 	FindUserPage(ctx context.Context, arg FindUserPageParams) ([]PltUser, error)
 	GetOutboxStats(ctx context.Context) (GetOutboxStatsRow, error)
 	GetSyncState(ctx context.Context, stateKey string) (PltSyncState, error)
+	IncrementFailedLoginAttempts(ctx context.Context, id uuid.UUID) (int32, error)
 	InsertContactEmail(ctx context.Context, arg InsertContactEmailParams) error
 	InsertContactPhone(ctx context.Context, arg InsertContactPhoneParams) error
 	InsertContactSocial(ctx context.Context, arg InsertContactSocialParams) error
@@ -73,6 +74,7 @@ type Querier interface {
 	ListFailedOutbox(ctx context.Context, limit int32) ([]ListFailedOutboxRow, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]PltMessage, error)
 	ListPendingOutbox(ctx context.Context, limit int32) ([]ListPendingOutboxRow, error)
+	LockUserUntil(ctx context.Context, arg LockUserUntilParams) error
 	LogAudit(ctx context.Context, arg LogAuditParams) (PltAuditLog, error)
 	MarkAllNotificationsRead(ctx context.Context, userID uuid.UUID) (int64, error)
 	MarkCleanContacts(ctx context.Context) error
@@ -82,6 +84,7 @@ type Querier interface {
 	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) (PltNotification, error)
 	MarkOutboxFailed(ctx context.Context, arg MarkOutboxFailedParams) (MarkOutboxFailedRow, error)
 	MarkOutboxProcessed(ctx context.Context, id uuid.UUID) (MarkOutboxProcessedRow, error)
+	ResetLoginFailures(ctx context.Context, id uuid.UUID) error
 	ResolveConflictContact(ctx context.Context, syncID string) (PltContact, error)
 	ResolveConflictMessage(ctx context.Context, syncID string) (PltMessage, error)
 	RestoreContact(ctx context.Context, syncID string) (PltContact, error)

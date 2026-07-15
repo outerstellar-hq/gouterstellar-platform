@@ -71,6 +71,13 @@ func TestRendererUsesWorkingAdminAndMessageActions(t *testing.T) {
 	assert.Contains(t, adminResponse.Body.String(), `action="/admin/users/user-id/enabled"`)
 	assert.Contains(t, adminResponse.Body.String(), `name="enabled" value="false"`)
 
+	lockedResponse := httptest.NewRecorder()
+	require.NoError(t, renderer.Render(lockedResponse, request, "admin_users.html", viewmodel.AdminUsersPage{Users: []viewmodel.UserItem{
+		{ID: "locked-id", Username: "locked", Enabled: true, IsLocked: true, FailedLoginAttempts: 10},
+	}}))
+	assert.Contains(t, lockedResponse.Body.String(), `action="/admin/users/locked-id/unlock"`)
+	assert.Contains(t, lockedResponse.Body.String(), "Unlock (10)")
+
 	messageResponse := httptest.NewRecorder()
 	require.NoError(t, renderer.Render(messageResponse, request, "messages.html", viewmodel.MessagesPage{Messages: []viewmodel.MessageItem{
 		{SyncID: "message-id", Author: "Alice", Content: "Hello"},

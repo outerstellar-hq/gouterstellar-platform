@@ -29,21 +29,23 @@ type SegmentConfig struct {
 }
 
 type Config struct {
-	Version               string        `mapstructure:"version"`
-	Port                  int           `mapstructure:"port"`
-	DatabaseURL           string        `mapstructure:"database_url"`
-	DevDashboardEnabled   bool          `mapstructure:"dev_dashboard_enabled"`
-	DevMode               bool          `mapstructure:"dev_mode"`
-	SessionCookieSecure   bool          `mapstructure:"session_cookie_secure"`
-	SessionTimeoutMinutes int           `mapstructure:"session_timeout_minutes"`
-	CORSOrigins           string        `mapstructure:"cors_origins"`
-	CSRFEnabled           bool          `mapstructure:"csrf_enabled"`
-	AppBaseURL            string        `mapstructure:"app_base_url"`
-	CSPPolicy             string        `mapstructure:"csp_policy"`
-	MetricsToken          string        `mapstructure:"metrics_token"`
-	JWT                   JwtConfig     `mapstructure:"jwt"`
-	Email                 EmailConfig   `mapstructure:"email"`
-	Segment               SegmentConfig `mapstructure:"segment"`
+	Version                string        `mapstructure:"version"`
+	Port                   int           `mapstructure:"port"`
+	DatabaseURL            string        `mapstructure:"database_url"`
+	DevDashboardEnabled    bool          `mapstructure:"dev_dashboard_enabled"`
+	DevMode                bool          `mapstructure:"dev_mode"`
+	SessionCookieSecure    bool          `mapstructure:"session_cookie_secure"`
+	SessionTimeoutMinutes  int           `mapstructure:"session_timeout_minutes"`
+	MaxFailedLoginAttempts int32         `mapstructure:"max_failed_login_attempts"`
+	LockoutDurationSeconds int64         `mapstructure:"lockout_duration_seconds"`
+	CORSOrigins            string        `mapstructure:"cors_origins"`
+	CSRFEnabled            bool          `mapstructure:"csrf_enabled"`
+	AppBaseURL             string        `mapstructure:"app_base_url"`
+	CSPPolicy              string        `mapstructure:"csp_policy"`
+	MetricsToken           string        `mapstructure:"metrics_token"`
+	JWT                    JwtConfig     `mapstructure:"jwt"`
+	Email                  EmailConfig   `mapstructure:"email"`
+	Segment                SegmentConfig `mapstructure:"segment"`
 }
 
 func Load() *Config {
@@ -64,6 +66,8 @@ func Load() *Config {
 	v.SetDefault("dev_mode", false)
 	v.SetDefault("session_cookie_secure", true)
 	v.SetDefault("session_timeout_minutes", 30)
+	v.SetDefault("max_failed_login_attempts", 10)
+	v.SetDefault("lockout_duration_seconds", 900)
 	v.SetDefault("cors_origins", "https://localhost:8080")
 	v.SetDefault("csrf_enabled", true)
 	v.SetDefault("app_base_url", "https://localhost:8080")
@@ -93,6 +97,12 @@ func Load() *Config {
 	if err := v.Unmarshal(&cfg); err != nil {
 		slog.Error("Failed to unmarshal config", "error", err)
 		panic(err)
+	}
+	if cfg.MaxFailedLoginAttempts <= 0 {
+		panic("max_failed_login_attempts must be greater than zero")
+	}
+	if cfg.LockoutDurationSeconds <= 0 {
+		panic("lockout_duration_seconds must be greater than zero")
 	}
 	return &cfg
 }

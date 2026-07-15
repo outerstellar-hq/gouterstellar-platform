@@ -5,19 +5,30 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/persistence"
 	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
 	"github.com/rygel/gouterstellar-platform/internal/security"
 )
+
+var errInvalidCredentials = errors.New("invalid credentials")
+
+type SecurityConfig struct {
+	SessionTimeout         time.Duration
+	MaxFailedLoginAttempts int32
+	LockoutDuration        time.Duration
+}
 
 const (
 	MinPasswordLength     = 8
@@ -28,11 +39,15 @@ const (
 )
 
 type SecurityService struct {
-	userRepo              persistence.UserRepository
-	passwordEncoder       security.PasswordEncoder
-	sessionRepo           persistence.SessionRepository
-	auditRepo             persistence.AuditRepository
-	sessionTimeoutSeconds int64
+	userRepo             persistence.UserRepository
+	passwordEncoder      security.PasswordEncoder
+	sessionRepo          persistence.SessionRepository
+	auditRepo            persistence.AuditRepository
+	config               SecurityConfig
+	now                  func() time.Time
+	dummyHashOnce        sync.Once
+	dummyPasswordHash    string
+	dummyPasswordHashErr error
 }
 
 func NewSecurityService(
@@ -40,31 +55,66 @@ func NewSecurityService(
 	passwordEncoder security.PasswordEncoder,
 	sessionRepo persistence.SessionRepository,
 	auditRepo persistence.AuditRepository,
-	sessionTimeoutSeconds int64,
+	config SecurityConfig,
 ) *SecurityService {
 	return &SecurityService{
-		userRepo:              userRepo,
-		passwordEncoder:       passwordEncoder,
-		sessionRepo:           sessionRepo,
-		auditRepo:             auditRepo,
-		sessionTimeoutSeconds: sessionTimeoutSeconds,
+		userRepo:        userRepo,
+		passwordEncoder: passwordEncoder,
+		sessionRepo:     sessionRepo,
+		auditRepo:       auditRepo,
+		config:          config,
+		now:             time.Now,
 	}
 }
 
 func (s *SecurityService) Authenticate(ctx context.Context, username, password string) (*model.User, error) {
 	pltUser, err := s.userRepo.FindByUsername(ctx, username)
 	if err != nil {
-		return nil, fmt.Errorf("invalid credentials")
+		if !errors.Is(err, pgx.ErrNoRows) {
+			slog.Error("Failed to load user during authentication", "error", err)
+			return nil, errInvalidCredentials
+		}
+		if timingErr := s.matchUnknownPassword(password); timingErr != nil {
+			slog.Error("Failed to equalize unknown-user authentication", "error", timingErr)
+		}
+		return nil, errInvalidCredentials
 	}
 
 	user := security.PltUserToModel(pltUser)
+	passwordMatches := s.passwordEncoder.Matches(password, user.PasswordHash)
 
 	if !user.Enabled {
-		return nil, fmt.Errorf("account is disabled")
+		s.authenticationFailed(ctx, user)
+		return nil, errInvalidCredentials
 	}
 
-	if !s.passwordEncoder.Matches(password, user.PasswordHash) {
-		return nil, fmt.Errorf("invalid credentials")
+	if user.LockedUntil != nil && user.LockedUntil.After(s.now()) {
+		s.authenticationFailed(ctx, user)
+		return nil, errInvalidCredentials
+	}
+
+	if !passwordMatches {
+		attempts, incrementErr := s.userRepo.IncrementFailedLoginAttempts(ctx, user.ID)
+		if incrementErr != nil {
+			slog.Error("Failed to record authentication attempt", "userID", user.ID, "error", incrementErr)
+			return nil, errInvalidCredentials
+		}
+		if attempts >= s.config.MaxFailedLoginAttempts {
+			until := s.now().Add(s.config.LockoutDuration)
+			if lockErr := s.userRepo.LockUserUntil(ctx, user.ID, until); lockErr != nil {
+				slog.Error("Failed to lock user after repeated authentication failures", "userID", user.ID, "error", lockErr)
+				return nil, errInvalidCredentials
+			}
+		}
+		s.authenticationFailed(ctx, user)
+		return nil, errInvalidCredentials
+	}
+
+	if user.FailedLoginAttempts > 0 || user.LockedUntil != nil {
+		if resetErr := s.userRepo.ResetLoginFailures(ctx, user.ID); resetErr != nil {
+			slog.Error("Failed to reset authentication failures", "userID", user.ID, "error", resetErr)
+			return nil, errInvalidCredentials
+		}
 	}
 
 	if err := s.userRepo.UpdateLastActivity(ctx, user.ID); err != nil {
@@ -72,6 +122,22 @@ func (s *SecurityService) Authenticate(ctx context.Context, username, password s
 	}
 
 	return user, nil
+}
+
+func (s *SecurityService) matchUnknownPassword(password string) error {
+	s.dummyHashOnce.Do(func() {
+		s.dummyPasswordHash, s.dummyPasswordHashErr = s.passwordEncoder.Encode("timing-mitigation-dummy")
+	})
+	if s.dummyPasswordHashErr != nil {
+		return s.dummyPasswordHashErr
+	}
+	s.passwordEncoder.Matches(password, s.dummyPasswordHash)
+	return nil
+}
+
+func (s *SecurityService) authenticationFailed(ctx context.Context, user *model.User) {
+	actorID, actorName := userToAuditParams(user)
+	s.auditLog(ctx, actorID, actorName, actorID, actorName, "AUTHENTICATION_FAILED", "Invalid credentials")
 }
 
 func (s *SecurityService) Register(ctx context.Context, username, password string) (*model.User, error) {
@@ -239,6 +305,29 @@ func (s *SecurityService) SetUserRole(ctx context.Context, adminID, targetID uui
 	return nil
 }
 
+func (s *SecurityService) UnlockAccount(ctx context.Context, adminID, targetID uuid.UUID) error {
+	admin, err := s.userRepo.FindByID(ctx, adminID)
+	if err != nil {
+		return &model.UserNotFoundError{UserID: adminID.String()}
+	}
+	adminModel := security.PltUserToModel(admin)
+	if adminModel.Role != model.RoleAdmin {
+		return &model.InsufficientPermissionError{Message: "Admin access required to unlock accounts"}
+	}
+	target, err := s.userRepo.FindByID(ctx, targetID)
+	if err != nil {
+		return &model.UserNotFoundError{UserID: targetID.String()}
+	}
+	if err := s.userRepo.ResetLoginFailures(ctx, targetID); err != nil {
+		return fmt.Errorf("unlock account: %w", err)
+	}
+	targetModel := security.PltUserToModel(target)
+	actorID, actorName := userToAuditParams(adminModel)
+	targetIDPtr, targetName := userToAuditParams(targetModel)
+	s.auditLog(ctx, actorID, actorName, targetIDPtr, targetName, "USER_UNLOCKED", "Account unlocked")
+	return nil
+}
+
 func (s *SecurityService) DevAdminID(ctx context.Context) uuid.UUID {
 	users, err := s.ListUsersPaged(ctx, 1, 0)
 	if err != nil {
@@ -296,7 +385,7 @@ func (s *SecurityService) CreateSession(ctx context.Context, userID uuid.UUID) (
 	hash := sha256.Sum256([]byte(rawToken))
 	tokenHash := hex.EncodeToString(hash[:])
 
-	expiresAt := time.Now().Add(time.Duration(s.sessionTimeoutSeconds) * time.Second)
+	expiresAt := s.now().Add(s.config.SessionTimeout)
 
 	_, err := s.sessionRepo.CreateSession(ctx, tokenHash, userID, expiresAt)
 	if err != nil {
@@ -317,11 +406,11 @@ func (s *SecurityService) LookupSession(ctx context.Context, rawToken string) mo
 
 	sess := pltSessionToModel(session)
 
-	if sess.ExpiresAt.Before(time.Now()) {
+	if sess.ExpiresAt.Before(s.now()) {
 		return model.SessionExpired{}
 	}
 
-	newExpiresAt := time.Now().Add(time.Duration(s.sessionTimeoutSeconds) * time.Second)
+	newExpiresAt := s.now().Add(s.config.SessionTimeout)
 	_, err = s.sessionRepo.UpdateExpiresAt(ctx, tokenHash, newExpiresAt)
 	if err != nil {
 		slog.Warn("Failed to extend session expiry", "error", err)

@@ -67,6 +67,9 @@ type UserRepository interface {
 	UpdateRole(ctx context.Context, id uuid.UUID, role string) (db.PltUser, error)
 	UpdateEnabled(ctx context.Context, id uuid.UUID, enabled bool) (db.PltUser, error)
 	UpdateLastActivity(ctx context.Context, id uuid.UUID) error
+	IncrementFailedLoginAttempts(ctx context.Context, id uuid.UUID) (int32, error)
+	ResetLoginFailures(ctx context.Context, id uuid.UUID) error
+	LockUserUntil(ctx context.Context, id uuid.UUID, until time.Time) error
 	DeleteByID(ctx context.Context, id uuid.UUID) error
 	UpdateUsername(ctx context.Context, id uuid.UUID, username string) (db.PltUser, error)
 	UpdateAvatarURL(ctx context.Context, id uuid.UUID, avatarURL *string) (db.PltUser, error)

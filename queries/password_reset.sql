@@ -13,9 +13,10 @@ WITH consumed AS (
     RETURNING user_id
 )
 UPDATE plt_users
-SET password_hash = $2
+SET password_hash = $2, failed_login_attempts = 0, locked_until = NULL
 FROM consumed
 WHERE plt_users.id = consumed.user_id
 RETURNING plt_users.id, username, email, password_hash, role, enabled, created_at,
           last_activity_at, avatar_url, email_notifications_enabled,
-          push_notifications_enabled, language, theme, layout;
+          push_notifications_enabled, language, theme, layout,
+          failed_login_attempts, locked_until;

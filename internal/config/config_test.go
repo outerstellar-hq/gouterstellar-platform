@@ -14,6 +14,8 @@ func TestLoadConfig(t *testing.T) {
 	assert.True(t, cfg.SessionCookieSecure)
 	assert.Equal(t, "https://localhost:8080", cfg.CORSOrigins)
 	assert.Equal(t, 30, cfg.SessionTimeoutMinutes)
+	assert.Equal(t, int32(10), cfg.MaxFailedLoginAttempts)
+	assert.Equal(t, int64(900), cfg.LockoutDurationSeconds)
 	assert.True(t, cfg.CSRFEnabled)
 	assert.False(t, cfg.JWT.Enabled)
 	assert.False(t, cfg.Email.Enabled)

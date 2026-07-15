@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -26,12 +27,13 @@ func NewUserAdminHandler(secSvc *service.SecurityService, renderer *web.Renderer
 }
 
 func (h *UserAdminHandler) RegisterRoutes(r chi.Router) {
-	r.Get("/admin/users", h.ListUsers)
-	r.Post("/admin/users/{id}/enabled", h.SetEnabled)
-	r.Post("/admin/users/{id}/role", h.SetRole)
-	r.Get("/admin/users/export", h.ExportUsers)
-	r.Get("/admin/audit", h.ShowAudit)
-	r.Get("/admin/audit/export", h.ExportAudit)
+	r.Get("/users", h.ListUsers)
+	r.Post("/users/{id}/enabled", h.SetEnabled)
+	r.Post("/users/{id}/role", h.SetRole)
+	r.Post("/users/{id}/unlock", h.Unlock)
+	r.Get("/users/export", h.ExportUsers)
+	r.Get("/audit", h.ShowAudit)
+	r.Get("/audit/export", h.ExportAudit)
 }
 
 func (h *UserAdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
@@ -54,11 +56,13 @@ func (h *UserAdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	userItems := make([]viewmodel.UserItem, len(users))
 	for i, u := range users {
 		userItems[i] = viewmodel.UserItem{
-			ID:       u.ID,
-			Username: u.Username,
-			Email:    u.Email,
-			Role:     u.Role,
-			Enabled:  u.Enabled,
+			ID:                  u.ID,
+			Username:            u.Username,
+			Email:               u.Email,
+			Role:                u.Role,
+			Enabled:             u.Enabled,
+			FailedLoginAttempts: u.FailedLoginAttempts,
+			IsLocked:            u.LockedUntil != nil && u.LockedUntil.After(time.Now()),
 		}
 	}
 
@@ -77,6 +81,19 @@ func (h *UserAdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
+}
+
+func (h *UserAdminHandler) Unlock(w http.ResponseWriter, r *http.Request) {
+	targetID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid user ID")
+		return
+	}
+	if err := h.securityService.UnlockAccount(r.Context(), web.UserFromRequest(r).ID, targetID); err != nil {
+		handleServiceError(w, err)
+		return
+	}
+	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }
 
 func (h *UserAdminHandler) SetEnabled(w http.ResponseWriter, r *http.Request) {

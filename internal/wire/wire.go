@@ -84,7 +84,11 @@ func Wire(cfg *config.Config, pool *pgxpool.Pool, templateFS fs.FS) *App {
 		passwordEncoder,
 		sessionRepo,
 		auditRepo,
-		int64(cfg.SessionTimeoutMinutes)*60,
+		service.SecurityConfig{
+			SessionTimeout:         time.Duration(cfg.SessionTimeoutMinutes) * time.Minute,
+			MaxFailedLoginAttempts: cfg.MaxFailedLoginAttempts,
+			LockoutDuration:        time.Duration(cfg.LockoutDurationSeconds) * time.Second,
+		},
 	)
 
 	apiKeySvc := security.NewApiKeyService(apiKeyRepo, userRepo)

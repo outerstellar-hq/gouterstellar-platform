@@ -38,7 +38,9 @@ func TestDesktopClientContractRoutes(t *testing.T) {
 func TestWebNavigationRoutes(t *testing.T) {
 	router := chi.NewRouter()
 	(&HomeHandler{}).RegisterRoutes(router)
-	(&UserAdminHandler{}).RegisterRoutes(router)
+	router.Route("/admin", func(r chi.Router) {
+		(&UserAdminHandler{}).RegisterRoutes(r)
+	})
 
 	for _, route := range []struct {
 		method string
@@ -47,6 +49,7 @@ func TestWebNavigationRoutes(t *testing.T) {
 		{http.MethodGet, "/messages"},
 		{http.MethodGet, "/messages/trash"},
 		{http.MethodPost, "/admin/users/8c607f06-69cf-4170-af4e-6a2bfcf43eae/enabled"},
+		{http.MethodPost, "/admin/users/8c607f06-69cf-4170-af4e-6a2bfcf43eae/unlock"},
 	} {
 		t.Run(route.method+" "+route.path, func(t *testing.T) {
 			context := chi.NewRouteContext()
