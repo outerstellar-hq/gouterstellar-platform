@@ -14,6 +14,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: 'theme=' + next
+            }).then(function (response) {
+                if (!response.ok) throw new Error('Unable to save theme');
+            }).catch(function () {
+                html.setAttribute('data-theme', current);
+                window.alert('The theme could not be saved. Please try again.');
             });
         });
     }

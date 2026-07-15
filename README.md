@@ -8,7 +8,7 @@ Go port of the [outerstellar-platform](https://github.com/outerstellar-hq/outers
 # Prerequisites: Go 1.24+, PostgreSQL 16+, Podman or Docker
 make build          # build the server
 make migrate-up     # apply database migrations
-make seed           # create initial admin user (admin / admin123)
+go run ./cmd/seed -username admin -password '<strong-password>'
 make dev            # run with dev profile (CSRF off, dev dashboard on)
 ```
 
@@ -29,11 +29,12 @@ Key settings:
 | Key | Default | Description |
 |-----|---------|-------------|
 | `port` | `8080` | Listen port |
-| `database_url` | `postgres://outerstellar:outerstellar@localhost:5432/outerstellar?sslmode=disable` | PostgreSQL connection string |
+| `database_url` | `postgres://localhost:5432/outerstellar?sslmode=require` | PostgreSQL connection string; override for local development |
 | `dev_mode` | `false` | Enable development mode |
 | `csrf_enabled` | `true` | Enable CSRF protection |
-| `session_cookie_secure` | `false` | Set Secure flag on session cookies |
+| `session_cookie_secure` | `true` | Set Secure flag on session cookies |
 | `session_timeout_minutes` | `30` | Session timeout |
+| `metrics_token` | empty | Enables `/metrics` when set and protects it with bearer authentication |
 | `jwt.enabled` | `false` | Enable JWT token auth |
 | `email.enabled` | `false` | Enable email sending |
 
@@ -141,7 +142,7 @@ go test -run TestAuthenticate ./... # run a specific test
 
 ```bash
 make migrate-up    # apply pending migrations
-make seed          # create admin user (pass -username / -password flags)
+go run ./cmd/seed -username admin -password '<strong-password>'
 ```
 
 ## API Endpoints

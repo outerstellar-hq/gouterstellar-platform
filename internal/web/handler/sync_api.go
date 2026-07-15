@@ -8,6 +8,7 @@ import (
 
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/service"
+	"github.com/rygel/gouterstellar-platform/internal/web/filter"
 )
 
 type SyncAPI struct {
@@ -25,10 +26,10 @@ func NewSyncAPI(msgSvc *service.MessageService, contactSvc *service.ContactServi
 }
 
 func (h *SyncAPI) RegisterRoutes(r chi.Router) {
-	r.Get("/api/v1/sync", h.PullMessages)
-	r.Post("/api/v1/sync", h.PushMessages)
-	r.Get("/api/v1/sync/contacts", h.PullContacts)
-	r.Post("/api/v1/sync/contacts", h.PushContacts)
+	r.With(filter.RequireAuthenticated).Get("/api/v1/sync", h.PullMessages)
+	r.With(filter.RequireAuthenticated).Post("/api/v1/sync", h.PushMessages)
+	r.With(filter.RequireAuthenticated).Get("/api/v1/sync/contacts", h.PullContacts)
+	r.With(filter.RequireAuthenticated).Post("/api/v1/sync/contacts", h.PushContacts)
 }
 
 func (h *SyncAPI) PullMessages(w http.ResponseWriter, r *http.Request) {

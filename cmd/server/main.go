@@ -64,7 +64,7 @@ func main() {
 		return app.SecurityService.DevAdminID(ctx)
 	}, app.SecurityService, cfg.DevMode))
 	r.Use(filter.RateLimiter(10, 20))
-	r.Use(filter.CSRF(cfg.CSRFEnabled))
+	r.Use(filter.CSRF(cfg.CSRFEnabled, cfg.SessionCookieSecure))
 	r.Use(filter.Session(app.SecurityService, cfg.SessionCookieSecure))
 	r.Use(filter.Logging())
 
@@ -74,13 +74,15 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		if err := pool.Ping(ctx); err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			_, _ = fmt.Fprintf(w, `{"status":"unhealthy","database":"down","error":%q}`, err.Error())
+			_, _ = w.Write([]byte(`{"status":"unhealthy","database":"down"}`))
 			return
 		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprintf(w, `{"status":"healthy","database":"up"}`)
 	})
-	r.Handle("/metrics", promhttp.HandlerFor(app.Registry, promhttp.HandlerOpts{}))
+	if cfg.MetricsToken != "" {
+		r.With(filter.RequireBearerToken(cfg.MetricsToken)).Handle("/metrics", promhttp.HandlerFor(app.Registry, promhttp.HandlerOpts{}))
+	}
 
 	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
@@ -104,6 +106,7 @@ func main() {
 	app.SyncWebSocket.RegisterRoutes(r)
 
 	r.Route("/admin", func(r chi.Router) {
+		r.Use(filter.RequireAdmin)
 		app.UserAdminHandler.RegisterRoutes(r)
 		if cfg.DevDashboardEnabled {
 			app.DevDashboardHandler.RegisterRoutes(r)

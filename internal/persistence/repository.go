@@ -130,6 +130,5 @@ type OAuthRepository interface {
 
 type PasswordResetRepository interface {
 	SavePasswordResetToken(ctx context.Context, userID uuid.UUID, token string, expiresAt time.Time) (db.PltPasswordResetToken, error)
-	FindByToken(ctx context.Context, token string) (db.PltPasswordResetToken, error)
-	MarkUsed(ctx context.Context, token string) (db.PltPasswordResetToken, error)
+	Consume(ctx context.Context, token, passwordHash string) (db.PltUser, error)
 }

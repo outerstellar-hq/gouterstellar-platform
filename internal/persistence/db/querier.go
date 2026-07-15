@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	ConsumePasswordReset(ctx context.Context, arg ConsumePasswordResetParams) (PltUser, error)
 	CountAllAudit(ctx context.Context) (int64, error)
 	CountAllUsers(ctx context.Context) (int64, error)
 	CountContacts(ctx context.Context) (int64, error)
@@ -46,7 +47,6 @@ type Querier interface {
 	FindNotificationsByUserID(ctx context.Context, arg FindNotificationsByUserIDParams) ([]PltNotification, error)
 	FindOAuthByProviderSubject(ctx context.Context, arg FindOAuthByProviderSubjectParams) (PltOauthConnection, error)
 	FindOAuthByUserID(ctx context.Context, userID uuid.UUID) ([]PltOauthConnection, error)
-	FindPasswordResetByToken(ctx context.Context, token string) (PltPasswordResetToken, error)
 	FindRecentAudit(ctx context.Context, limit int32) ([]PltAuditLog, error)
 	FindSessionByTokenHash(ctx context.Context, tokenHash string) (PltSession, error)
 	FindSessionByTokenHashIncludingExpired(ctx context.Context, tokenHash string) (PltSession, error)
@@ -77,7 +77,6 @@ type Querier interface {
 	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) (PltNotification, error)
 	MarkOutboxFailed(ctx context.Context, arg MarkOutboxFailedParams) (MarkOutboxFailedRow, error)
 	MarkOutboxProcessed(ctx context.Context, id uuid.UUID) (MarkOutboxProcessedRow, error)
-	MarkPasswordResetUsed(ctx context.Context, token string) (PltPasswordResetToken, error)
 	ResolveConflictContact(ctx context.Context, syncID string) (PltContact, error)
 	ResolveConflictMessage(ctx context.Context, syncID string) (PltMessage, error)
 	RestoreContact(ctx context.Context, syncID string) (PltContact, error)

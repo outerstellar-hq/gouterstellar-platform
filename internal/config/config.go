@@ -40,6 +40,7 @@ type Config struct {
 	CSRFEnabled           bool          `mapstructure:"csrf_enabled"`
 	AppBaseURL            string        `mapstructure:"app_base_url"`
 	CSPPolicy             string        `mapstructure:"csp_policy"`
+	MetricsToken          string        `mapstructure:"metrics_token"`
 	JWT                   JwtConfig     `mapstructure:"jwt"`
 	Email                 EmailConfig   `mapstructure:"email"`
 	Segment               SegmentConfig `mapstructure:"segment"`
@@ -58,14 +59,15 @@ func Load() *Config {
 
 	v.SetDefault("version", "dev")
 	v.SetDefault("port", 8080)
-	v.SetDefault("database_url", "postgres://outerstellar:outerstellar@localhost:5432/outerstellar?sslmode=disable")
+	v.SetDefault("database_url", "postgres://localhost:5432/outerstellar?sslmode=require")
 	v.SetDefault("dev_dashboard_enabled", false)
 	v.SetDefault("dev_mode", false)
-	v.SetDefault("session_cookie_secure", false)
+	v.SetDefault("session_cookie_secure", true)
 	v.SetDefault("session_timeout_minutes", 30)
-	v.SetDefault("cors_origins", "*")
+	v.SetDefault("cors_origins", "https://localhost:8080")
 	v.SetDefault("csrf_enabled", true)
-	v.SetDefault("app_base_url", "http://localhost:8080")
+	v.SetDefault("app_base_url", "https://localhost:8080")
+	v.SetDefault("metrics_token", "")
 	v.SetDefault("jwt.enabled", false)
 	v.SetDefault("jwt.secret", "")
 	v.SetDefault("jwt.issuer", "outerstellar")

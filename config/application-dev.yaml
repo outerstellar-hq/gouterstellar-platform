@@ -3,3 +3,6 @@ dev_mode: true
 database_url: "postgres://outerstellar:outerstellar@127.0.0.1:15432/outerstellar?sslmode=disable"
 csrf_enabled: false
 session_cookie_secure: false
+cors_origins: "http://localhost:8080"
+app_base_url: "http://localhost:8080"
+csp_policy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' ws:; img-src 'self' data:;"

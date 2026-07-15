@@ -2,6 +2,8 @@ package persistence
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,15 +25,19 @@ func NewPasswordResetRepository(pool *pgxpool.Pool) PasswordResetRepository {
 func (r *passwordResetRepo) SavePasswordResetToken(ctx context.Context, userID uuid.UUID, token string, expiresAt time.Time) (db.PltPasswordResetToken, error) {
 	return r.q.SavePasswordResetToken(ctx, db.SavePasswordResetTokenParams{
 		UserID:    userID,
-		Token:     token,
+		Token:     hashResetToken(token),
 		ExpiresAt: pgtype.Timestamp{Time: expiresAt, Valid: true},
 	})
 }
 
-func (r *passwordResetRepo) FindByToken(ctx context.Context, token string) (db.PltPasswordResetToken, error) {
-	return r.q.FindPasswordResetByToken(ctx, token)
+func (r *passwordResetRepo) Consume(ctx context.Context, token, passwordHash string) (db.PltUser, error) {
+	return r.q.ConsumePasswordReset(ctx, db.ConsumePasswordResetParams{
+		Token:        hashResetToken(token),
+		PasswordHash: passwordHash,
+	})
 }
 
-func (r *passwordResetRepo) MarkUsed(ctx context.Context, token string) (db.PltPasswordResetToken, error) {
-	return r.q.MarkPasswordResetUsed(ctx, token)
+func hashResetToken(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hash[:])
 }

@@ -19,7 +19,7 @@ func BearerAuth(realms ...security.AuthRealm) func(http.Handler) http.Handler {
 
 			parts := strings.SplitN(authHeader, " ", 2)
 			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-				next.ServeHTTP(w, r)
+				http.Error(w, "Invalid authorization header", http.StatusUnauthorized)
 				return
 			}
 
@@ -39,7 +39,7 @@ func BearerAuth(realms ...security.AuthRealm) func(http.Handler) http.Handler {
 				}
 			}
 
-			next.ServeHTTP(w, r)
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
 		})
 	}
 }

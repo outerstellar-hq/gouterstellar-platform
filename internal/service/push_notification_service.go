@@ -18,8 +18,6 @@ func (c *ConsolePushNotificationService) Send(platform, deviceToken string, noti
 	slog.Info(
 		"Push notification",
 		"platform", platform,
-		"deviceToken", deviceToken,
 		"title", notification.Title,
-		"body", notification.Body,
 	)
 }

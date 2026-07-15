@@ -289,6 +289,17 @@ form {
 .form-group select:focus {
     border-color: var(--color-primary);
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
 }
 
 .form-group .field-error {
@@ -751,13 +762,13 @@ footer {
         grid-template-columns: 1fr;
     }
 
-    .settings-nav {
+    .settings-tabs {
         display: flex;
         overflow-x: auto;
         gap: 4px;
     }
 
-    .settings-nav a {
+    .settings-tabs a {
         white-space: nowrap;
     }
 

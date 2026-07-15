@@ -17,6 +17,5 @@ func (c *ConsoleEmailService) Send(to, subject, body string) {
 		"Sending email",
 		"to", to,
 		"subject", subject,
-		"body", body,
 	)
 }

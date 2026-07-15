@@ -1,0 +1,3 @@
+{{ define "content" }}
+{{ range .Contacts }}{{ template "contact_row" . }}{{ else }}<div class="empty-state">No contacts found.</div>{{ end }}
+{{ end }}

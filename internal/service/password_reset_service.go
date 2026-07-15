@@ -63,45 +63,21 @@ func (s *PasswordResetService) RequestPasswordReset(ctx context.Context, email s
 }
 
 func (s *PasswordResetService) ResetPassword(ctx context.Context, token, newPassword string) error {
-	resetToken, err := s.resetRepo.FindByToken(ctx, token)
-	if err != nil {
-		return fmt.Errorf("invalid or expired reset token")
-	}
-
-	if resetToken.Used {
-		return fmt.Errorf("reset token has already been used")
-	}
-
-	if resetToken.ExpiresAt.Time.Before(time.Now()) {
-		return fmt.Errorf("reset token has expired")
-	}
-
 	if len(newPassword) < MinPasswordLength {
 		return &model.WeakPasswordError{Message: fmt.Sprintf("Password must be at least %d characters", MinPasswordLength)}
 	}
-
-	pltUser, err := s.userRepo.FindByID(ctx, resetToken.UserID)
-	if err != nil {
-		return fmt.Errorf("user not found")
-	}
-
-	user := security.PltUserToModel(pltUser)
 
 	hash, err := s.passwordEncoder.Encode(newPassword)
 	if err != nil {
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	_, err = s.userRepo.CreateUser(ctx, user.ID, user.Username, user.Email, hash, string(user.Role), user.Enabled)
+	pltUser, err := s.resetRepo.Consume(ctx, token, hash)
 	if err != nil {
-		return fmt.Errorf("update password: %w", err)
+		return fmt.Errorf("invalid or expired reset token")
 	}
 
-	_, err = s.resetRepo.MarkUsed(ctx, token)
-	if err != nil {
-		slog.Error("Failed to mark reset token as used", "error", err)
-	}
-
+	user := security.PltUserToModel(pltUser)
 	actorID, actorName := userToAuditParams(user)
 	s.auditLog(ctx, actorID, actorName, nil, nil, "PASSWORD_RESET_COMPLETED", "Password reset completed")
 

@@ -81,10 +81,6 @@ func (h *UserAdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 func (h *UserAdminHandler) SetEnabled(w http.ResponseWriter, r *http.Request) {
 	currentUser := web.UserFromRequest(r)
-	if currentUser == nil || currentUser.Role != model.RoleAdmin {
-		writeError(w, http.StatusForbidden, "Admin access required")
-		return
-	}
 
 	idStr := chi.URLParam(r, "id")
 	targetID, err := uuid.Parse(idStr)
@@ -111,10 +107,6 @@ func (h *UserAdminHandler) SetEnabled(w http.ResponseWriter, r *http.Request) {
 
 func (h *UserAdminHandler) SetRole(w http.ResponseWriter, r *http.Request) {
 	currentUser := web.UserFromRequest(r)
-	if currentUser == nil || currentUser.Role != model.RoleAdmin {
-		writeError(w, http.StatusForbidden, "Admin access required")
-		return
-	}
 
 	idStr := chi.URLParam(r, "id")
 	targetID, err := uuid.Parse(idStr)
