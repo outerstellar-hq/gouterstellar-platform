@@ -16,12 +16,14 @@ import (
 
 type MessagesHandler struct {
 	messageService *service.MessageService
+	voteService    messageVoteService
 	renderer       *web.Renderer
 }
 
-func NewMessagesHandler(msgSvc *service.MessageService, renderer *web.Renderer) *MessagesHandler {
+func NewMessagesHandler(msgSvc *service.MessageService, voteSvc messageVoteService, renderer *web.Renderer) *MessagesHandler {
 	return &MessagesHandler{
 		messageService: msgSvc,
+		voteService:    voteSvc,
 		renderer:       renderer,
 	}
 }
@@ -72,18 +74,14 @@ func (h *MessagesHandler) Show(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messageItems := make([]viewmodel.MessageItem, len(result.Items))
-	for i, m := range result.Items {
-		messageItems[i] = viewmodel.MessageItem{
-			SyncID:       m.SyncID,
-			Author:       m.Author,
-			Content:      m.Content,
-			UpdatedAt:    m.UpdatedAtLabel(),
-			UpdatedLabel: m.UpdatedAtLabel(),
-			Dirty:        m.Dirty,
-			Version:      m.Version,
-			HasConflict:  m.HasConflict,
-		}
+	messageItems, err := buildMessageItems(r.Context(), result.Items, h.voteService, user.ID, web.CSRFTokenFromRequest(r))
+	if err != nil {
+		_ = h.renderer.RenderWithStatus(w, r, "error", viewmodel.ErrorPage{
+			StatusCode: http.StatusInternalServerError,
+			Title:      "Error",
+			Message:    "Failed to load message votes",
+		}, http.StatusInternalServerError)
+		return
 	}
 
 	pagination := viewmodel.PaginationInfo{

@@ -38,6 +38,16 @@ type MessageRepository interface {
 	WithTx(tx pgx.Tx) MessageRepository
 }
 
+type VoteRepository interface {
+	LockMessage(ctx context.Context, syncID string) error
+	FindVote(ctx context.Context, userID uuid.UUID, syncID string) (db.PltMessageVote, error)
+	CreateVote(ctx context.Context, userID uuid.UUID, syncID string, direction int16) error
+	UpdateVote(ctx context.Context, userID uuid.UUID, syncID string, direction int16) error
+	DeleteVote(ctx context.Context, userID uuid.UUID, syncID string) error
+	ListScores(ctx context.Context, syncIDs []string, userID *uuid.UUID) (map[string]model.VoteScore, error)
+	WithTx(tx pgx.Tx) VoteRepository
+}
+
 type ContactRepository interface {
 	ListContacts(ctx context.Context, limit, offset int32) ([]db.PltContact, error)
 	SearchContacts(ctx context.Context, query string, limit, offset int32) ([]db.PltContact, error)

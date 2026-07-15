@@ -52,6 +52,17 @@ func buildOpenAPISpec() map[string]interface{} {
 			{"url": "/api/v1", "description": "Current server"},
 		},
 		"paths": map[string]interface{}{
+			"/messages/{syncId}/vote": map[string]interface{}{
+				"get": op("Get a message's vote score", false, ok("Vote score")),
+				"post": op("Create, toggle, or flip the current user's message vote", true, map[string]interface{}{
+					"200": map[string]interface{}{"description": "Updated vote score"},
+					"400": map[string]interface{}{"description": "Direction must be 1 or -1"},
+					"404": map[string]interface{}{"description": "Message not found"},
+				}),
+				"delete": op("Remove the current user's message vote", true, map[string]interface{}{
+					"204": map[string]interface{}{"description": "Vote removed"},
+				}),
+			},
 			// Sync
 			"/sync": map[string]interface{}{
 				"get":  op("Pull message changes since timestamp", true, ok("Sync pull response")),

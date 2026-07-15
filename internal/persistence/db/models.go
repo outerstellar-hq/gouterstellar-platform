@@ -87,6 +87,14 @@ type PltMessage struct {
 	SyncConflict     *string          `json:"sync_conflict"`
 }
 
+type PltMessageVote struct {
+	ID            int64     `json:"id"`
+	MessageSyncID string    `json:"message_sync_id"`
+	UserID        uuid.UUID `json:"user_id"`
+	Direction     int16     `json:"direction"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
 type PltNotification struct {
 	ID        uuid.UUID        `json:"id"`
 	UserID    uuid.UUID        `json:"user_id"`

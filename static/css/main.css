@@ -4,7 +4,9 @@
     --color-primary-pressed: #1d4ed8;
     --color-secondary: #6b7280;
     --color-success: #22c55e;
+	--color-success-text: #15803d;
     --color-error: #ef4444;
+	--color-error-text: #b91c1c;
     --color-warning: #f59e0b;
     --color-info: #3b82f6;
     --bg-primary: #ffffff;
@@ -20,6 +22,8 @@
 }
 
 [data-theme="dark"] {
+	--color-success-text: #4ade80;
+	--color-error-text: #f87171;
     --bg-primary: #111827;
     --bg-secondary: #1f2937;
     --bg-card: #1f2937;
@@ -174,6 +178,91 @@ main {
 
 .message-row:last-child {
     border-bottom: none;
+}
+
+.message-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.message-author {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.message-content {
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+
+.message-meta,
+.message-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.message-time {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.vote-controls {
+    display: grid;
+    flex: 0 0 36px;
+    justify-items: center;
+    line-height: 1;
+}
+
+.vote-form {
+    margin: 0;
+    max-width: none;
+}
+
+.vote-button {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    font-size: 13px;
+    height: 32px;
+    justify-content: center;
+    padding: 0;
+    width: 32px;
+}
+
+.vote-button:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.vote-button:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.vote-up.active {
+    color: var(--color-success-text);
+}
+
+.vote-down.active {
+    color: var(--color-error-text);
+}
+
+.vote-score {
+    color: var(--text-primary);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    min-width: 32px;
+    padding: 3px 0;
+    text-align: center;
 }
 
 .message-row .author {

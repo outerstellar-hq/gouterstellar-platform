@@ -18,6 +18,22 @@ type MessageItem struct {
 	Version      int64
 	HasConflict  bool
 	Deleted      bool
+	Upvotes      int32
+	Downvotes    int32
+	NetScore     int32
+	HasUpvoted   bool
+	HasDownvoted bool
+	CSRFToken    string
+}
+
+type VoteControls struct {
+	SyncID       string
+	Upvotes      int32
+	Downvotes    int32
+	NetScore     int32
+	HasUpvoted   bool
+	HasDownvoted bool
+	CSRFToken    string
 }
 
 type ContactsPage struct {
@@ -46,15 +62,15 @@ type ContactItem struct {
 }
 
 type AuthPage struct {
-	ReturnTo           string
-	Username           string
-	Error              string
-	CSRFToken          string
-	GoogleLoginEnabled bool
+	ReturnTo            string
+	Username            string
+	Error               string
+	CSRFToken           string
+	GoogleLoginEnabled  bool
 	RegistrationEnabled bool
-	RegisterMode       bool
-	TOTPRequired       bool
-	PartialToken       string
+	RegisterMode        bool
+	TOTPRequired        bool
+	PartialToken        string
 }
 
 type AdminUsersPage struct {
@@ -129,10 +145,10 @@ type SettingsSessionsPage struct {
 // is a short prefix of the stored token hash, safe to render; TokenHash carries
 // the full hash so the revoke form can address the session.
 type SessionItem struct {
-	TokenHash        string
-	MaskedTokenHash  string
-	CreatedAt        string
-	ExpiresAt        string
+	TokenHash       string
+	MaskedTokenHash string
+	CreatedAt       string
+	ExpiresAt       string
 }
 
 type ProfileData struct {

@@ -1,13 +1,16 @@
 {{ define "message_row" }}
 <div class="message-row{{ if .Deleted }} deleted{{ end }}{{ if .HasConflict }} conflict{{ end }}{{ if .Dirty }} dirty{{ end }}">
-    <div class="message-author">{{ .Author }}</div>
-    <div class="message-content">{{ .Content }}</div>
-    <div class="message-meta">
-        <span class="message-time" title="{{ .UpdatedAt }}">{{ .UpdatedLabel }}</span>
-        {{ if .Dirty }}<span class="badge badge-warning">Unsynced</span>{{ end }}
-        {{ if .HasConflict }}<span class="badge badge-error">Conflict</span>{{ end }}
-        {{ if .Deleted }}<span class="badge badge-error">Deleted</span>{{ end }}
-        <span class="badge">v{{ .Version }}</span>
+    {{ template "vote_controls" . }}
+    <div class="message-body">
+        <div class="message-author">{{ .Author }}</div>
+        <div class="message-content">{{ .Content }}</div>
+        <div class="message-meta">
+            <span class="message-time" title="{{ .UpdatedAt }}">{{ .UpdatedLabel }}</span>
+            {{ if .Dirty }}<span class="badge badge-warning">Unsynced</span>{{ end }}
+            {{ if .HasConflict }}<span class="badge badge-error">Conflict</span>{{ end }}
+            {{ if .Deleted }}<span class="badge badge-error">Deleted</span>{{ end }}
+            <span class="badge">v{{ .Version }}</span>
+        </div>
     </div>
 </div>
 {{ end }}

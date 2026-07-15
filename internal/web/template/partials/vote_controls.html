@@ -1,0 +1,21 @@
+{{ define "vote_controls" }}
+<div class="vote-controls" aria-label="Message score: {{ .NetScore }}" role="group">
+    <form method="POST" action="/components/messages/{{ .SyncID }}/vote" class="vote-form"
+          hx-post="/components/messages/{{ .SyncID }}/vote" hx-target="closest .vote-controls" hx-swap="outerHTML">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <input type="hidden" name="direction" value="1">
+        <button type="submit" class="vote-button vote-up{{ if .HasUpvoted }} active{{ end }}"
+                aria-label="Upvote. Current upvotes: {{ .Upvotes }}" aria-pressed="{{ if .HasUpvoted }}true{{ else }}false{{ end }}"
+                title="Upvote ({{ .Upvotes }})"><span aria-hidden="true">▲</span></button>
+    </form>
+    <output class="vote-score" aria-live="polite" title="Net score">{{ .NetScore }}</output>
+    <form method="POST" action="/components/messages/{{ .SyncID }}/vote" class="vote-form"
+          hx-post="/components/messages/{{ .SyncID }}/vote" hx-target="closest .vote-controls" hx-swap="outerHTML">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <input type="hidden" name="direction" value="-1">
+        <button type="submit" class="vote-button vote-down{{ if .HasDownvoted }} active{{ end }}"
+                aria-label="Downvote. Current downvotes: {{ .Downvotes }}" aria-pressed="{{ if .HasDownvoted }}true{{ else }}false{{ end }}"
+                title="Downvote ({{ .Downvotes }})"><span aria-hidden="true">▼</span></button>
+    </form>
+</div>
+{{ end }}

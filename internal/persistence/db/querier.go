@@ -25,6 +25,7 @@ type Querier interface {
 	CreateApiKey(ctx context.Context, arg CreateApiKeyParams) (PltApiKey, error)
 	CreateLocalContact(ctx context.Context, arg CreateLocalContactParams) (PltContact, error)
 	CreateLocalMessage(ctx context.Context, arg CreateLocalMessageParams) (PltMessage, error)
+	CreateMessageVote(ctx context.Context, arg CreateMessageVoteParams) (PltMessageVote, error)
 	CreateServerContact(ctx context.Context, arg CreateServerContactParams) (PltContact, error)
 	CreateServerMessage(ctx context.Context, arg CreateServerMessageParams) (PltMessage, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (PltSession, error)
@@ -35,6 +36,7 @@ type Querier interface {
 	DeleteDeviceToken(ctx context.Context, arg DeleteDeviceTokenParams) (int64, error)
 	DeleteExpiredSessions(ctx context.Context) (int64, error)
 	DeleteExpiredTOTPChallenges(ctx context.Context) (int64, error)
+	DeleteMessageVote(ctx context.Context, arg DeleteMessageVoteParams) (int64, error)
 	DeleteNotification(ctx context.Context, arg DeleteNotificationParams) (int64, error)
 	DeleteOAuthConnection(ctx context.Context, arg DeleteOAuthConnectionParams) (int64, error)
 	DeleteSessionByTokenHash(ctx context.Context, tokenHash string) error
@@ -52,6 +54,7 @@ type Querier interface {
 	FindContactBySyncID(ctx context.Context, syncID string) (PltContact, error)
 	FindContactChangesSince(ctx context.Context, updatedAtEpochMs int64) ([]PltContact, error)
 	FindDeviceTokensByUserID(ctx context.Context, userID uuid.UUID) ([]PltDeviceToken, error)
+	FindMessageVote(ctx context.Context, arg FindMessageVoteParams) (PltMessageVote, error)
 	FindNotificationsByUserID(ctx context.Context, arg FindNotificationsByUserIDParams) ([]PltNotification, error)
 	FindOAuthByProviderSubject(ctx context.Context, arg FindOAuthByProviderSubjectParams) (PltOauthConnection, error)
 	FindOAuthByUserID(ctx context.Context, userID uuid.UUID) ([]PltOauthConnection, error)
@@ -81,6 +84,7 @@ type Querier interface {
 	ListDirtyContacts(ctx context.Context) ([]PltContact, error)
 	ListDirtyMessages(ctx context.Context) ([]PltMessage, error)
 	ListFailedOutbox(ctx context.Context, limit int32) ([]ListFailedOutboxRow, error)
+	ListMessageVoteCounts(ctx context.Context, messageSyncIds []string) ([]ListMessageVoteCountsRow, error)
 	// Distinct calendar years (descending) for which non-deleted messages exist.
 	// Used to populate the year filter on the messages page.
 	ListMessageYears(ctx context.Context) ([]int32, error)
@@ -92,6 +96,8 @@ type Querier interface {
 	ListMessagesByYear(ctx context.Context, arg ListMessagesByYearParams) ([]PltMessage, error)
 	ListPendingOutbox(ctx context.Context, limit int32) ([]ListPendingOutboxRow, error)
 	ListSessionsForUser(ctx context.Context, userID uuid.UUID) ([]ListSessionsForUserRow, error)
+	ListUserMessageVotes(ctx context.Context, arg ListUserMessageVotesParams) ([]ListUserMessageVotesRow, error)
+	LockMessageForVote(ctx context.Context, syncID string) (int64, error)
 	LockUserUntil(ctx context.Context, arg LockUserUntilParams) error
 	LogAudit(ctx context.Context, arg LogAuditParams) (PltAuditLog, error)
 	MarkAllNotificationsRead(ctx context.Context, userID uuid.UUID) (int64, error)
@@ -132,6 +138,7 @@ type Querier interface {
 	UpdateContact(ctx context.Context, arg UpdateContactParams) (PltContact, error)
 	UpdateLastActivity(ctx context.Context, id uuid.UUID) error
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) (PltMessage, error)
+	UpdateMessageVote(ctx context.Context, arg UpdateMessageVoteParams) (int64, error)
 	UpdateNotificationPreferences(ctx context.Context, arg UpdateNotificationPreferencesParams) (PltUser, error)
 	UpdateOutboxStatus(ctx context.Context, arg UpdateOutboxStatusParams) (UpdateOutboxStatusRow, error)
 	UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error
