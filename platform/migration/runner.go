@@ -139,7 +139,7 @@ func (r *Runner) applyOne(ctx context.Context, set setEntry, m migrationFile) er
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx, m.Content); err != nil {
 		return fmt.Errorf("apply %s: %w", m.Filename, err)

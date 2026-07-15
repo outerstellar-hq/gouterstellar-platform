@@ -230,6 +230,9 @@ func pageTitle(page string) string {
 	case "error":
 		return "Error"
 	default:
-		return strings.Title(page)
+		if page == "" {
+			return ""
+		}
+		return strings.ToUpper(page[:1]) + page[1:]
 	}
 }
