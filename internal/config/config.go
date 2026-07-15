@@ -70,7 +70,7 @@ func defaults() *Config {
 	return &Config{
 		Version:               "dev",
 		Port:                  8080,
-		DatabaseURL:           "postgres://outerstellar:outerstellar@localhost:5432/outerstellar?sslmode=disable",
+		DatabaseURL:           "postgres://outerstellar:outerstellar@localhost:5432/outerstellar?sslmode=disable", // #nosec G101 -- default local dev connection string, overridden by env in production
 		DevDashboardEnabled:   false,
 		DevMode:               false,
 		SessionCookieSecure:   false,
@@ -135,7 +135,7 @@ func loadYAML(name string, cfg *Config) {
 		if dir == "." {
 			path = name
 		}
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G304 G703 -- path is built from a hardcoded config name, not user input
 		if err != nil {
 			continue
 		}

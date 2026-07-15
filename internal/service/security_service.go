@@ -286,7 +286,6 @@ func (s *SecurityService) SetUserRole(ctx context.Context, adminID, targetID uui
 		}
 	}
 
-	_ = targetModel
 	return nil
 }
 

@@ -13,7 +13,6 @@ import (
 	"github.com/rygel/gouterstellar-platform/internal/config"
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/persistence"
-	"github.com/rygel/gouterstellar-platform/internal/platform"
 	"github.com/rygel/gouterstellar-platform/internal/platform/core"
 	"github.com/rygel/gouterstellar-platform/internal/security"
 	"github.com/rygel/gouterstellar-platform/internal/service"
@@ -323,7 +322,9 @@ func buildApp(cfg *config.Config, r repos, svcs *services, templateFS fs.FS, reg
 	openAPIHandler := handler.NewOpenAPIHandler()
 	syncWebSocket := handler.NewSyncWebSocket(svcs.wsPublisher, r.sessionRepo, r.userRepo, cfg.SessionCookieSecure)
 
-	svcBag := platform.BuildServiceBag(svcs.messageSvc, svcs.contactSvc, svcs.securitySvc)
+	svcBag := extplatform.ServiceBag{
+		MessageCounter: messageCounterAdapter{svc: svcs.messageSvc},
+	}
 
 	return &App{
 		Config:                cfg,
@@ -392,4 +393,14 @@ func BuildCoreExtension(app *App) *core.Extension {
 		app.DevDashboardHandler,
 	)
 	return ext
+}
+
+// messageCounterAdapter wraps *service.MessageService as a platform.MessageCounter
+// so extensions can read message counts without depending on internal types.
+type messageCounterAdapter struct {
+	svc *service.MessageService
+}
+
+func (a messageCounterAdapter) CountMessages(ctx context.Context) (int64, error) {
+	return a.svc.CountMessages(ctx)
 }

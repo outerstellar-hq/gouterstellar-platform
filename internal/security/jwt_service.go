@@ -106,7 +106,3 @@ func (s *JwtService) ExtractClaims(tokenStr string) (userID uuid.UUID, isAdmin b
 	s.cache.Store(tokenStr, jwtCacheEntry{claims: *claims, expiresAt: time.Now().Add(jwtCacheTTL)})
 	return uid, claims.Admin, nil
 }
-
-func (s *JwtService) Invalidate(token string) {
-	s.cache.Delete(token)
-}

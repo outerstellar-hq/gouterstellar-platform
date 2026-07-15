@@ -41,9 +41,3 @@ func (a *auditService) Record(ctx context.Context, action string, actorID *uuid.
 		slog.Error("Failed to log audit entry", "action", action, "error", err)
 	}
 }
-
-// noOpAuditor is an Auditor that discards every record. It lets tests and
-// opt-out paths depend on a non-nil Auditor without hitting the database.
-type noOpAuditor struct{}
-
-func (noOpAuditor) Record(context.Context, string, *uuid.UUID, *string, *uuid.UUID, *string, string) {}

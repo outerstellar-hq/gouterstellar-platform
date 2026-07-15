@@ -6,34 +6,26 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
-	"sort"
 	"strings"
 	"sync"
 )
 
-type Translatable interface {
-	UpdateTexts()
-}
-
 type I18nService struct {
-	mu             sync.RWMutex
-	locale         string
-	translations   map[string]map[string]string
-	dynamicBundles map[string]map[string]string
-	listeners      []Translatable
-	fsys           embed.FS
-	basePath       string
+	mu           sync.RWMutex
+	locale       string
+	translations map[string]map[string]string
+	fsys         embed.FS
+	basePath     string
 }
 
 var placeholderRe = regexp.MustCompile(`\{(\d+)\}`)
 
 func NewI18nService(fsys embed.FS, basePath string) *I18nService {
 	svc := &I18nService{
-		locale:         "en",
-		translations:   make(map[string]map[string]string),
-		dynamicBundles: make(map[string]map[string]string),
-		fsys:           fsys,
-		basePath:       basePath,
+		locale:       "en",
+		translations: make(map[string]map[string]string),
+		fsys:         fsys,
+		basePath:     basePath,
 	}
 	// Preload every supported locale so TranslateForLocale can resolve any
 	// language under the read lock without mutating the service locale. The
@@ -63,11 +55,6 @@ func (s *I18nService) SetLocale(locale string) {
 	if _, ok := s.translations[locale]; !ok {
 		s.translations[locale] = s.loadLocale(locale)
 	}
-	s.dynamicBundles[locale] = make(map[string]string)
-
-	for _, l := range s.listeners {
-		l.UpdateTexts()
-	}
 
 	slog.Info("i18n locale changed", "locale", locale)
 }
@@ -87,12 +74,6 @@ func (s *I18nService) TranslateOrDefault(key, defaultVal string, params ...inter
 	defer s.mu.RUnlock()
 
 	locale := s.locale
-
-	if dyn, ok := s.dynamicBundles[locale]; ok {
-		if val, found := dyn[key]; found {
-			return injectParams(val, params)
-		}
-	}
 
 	if bundle, ok := s.translations[locale]; ok {
 		if val, found := bundle[key]; found {
@@ -144,113 +125,6 @@ func (s *I18nService) TranslateForLocale(locale, key string) string {
 	}
 
 	return key
-}
-
-func (s *I18nService) HasKey(key string) bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	locale := s.locale
-
-	if dyn, ok := s.dynamicBundles[locale]; ok {
-		if _, found := dyn[key]; found {
-			return true
-		}
-	}
-
-	if bundle, ok := s.translations[locale]; ok {
-		if _, found := bundle[key]; found {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (s *I18nService) Keys() []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	seen := make(map[string]bool)
-	var keys []string
-
-	addKeys := func(m map[string]string) {
-		for k := range m {
-			if !seen[k] {
-				seen[k] = true
-				keys = append(keys, k)
-			}
-		}
-	}
-
-	if dyn, ok := s.dynamicBundles[s.locale]; ok {
-		addKeys(dyn)
-	}
-	if bundle, ok := s.translations[s.locale]; ok {
-		addKeys(bundle)
-	}
-
-	sort.Strings(keys)
-	return keys
-}
-
-func (s *I18nService) AddListener(l Translatable) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.listeners = append(s.listeners, l)
-}
-
-func (s *I18nService) RemoveListener(l Translatable) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for i, listener := range s.listeners {
-		if listener == l {
-			s.listeners = append(s.listeners[:i], s.listeners[i+1:]...)
-			return
-		}
-	}
-}
-
-func (s *I18nService) Reload() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.translations = make(map[string]map[string]string)
-	s.translations["en"] = s.loadLocale("en")
-
-	if s.locale != "en" {
-		s.translations[s.locale] = s.loadLocale(s.locale)
-	}
-
-	s.dynamicBundles[s.locale] = make(map[string]string)
-
-	for _, l := range s.listeners {
-		l.UpdateTexts()
-	}
-
-	slog.Info("i18n translations reloaded")
-}
-
-func (s *I18nService) LoadFromProperties(data []byte, key string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	props := parseProperties(data)
-
-	locale := s.locale
-	if _, ok := s.dynamicBundles[locale]; !ok {
-		s.dynamicBundles[locale] = make(map[string]string)
-	}
-
-	for k, v := range props {
-		if key != "" {
-			s.dynamicBundles[locale][key+"."+k] = v
-		} else {
-			s.dynamicBundles[locale][k] = v
-		}
-	}
-
-	slog.Info("i18n loaded dynamic properties", "key", key, "count", len(props))
 }
 
 func (s *I18nService) loadLocale(locale string) map[string]string {

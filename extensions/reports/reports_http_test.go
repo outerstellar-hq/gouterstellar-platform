@@ -19,7 +19,6 @@ func TestReportsHomeHTTP(t *testing.T) {
 		Extensions: []extplatform.Extension{ext},
 	})
 	require.NoError(t, err)
-	t.Cleanup(app.Close)
 
 	req := httptest.NewRequest(http.MethodGet, "/reports", nil)
 	rec := httptest.NewRecorder()
@@ -38,7 +37,6 @@ func TestReportsSummaryAPI(t *testing.T) {
 		Extensions: []extplatform.Extension{ext},
 	})
 	require.NoError(t, err)
-	t.Cleanup(app.Close)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/summary", nil)
 	rec := httptest.NewRecorder()

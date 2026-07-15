@@ -149,3 +149,32 @@ func convertNavItems(items []NavigationItem) []viewmodel.NavItem {
 	}
 	return out
 }
+
+// TestOptions configures a test application.
+type TestOptions struct {
+	Mode            PlatformMode
+	Extensions      []Extension
+	MiddlewareChain []func(http.Handler) http.Handler
+}
+
+// TestApp is the result of NewTestApp. It exposes the assembled handler so
+// in-memory HTTP tests can drive it with httptest without starting real
+// servers or databases.
+type TestApp struct {
+	Handler http.Handler
+}
+
+// NewTestApp builds the handler through the same NewHandler assembly path as
+// production. This means the same manifest validation, contribution, route
+// validation, and router build steps run in tests as in the live wire root.
+func NewTestApp(opts TestOptions) (*TestApp, error) {
+	handler, err := NewHandler(Options{
+		Mode:            opts.Mode,
+		Extensions:      opts.Extensions,
+		MiddlewareChain: opts.MiddlewareChain,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &TestApp{Handler: handler}, nil
+}

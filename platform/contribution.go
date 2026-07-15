@@ -24,58 +24,12 @@ func (n *NavigationRegistry) Items() []NavigationItem {
 	return n.items
 }
 
-// AssetRegistry collects static asset declarations.
-type AssetRegistry struct {
-	entries []AssetEntry
-}
-
-type AssetEntry struct {
-	Pattern string
-	Path    string
-}
-
-func NewAssetRegistry() *AssetRegistry {
-	return &AssetRegistry{}
-}
-
-func (a *AssetRegistry) Add(pattern, path string) {
-	a.entries = append(a.entries, AssetEntry{Pattern: pattern, Path: path})
-}
-
-func (a *AssetRegistry) Entries() []AssetEntry {
-	return a.entries
-}
-
-// AdminRegistry collects admin page contributions.
-type AdminRegistry struct {
-	pages []AdminPage
-}
-
-type AdminPage struct {
-	Label string
-	URL   string
-}
-
-func NewAdminRegistry() *AdminRegistry {
-	return &AdminRegistry{}
-}
-
-func (a *AdminRegistry) Add(label, url string) {
-	a.pages = append(a.pages, AdminPage{Label: label, URL: url})
-}
-
-func (a *AdminRegistry) Pages() []AdminPage {
-	return a.pages
-}
-
 // ContributionContext is the capability surface passed to Extension.Contribute.
 // Each instance is constructed per-extension and stamps the owner ID onto
 // every route registration.
 type ContributionContext struct {
 	Routes     *RouteRegistry
 	Navigation *NavigationRegistry
-	Assets     *AssetRegistry
-	Admin      *AdminRegistry
 }
 
 // NewContributionContext builds a context for a specific extension owner.
@@ -83,7 +37,18 @@ func NewContributionContext(owner string) *ContributionContext {
 	return &ContributionContext{
 		Routes:     newRouteRegistry(owner),
 		Navigation: NewNavigationRegistry(),
-		Assets:     NewAssetRegistry(),
-		Admin:      NewAdminRegistry(),
 	}
+}
+
+// RouteContributor contributes its own routes to the platform via the
+// contribution context. Handlers implement this instead of a dead
+// RegisterRoutes(chi.Router) method so the route declarations live next to
+// the handlers they register and the core Extension no longer needs a
+// pass-through Bundle of function values.
+//
+// The context carries the group-aware RouteRegistry (Public/Protected/API/
+// Admin/Assets) and navigation registries; each contributor stamps
+// its routes through ctx.Routes, which records the owner automatically.
+type RouteContributor interface {
+	ContributeRoutes(ctx *ContributionContext) error
 }
