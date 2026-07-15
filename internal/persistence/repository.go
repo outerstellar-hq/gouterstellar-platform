@@ -99,6 +99,9 @@ type UserRepository interface {
 	UpdateNotificationPreferences(ctx context.Context, id uuid.UUID, emailEnabled, pushEnabled bool) (db.PltUser, error)
 	UpdatePreferences(ctx context.Context, id uuid.UUID, language, theme, layout *string) (db.PltUser, error)
 	SeedAdminUser(ctx context.Context, id uuid.UUID, username, email, passwordHash string) (db.PltUser, error)
+	IncrementFailedLoginAttempts(ctx context.Context, id uuid.UUID) (int32, error)
+	ResetLoginFailures(ctx context.Context, id uuid.UUID) error
+	LockUserUntil(ctx context.Context, id uuid.UUID, until time.Time) error
 }
 
 type SessionRepository interface {

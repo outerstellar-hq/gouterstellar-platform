@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -32,6 +33,7 @@ func (h *UserAdminHandler) ContributeRoutes(ctx *extplatform.ContributionContext
 	ctx.Routes.Admin(http.MethodGet, "/admin/users", "User management", http.HandlerFunc(h.ListUsers))
 	ctx.Routes.Admin(http.MethodPost, "/admin/users/{id}/enabled", "Set user enabled", http.HandlerFunc(h.SetEnabled))
 	ctx.Routes.Admin(http.MethodPost, "/admin/users/{id}/role", "Set user role", http.HandlerFunc(h.SetRole))
+	ctx.Routes.Admin(http.MethodPost, "/admin/users/{id}/unlock", "Unlock user", http.HandlerFunc(h.Unlock))
 	ctx.Routes.Admin(http.MethodGet, "/admin/users/export", "Export users", http.HandlerFunc(h.ExportUsers))
 	ctx.Routes.Admin(http.MethodGet, "/admin/audit", "Audit log", http.HandlerFunc(h.ShowAudit))
 	ctx.Routes.Admin(http.MethodGet, "/admin/audit/export", "Export audit", http.HandlerFunc(h.ExportAudit))
@@ -58,11 +60,13 @@ func (h *UserAdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	userItems := make([]viewmodel.UserItem, len(users))
 	for i, u := range users {
 		userItems[i] = viewmodel.UserItem{
-			ID:       u.ID,
-			Username: u.Username,
-			Email:    u.Email,
-			Role:     u.Role,
-			Enabled:  u.Enabled,
+			ID:                  u.ID,
+			Username:            u.Username,
+			Email:               u.Email,
+			Role:                u.Role,
+			Enabled:             u.Enabled,
+			FailedLoginAttempts: u.FailedLoginAttempts,
+			IsLocked:            u.LockedUntil != nil && u.LockedUntil.After(time.Now()),
 		}
 	}
 
@@ -81,6 +85,26 @@ func (h *UserAdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
+}
+
+func (h *UserAdminHandler) Unlock(w http.ResponseWriter, r *http.Request) {
+	currentUser := web.UserFromRequest(r)
+	if currentUser == nil || currentUser.Role != model.RoleAdmin {
+		writeError(w, http.StatusForbidden, "Admin access required")
+		return
+	}
+
+	targetID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid user ID")
+		return
+	}
+	if err := h.securityService.UnlockAccount(r.Context(), currentUser.ID, targetID); err != nil {
+		handleServiceError(w, err)
+		return
+	}
+
+	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }
 
 func (h *UserAdminHandler) SetEnabled(w http.ResponseWriter, r *http.Request) {

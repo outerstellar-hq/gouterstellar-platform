@@ -21,7 +21,9 @@
                 <td>{{ .Email }}</td>
                 <td><span class="badge badge-{{ .Role }}">{{ .Role }}</span></td>
                 <td>
-                    {{ if .Enabled }}
+                    {{ if .IsLocked }}
+                    <span class="badge badge-error">Locked</span>
+                    {{ else if .Enabled }}
                     <span class="badge badge-success">Active</span>
                     {{ else }}
                     <span class="badge badge-error">Disabled</span>
@@ -42,6 +44,12 @@
                             {{ if .Enabled }}Disable{{ else }}Enable{{ end }}
                         </button>
                     </form>
+                    {{ if .IsLocked }}
+                    <form method="POST" action="/admin/users/{{ .ID }}/unlock" class="inline-form">
+                        <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                        <button type="submit" class="btn btn-sm">Unlock ({{ .FailedLoginAttempts }})</button>
+                    </form>
+                    {{ end }}
                 </td>
             </tr>
             {{ else }}

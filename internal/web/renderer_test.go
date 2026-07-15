@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
 )
 
 func testFS() fstest.MapFS {
@@ -67,4 +69,27 @@ func TestRenderPageSetsContentType(t *testing.T) {
 	_ = r.RenderPage(rec, req, "home", map[string]string{"Title": "X"})
 
 	assert.Equal(t, "text/html; charset=utf-8", rec.Header().Get("Content-Type"))
+}
+
+func TestAdminUsersRendersLockedAccountControl(t *testing.T) {
+	r, err := NewRenderer(TemplateFS(), TemplateFuncMap(), "1.0.0")
+	require.NoError(t, err)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/admin/users", nil)
+
+	err = r.RenderPage(rec, req, "admin_users", viewmodel.AdminUsersPage{
+		Users: []viewmodel.UserItem{{
+			ID:                  "user-id",
+			Username:            "alice",
+			Role:                "USER",
+			Enabled:             true,
+			FailedLoginAttempts: 10,
+			IsLocked:            true,
+		}},
+	})
+
+	require.NoError(t, err)
+	assert.Contains(t, rec.Body.String(), "Locked")
+	assert.Contains(t, rec.Body.String(), "/admin/users/user-id/unlock")
+	assert.Contains(t, rec.Body.String(), "Unlock (10)")
 }

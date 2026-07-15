@@ -2,8 +2,10 @@ package persistence
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
@@ -126,5 +128,20 @@ func (r *userRepo) SeedAdminUser(ctx context.Context, id uuid.UUID, username, em
 		Username:     username,
 		Email:        email,
 		PasswordHash: passwordHash,
+	})
+}
+
+func (r *userRepo) IncrementFailedLoginAttempts(ctx context.Context, id uuid.UUID) (int32, error) {
+	return r.q.IncrementFailedLoginAttempts(ctx, id)
+}
+
+func (r *userRepo) ResetLoginFailures(ctx context.Context, id uuid.UUID) error {
+	return r.q.ResetLoginFailures(ctx, id)
+}
+
+func (r *userRepo) LockUserUntil(ctx context.Context, id uuid.UUID, until time.Time) error {
+	return r.q.LockUserUntil(ctx, db.LockUserUntilParams{
+		ID:          id,
+		LockedUntil: pgtype.Timestamptz{Time: until, Valid: true},
 	})
 }

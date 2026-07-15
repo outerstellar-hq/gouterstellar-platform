@@ -46,39 +46,43 @@ type GoogleOAuthConfig struct {
 }
 
 type Config struct {
-	Version               string        `yaml:"version"`
-	Port                  int           `yaml:"port"`
-	DatabaseURL           string        `yaml:"database_url"`
-	DevDashboardEnabled   bool          `yaml:"dev_dashboard_enabled"`
-	DevMode               bool          `yaml:"dev_mode"`
-	SessionCookieSecure   bool          `yaml:"session_cookie_secure"`
-	SessionTimeoutMinutes int           `yaml:"session_timeout_minutes"`
-	CORSOrigins           string        `yaml:"cors_origins"`
-	CSRFEnabled           bool          `yaml:"csrf_enabled"`
-	AppBaseURL            string        `yaml:"app_base_url"`
-	CSPPolicy             string        `yaml:"csp_policy"`
-	PlatformMode          string        `yaml:"platform_mode"`
-	JWT                   JwtConfig     `yaml:"jwt"`
-	Email                 EmailConfig   `yaml:"email"`
-	Segment               SegmentConfig `yaml:"segment"`
-	OAuth                 OAuthConfig   `yaml:"oauth"`
+	Version                string        `yaml:"version"`
+	Port                   int           `yaml:"port"`
+	DatabaseURL            string        `yaml:"database_url"`
+	DevDashboardEnabled    bool          `yaml:"dev_dashboard_enabled"`
+	DevMode                bool          `yaml:"dev_mode"`
+	SessionCookieSecure    bool          `yaml:"session_cookie_secure"`
+	SessionTimeoutMinutes  int           `yaml:"session_timeout_minutes"`
+	MaxFailedLoginAttempts int32         `yaml:"max_failed_login_attempts"`
+	LockoutDurationSeconds int64         `yaml:"lockout_duration_seconds"`
+	CORSOrigins            string        `yaml:"cors_origins"`
+	CSRFEnabled            bool          `yaml:"csrf_enabled"`
+	AppBaseURL             string        `yaml:"app_base_url"`
+	CSPPolicy              string        `yaml:"csp_policy"`
+	PlatformMode           string        `yaml:"platform_mode"`
+	JWT                    JwtConfig     `yaml:"jwt"`
+	Email                  EmailConfig   `yaml:"email"`
+	Segment                SegmentConfig `yaml:"segment"`
+	OAuth                  OAuthConfig   `yaml:"oauth"`
 }
 
 // defaults returns a Config populated with the same default values the previous
 // viper-based loader set via SetDefault. Profile YAML and env vars overlay these.
 func defaults() *Config {
 	return &Config{
-		Version:               "dev",
-		Port:                  8080,
-		DatabaseURL:           "postgres://outerstellar:outerstellar@localhost:5432/outerstellar?sslmode=disable", // #nosec G101 -- default local dev connection string, overridden by env in production
-		DevDashboardEnabled:   false,
-		DevMode:               false,
-		SessionCookieSecure:   false,
-		SessionTimeoutMinutes: 30,
-		CORSOrigins:           "*",
-		CSRFEnabled:           true,
-		AppBaseURL:            "http://localhost:8080",
-		PlatformMode:          "full",
+		Version:                "dev",
+		Port:                   8080,
+		DatabaseURL:            "postgres://outerstellar:outerstellar@localhost:5432/outerstellar?sslmode=disable", // #nosec G101 -- default local dev connection string, overridden by env in production
+		DevDashboardEnabled:    false,
+		DevMode:                false,
+		SessionCookieSecure:    false,
+		SessionTimeoutMinutes:  30,
+		MaxFailedLoginAttempts: 10,
+		LockoutDurationSeconds: 900,
+		CORSOrigins:            "*",
+		CSRFEnabled:            true,
+		AppBaseURL:             "http://localhost:8080",
+		PlatformMode:           "full",
 		JWT: JwtConfig{
 			Enabled:       false,
 			Secret:        "",
@@ -172,6 +176,16 @@ func applyEnvOverrides(cfg *Config) {
 			cfg.SessionTimeoutMinutes = n
 		}
 	}
+	if v := os.Getenv("MAX_FAILED_LOGIN_ATTEMPTS"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 32); err == nil {
+			cfg.MaxFailedLoginAttempts = int32(n)
+		}
+	}
+	if v := os.Getenv("LOCKOUT_DURATION_SECONDS"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			cfg.LockoutDurationSeconds = n
+		}
+	}
 	if v := os.Getenv("SESSION_COOKIE_SECURE"); v == "true" {
 		cfg.SessionCookieSecure = true
 	}
@@ -209,6 +223,12 @@ func (c *Config) Validate() error {
 	}
 	if c.SessionTimeoutMinutes < 1 {
 		return fmt.Errorf("session_timeout_minutes must be at least 1, got %d", c.SessionTimeoutMinutes)
+	}
+	if c.MaxFailedLoginAttempts < 1 {
+		return fmt.Errorf("max_failed_login_attempts must be positive, got %d", c.MaxFailedLoginAttempts)
+	}
+	if c.LockoutDurationSeconds < 1 {
+		return fmt.Errorf("lockout_duration_seconds must be positive, got %d", c.LockoutDurationSeconds)
 	}
 	switch c.PlatformMode {
 	case "full", "extension-host", "headless", "":

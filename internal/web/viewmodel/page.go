@@ -58,11 +58,13 @@ type AdminUsersPage struct {
 }
 
 type UserItem struct {
-	ID       string
-	Username string
-	Email    string
-	Role     string
-	Enabled  bool
+	ID                  string
+	Username            string
+	Email               string
+	Role                string
+	Enabled             bool
+	FailedLoginAttempts int32
+	IsLocked            bool
 }
 
 type AdminAuditPage struct {

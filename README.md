@@ -34,6 +34,8 @@ Key settings:
 | `csrf_enabled` | `true` | Enable CSRF protection |
 | `session_cookie_secure` | `false` | Set Secure flag on session cookies |
 | `session_timeout_minutes` | `30` | Session timeout |
+| `max_failed_login_attempts` | `10` | Failed logins before a timed account lockout |
+| `lockout_duration_seconds` | `900` | Account lockout duration |
 | `jwt.enabled` | `false` | Enable JWT token auth |
 | `email.enabled` | `false` | Enable email sending |
 

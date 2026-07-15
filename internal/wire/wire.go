@@ -108,7 +108,11 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 		r.auditRepo,
 		notificationSvc,
 		emailSvc,
-		int64(cfg.SessionTimeoutMinutes)*60,
+		service.SecurityConfig{
+			SessionTimeout:         time.Duration(cfg.SessionTimeoutMinutes) * time.Minute,
+			MaxFailedLoginAttempts: cfg.MaxFailedLoginAttempts,
+			LockoutDuration:        time.Duration(cfg.LockoutDurationSeconds) * time.Second,
+		},
 	)
 
 	apiKeySvc := security.NewApiKeyService(r.apiKeyRepo, r.userRepo)
