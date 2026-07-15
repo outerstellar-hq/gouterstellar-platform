@@ -95,7 +95,7 @@ func (h *SettingsHandler) Show(w http.ResponseWriter, r *http.Request) {
 
 	newApiKey := r.URL.Query().Get("new_key")
 
-	if err := h.renderer.Render(w, "settings.html", viewmodel.SettingsPage{
+	if err := h.renderer.Render(w, r, "settings.html", viewmodel.SettingsPage{
 		ActiveTab: activeTab,
 		Profile:   profile,
 		ApiKeys:   apiKeys,

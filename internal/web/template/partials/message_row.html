@@ -8,6 +8,11 @@
         {{ if .HasConflict }}<span class="badge badge-error">Conflict</span>{{ end }}
         {{ if .Deleted }}<span class="badge badge-error">Deleted</span>{{ end }}
         <span class="badge">v{{ .Version }}</span>
+        {{ if not .Deleted }}
+        <form method="POST" action="/messages/{{ .SyncID }}/delete">
+            <button class="btn btn-danger btn-sm" type="submit" data-confirm="Move this message to Trash?">Delete</button>
+        </form>
+        {{ end }}
     </div>
 </div>
 {{ end }}

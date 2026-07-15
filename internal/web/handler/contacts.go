@@ -52,7 +52,7 @@ func (h *ContactsHandler) TrashList(w http.ResponseWriter, r *http.Request) {
 	for i, contact := range contacts {
 		items[i] = viewmodel.ContactItem{SyncID: contact.SyncID, Name: contact.Name, Emails: contact.Emails, Phones: contact.Phones, Company: contact.Company, Deleted: true}
 	}
-	if err := h.renderer.Render(w, "components/contact_trash_list.html", viewmodel.ContactsPage{Contacts: items}); err != nil {
+	if err := h.renderer.Render(w, r, "components/contact_trash_list.html", viewmodel.ContactsPage{Contacts: items}); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
 }
@@ -64,7 +64,7 @@ func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	contacts, err := h.contactService.ListContacts(r.Context(), safeInt32(pageSize), safeInt32(offset))
 	if err != nil {
-		_ = h.renderer.RenderWithStatus(w, "error.html", viewmodel.ErrorPage{
+		_ = h.renderer.RenderWithStatus(w, r, "error.html", viewmodel.ErrorPage{
 			StatusCode: http.StatusInternalServerError,
 			Title:      "Error",
 			Message:    "Failed to load contacts",
@@ -102,7 +102,7 @@ func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {
 		PageSize:    pageSize,
 	}
 
-	if err := h.renderer.Render(w, "contacts.html", viewmodel.ContactsPage{
+	if err := h.renderer.Render(w, r, "contacts.html", viewmodel.ContactsPage{
 		Contacts:   contactItems,
 		Pagination: pagination,
 	}); err != nil {

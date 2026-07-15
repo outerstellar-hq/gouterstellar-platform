@@ -401,7 +401,7 @@ func (s *SecurityService) UpdateProfile(ctx context.Context, userID uuid.UUID, e
 	return nil
 }
 
-func (s *SecurityService) DeleteAccount(ctx context.Context, userID uuid.UUID) error {
+func (s *SecurityService) DeleteAccount(ctx context.Context, userID uuid.UUID, currentPassword string) error {
 	pltUser, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
 		return &model.UserNotFoundError{UserID: userID.String()}
@@ -409,8 +409,18 @@ func (s *SecurityService) DeleteAccount(ctx context.Context, userID uuid.UUID) e
 
 	user := security.PltUserToModel(pltUser)
 
-	if err := s.sessionRepo.DeleteByUserID(ctx, userID); err != nil {
-		slog.Warn("Failed to delete user sessions", "userID", userID, "error", err)
+	if !s.passwordEncoder.Matches(currentPassword, user.PasswordHash) {
+		return &model.WeakPasswordError{Message: "Current password is incorrect"}
+	}
+
+	if user.Role == model.RoleAdmin {
+		adminCount, countErr := s.userRepo.CountByRole(ctx, string(model.RoleAdmin))
+		if countErr != nil {
+			return fmt.Errorf("count administrators: %w", countErr)
+		}
+		if adminCount <= 1 {
+			return &model.InsufficientPermissionError{Message: "Cannot delete the only remaining admin account"}
+		}
 	}
 
 	if err := s.userRepo.DeleteByID(ctx, userID); err != nil {

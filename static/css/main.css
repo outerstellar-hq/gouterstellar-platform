@@ -49,7 +49,7 @@ a:hover {
     text-decoration: underline;
 }
 
-nav {
+.app-nav {
     display: flex;
     align-items: center;
     height: var(--nav-height);
@@ -62,39 +62,39 @@ nav {
     z-index: 100;
 }
 
-nav .brand {
+.app-nav .brand {
     font-weight: 700;
     font-size: 18px;
     color: var(--text-primary);
     margin-right: 32px;
 }
 
-nav .nav-links {
+.app-nav .nav-links {
     display: flex;
     gap: 20px;
     flex: 1;
 }
 
-nav .nav-links a {
+.app-nav .nav-links a {
     color: var(--text-secondary);
     font-size: 14px;
     font-weight: 500;
 }
 
-nav .nav-links a:hover,
-nav .nav-links a.active {
+.app-nav .nav-links a:hover,
+.app-nav .nav-links a.active {
     color: var(--color-primary);
     text-decoration: none;
 }
 
-nav .user-section {
+.app-nav .user-section {
     display: flex;
     align-items: center;
     gap: 12px;
     font-size: 14px;
 }
 
-nav .user-section .avatar {
+.app-nav .user-section .avatar {
     width: 32px;
     height: 32px;
     border-radius: 50%;
@@ -181,6 +181,24 @@ main {
     font-size: 14px;
     white-space: nowrap;
     min-width: 100px;
+}
+
+.message-row .message-author {
+    font-weight: 600;
+    min-width: 100px;
+}
+
+.message-row .message-content {
+    flex: 1;
+    word-break: break-word;
+}
+
+.message-row .message-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
 }
 
 .message-row .content {
@@ -742,12 +760,19 @@ footer {
 }
 
 @media (max-width: 768px) {
-    nav {
+    .app-nav {
         padding: 0 16px;
+        height: auto;
+        min-height: var(--nav-height);
+        flex-wrap: wrap;
     }
 
-    nav .nav-links {
+    .app-nav .nav-links {
         gap: 12px;
+        order: 3;
+        width: 100%;
+        overflow-x: auto;
+        padding-bottom: 10px;
     }
 
     main {

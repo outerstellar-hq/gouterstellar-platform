@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
+	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
 )
 
@@ -267,4 +268,53 @@ func TestRegister_DuplicateUsername(t *testing.T) {
 	_, err := svc.Register(context.Background(), "existing", "password123")
 
 	assert.Error(t, err)
+}
+
+func TestDeleteAccountRejectsIncorrectPassword(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	encoder := new(mockPasswordEncoder)
+	svc := NewSecurityService(userRepo, encoder, new(mockSessionRepo), new(mockAuditRepo), 3600)
+	user := makeTestUser("alice", "USER", true)
+	userRepo.On("FindByID", mock.Anything, user.ID).Return(user, nil)
+	encoder.On("Matches", "wrong-password", user.PasswordHash).Return(false)
+
+	err := svc.DeleteAccount(context.Background(), user.ID, "wrong-password")
+
+	assert.IsType(t, &model.WeakPasswordError{}, err)
+	userRepo.AssertNotCalled(t, "DeleteByID", mock.Anything, mock.Anything)
+}
+
+func TestDeleteAccountProtectsOnlyAdministrator(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	encoder := new(mockPasswordEncoder)
+	svc := NewSecurityService(userRepo, encoder, new(mockSessionRepo), new(mockAuditRepo), 3600)
+	user := makeTestUser("admin", "ADMIN", true)
+	userRepo.On("FindByID", mock.Anything, user.ID).Return(user, nil)
+	userRepo.On("CountByRole", mock.Anything, "ADMIN").Return(int64(1), nil)
+	encoder.On("Matches", "correct-password", user.PasswordHash).Return(true)
+
+	err := svc.DeleteAccount(context.Background(), user.ID, "correct-password")
+
+	assert.IsType(t, &model.InsufficientPermissionError{}, err)
+	userRepo.AssertNotCalled(t, "DeleteByID", mock.Anything, mock.Anything)
+}
+
+func TestDeleteAccountRemovesVerifiedUser(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	encoder := new(mockPasswordEncoder)
+	auditRepo := new(mockAuditRepo)
+	svc := NewSecurityService(userRepo, encoder, new(mockSessionRepo), auditRepo, 3600)
+	user := makeTestUser("alice", "USER", true)
+	userRepo.On("FindByID", mock.Anything, user.ID).Return(user, nil)
+	userRepo.On("DeleteByID", mock.Anything, user.ID).Return(nil)
+	encoder.On("Matches", "correct-password", user.PasswordHash).Return(true)
+	auditRepo.On(
+		"LogAudit", mock.Anything, mock.AnythingOfType("*uuid.UUID"), mock.AnythingOfType("*string"),
+		mock.AnythingOfType("*uuid.UUID"), mock.AnythingOfType("*string"), "ACCOUNT_DELETED", "Account deleted",
+	).Return(db.PltAuditLog{}, nil)
+
+	err := svc.DeleteAccount(context.Background(), user.ID, "correct-password")
+
+	assert.NoError(t, err)
+	userRepo.AssertExpectations(t)
 }

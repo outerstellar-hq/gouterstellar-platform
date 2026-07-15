@@ -32,6 +32,10 @@ type UpdateNotificationPrefsRequest struct {
 	PushEnabled  bool `json:"pushEnabled"`
 }
 
+type DeleteAccountRequest struct {
+	CurrentPassword string `json:"currentPassword" validate:"required"`
+}
+
 type UserProfileResponse struct {
 	Username                  string  `json:"username"`
 	Email                     string  `json:"email"`

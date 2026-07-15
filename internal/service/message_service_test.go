@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -170,6 +171,18 @@ func TestCreateServerMessage_BlankValidation(t *testing.T) {
 	_, err := svc.CreateServerMessage(context.Background(), "", "hello")
 	assert.Error(t, err)
 	assert.IsType(t, &model.ValidationError{}, err)
+}
+
+func TestCreateServerMessage_LengthValidationUsesDatabaseLimits(t *testing.T) {
+	repo := new(mockMessageRepo)
+	svc := NewMessageService(repo, new(mockOutboxRepo), nil, persistence.NewMessageCache(60), &NoOpEventPublisher{}, new(mockAuditRepo))
+
+	_, authorErr := svc.CreateServerMessage(context.Background(), strings.Repeat("a", MaxMessageAuthorLength+1), "hello")
+	_, contentErr := svc.CreateServerMessage(context.Background(), "alice", strings.Repeat("c", MaxMessageContentLength+1))
+
+	assert.IsType(t, &model.ValidationError{}, authorErr)
+	assert.IsType(t, &model.ValidationError{}, contentErr)
+	repo.AssertNotCalled(t, "CreateServerMessage", mock.Anything)
 }
 
 func TestCreateServerMessage_Success(t *testing.T) {

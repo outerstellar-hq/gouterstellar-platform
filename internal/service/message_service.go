@@ -7,12 +7,18 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/persistence"
 	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
+)
+
+const (
+	MaxMessageAuthorLength  = 100
+	MaxMessageContentLength = 500
 )
 
 type MessageService struct {
@@ -129,8 +135,8 @@ func (s *MessageService) ListDirtyMessages(ctx context.Context) ([]model.StoredM
 }
 
 func (s *MessageService) CreateServerMessage(ctx context.Context, author, content string) (*model.StoredMessage, error) {
-	if strings.TrimSpace(author) == "" || strings.TrimSpace(content) == "" {
-		return nil, &model.ValidationError{Errors: []string{"Author and content must not be blank"}}
+	if err := validateMessage(author, content); err != nil {
+		return nil, err
 	}
 
 	syncID := "srv_" + uuid.New().String()
@@ -151,8 +157,8 @@ func (s *MessageService) CreateServerMessage(ctx context.Context, author, conten
 }
 
 func (s *MessageService) CreateLocalMessage(ctx context.Context, author, content string) (*model.StoredMessage, error) {
-	if strings.TrimSpace(author) == "" || strings.TrimSpace(content) == "" {
-		return nil, &model.ValidationError{Errors: []string{"Author and content must not be blank"}}
+	if err := validateMessage(author, content); err != nil {
+		return nil, err
 	}
 
 	syncID := "loc_" + uuid.New().String()
@@ -269,6 +275,9 @@ func (s *MessageService) DeleteMessage(ctx context.Context, syncID string) error
 }
 
 func (s *MessageService) UpdateMessage(ctx context.Context, msg *model.StoredMessage) (*model.StoredMessage, error) {
+	if err := validateMessage(msg.Author, msg.Content); err != nil {
+		return nil, err
+	}
 	updated, err := s.repo.UpdateMessage(ctx, msg.SyncID, msg.Author, msg.Content, msg.UpdatedAtEpochMs, msg.Dirty, msg.Version)
 	if err != nil {
 		return nil, fmt.Errorf("update message: %w", err)
@@ -280,6 +289,23 @@ func (s *MessageService) UpdateMessage(ctx context.Context, msg *model.StoredMes
 	s.cache.InvalidateByPrefix("messages:")
 	s.eventPub.PublishRefresh("messages")
 	return stored, nil
+}
+
+func validateMessage(author, content string) error {
+	var validationErrors []string
+	if strings.TrimSpace(author) == "" || strings.TrimSpace(content) == "" {
+		validationErrors = append(validationErrors, "Author and content must not be blank")
+	}
+	if utf8.RuneCountInString(author) > MaxMessageAuthorLength {
+		validationErrors = append(validationErrors, fmt.Sprintf("Author must be at most %d characters", MaxMessageAuthorLength))
+	}
+	if utf8.RuneCountInString(content) > MaxMessageContentLength {
+		validationErrors = append(validationErrors, fmt.Sprintf("Content must be at most %d characters", MaxMessageContentLength))
+	}
+	if len(validationErrors) > 0 {
+		return &model.ValidationError{Errors: validationErrors}
+	}
+	return nil
 }
 
 func (s *MessageService) ResolveConflict(ctx context.Context, syncID string, strategy model.ConflictStrategy) error {

@@ -293,7 +293,13 @@ func (h *AuthAPI) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.securityService.DeleteAccount(r.Context(), user.ID)
+	var req model.DeleteAccountRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.CurrentPassword == "" {
+		writeError(w, http.StatusBadRequest, "Current password is required")
+		return
+	}
+
+	err := h.securityService.DeleteAccount(r.Context(), user.ID, req.CurrentPassword)
 	if err != nil {
 		handleServiceError(w, err)
 		return

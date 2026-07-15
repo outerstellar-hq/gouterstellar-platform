@@ -67,7 +67,7 @@ func (h *ComponentsHandler) MessageList(w http.ResponseWriter, r *http.Request) 
 		PageSize:    result.Metadata.PageSize,
 	}
 
-	if err := h.renderer.Render(w, "components/message_list.html", viewmodel.MessagesPage{
+	if err := h.renderer.Render(w, r, "components/message_list.html", viewmodel.MessagesPage{
 		Messages:   messageItems,
 		Pagination: pagination,
 	}); err != nil {
@@ -115,7 +115,7 @@ func (h *ComponentsHandler) ContactList(w http.ResponseWriter, r *http.Request) 
 		PageSize:    pageSize,
 	}
 
-	if err := h.renderer.Render(w, "components/contact_list.html", viewmodel.ContactsPage{
+	if err := h.renderer.Render(w, r, "components/contact_list.html", viewmodel.ContactsPage{
 		Contacts:   contactItems,
 		Pagination: pagination,
 	}); err != nil {

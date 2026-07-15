@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
 	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
@@ -36,6 +37,7 @@ func NewHomeHandler(
 
 func (h *HomeHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/", h.Show)
+	r.Get("/messages", h.Messages)
 	r.Post("/messages", h.CreateMessage)
 	r.Post("/messages/{syncId}/delete", h.DeleteMessage)
 	r.Post("/messages/restore/{syncId}", h.RestoreMessage)
@@ -53,8 +55,42 @@ func (h *HomeHandler) Show(w http.ResponseWriter, r *http.Request) {
 		UserCount:    userCount,
 	}
 
-	if err := h.renderer.Render(w, "home.html", page); err != nil {
+	if err := h.renderer.Render(w, r, "home.html", page); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
+}
+
+func (h *HomeHandler) Messages(w http.ResponseWriter, r *http.Request) {
+	page := getIntParam(r, "page", 1)
+	pageSize := getIntParam(r, "pageSize", 20)
+	result, err := h.messageService.ListMessages(r.Context(), safeInt32(pageSize), safeInt32((page-1)*pageSize))
+	if err != nil {
+		_ = h.renderer.RenderWithStatus(w, r, "error.html", viewmodel.ErrorPage{
+			StatusCode: http.StatusInternalServerError, Title: "Error", Message: "Failed to load messages",
+		}, http.StatusInternalServerError)
+		return
+	}
+	items := make([]viewmodel.MessageItem, len(result.Items))
+	for i, message := range result.Items {
+		items[i] = messageItem(message)
+	}
+	metadata := result.Metadata
+	if err := h.renderer.Render(w, r, "messages.html", viewmodel.MessagesPage{
+		Messages: items,
+		Pagination: viewmodel.PaginationInfo{
+			CurrentPage: metadata.CurrentPage, TotalPages: metadata.TotalPages, TotalItems: metadata.TotalItems,
+			HasPrevious: metadata.HasPrevious, HasNext: metadata.HasNext, PageSize: metadata.PageSize,
+		},
+	}); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
+}
+
+func messageItem(message model.MessageSummary) viewmodel.MessageItem {
+	return viewmodel.MessageItem{
+		SyncID: message.SyncID, Author: message.Author, Content: message.Content,
+		UpdatedAt: message.UpdatedAtLabel(), UpdatedLabel: message.UpdatedAtLabel(), Dirty: message.Dirty,
+		Version: message.Version, HasConflict: message.HasConflict,
 	}
 }
 
@@ -75,7 +111,7 @@ func (h *HomeHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 		handleServiceError(w, err)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
+	http.Redirect(w, r, "/messages", http.StatusSeeOther)
 }
 
 func (h *HomeHandler) RestoreMessage(w http.ResponseWriter, r *http.Request) {
@@ -105,7 +141,7 @@ func (h *HomeHandler) Trash(w http.ResponseWriter, r *http.Request) {
 	for i, contact := range contacts {
 		contactItems[i] = viewmodel.ContactItem{SyncID: contact.SyncID, Name: contact.Name, Emails: contact.Emails, Phones: contact.Phones, Company: contact.Company, Deleted: true}
 	}
-	if err := h.renderer.Render(w, "trash.html", viewmodel.TrashPage{Messages: messageItems, Contacts: contactItems}); err != nil {
+	if err := h.renderer.Render(w, r, "trash.html", viewmodel.TrashPage{Messages: messageItems, Contacts: contactItems}); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
 }

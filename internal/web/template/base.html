@@ -5,16 +5,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ .Title }} - Outerstellar Platform</title>
+    <meta name="csrf-token" content="{{ .CSRFToken }}">
     <link rel="stylesheet" href="/static/css/main.css">
+    <script src="/static/js/platform.js" defer></script>
     {{ if .CustomCSS }}<style>{{ .CustomCSS }}</style>{{ end }}
 </head>
 <body class="{{ if .IsDark }}dark{{ end }}">
     {{ if .User }}
-    <nav>
-        <div class="nav-brand">Outerstellar</div>
+    <nav class="app-nav" aria-label="Primary navigation">
+        <a class="brand" href="/">Outerstellar</a>
         <div class="nav-links">
             <a href="/" class="nav-link{{ if eq .Body "home" }} active{{ end }}">Home</a>
             <a href="/messages" class="nav-link{{ if eq .Body "messages" }} active{{ end }}">Messages</a>
+            <a href="/messages/trash" class="nav-link{{ if eq .Body "trash" }} active{{ end }}">Trash</a>
             <a href="/contacts" class="nav-link{{ if eq .Body "contacts" }} active{{ end }}">Contacts</a>
             <a href="/notifications" class="nav-link{{ if eq .Body "notifications" }} active{{ end }}">Notifications</a>
             {{ if .User.IsAdmin }}
@@ -22,7 +25,7 @@
             {{ end }}
             <a href="/settings" class="nav-link{{ if eq .Body "settings" }} active{{ end }}">Settings</a>
         </div>
-        <div class="nav-user">
+        <div class="user-section">
             <span>{{ .User.Username }}</span>
             <form method="POST" action="/auth/logout"><button type="submit">Logout</button></form>
         </div>
@@ -34,7 +37,7 @@
         {{ end }}
         {{ template "content" .BodyData }}
     </main>
-    <footer>
+    <footer class="app-footer">
         <span>v{{ .Version }}</span>
         <span>Request: {{ .RequestID }}</span>
     </footer>

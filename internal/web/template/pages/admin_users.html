@@ -28,7 +28,8 @@
                     {{ end }}
                 </td>
                 <td>
-                    <form method="POST" action="/admin/users/{{ .ID }}/toggle">
+                    <form method="POST" action="/admin/users/{{ .ID }}/enabled">
+                        <input type="hidden" name="enabled" value="{{ if .Enabled }}false{{ else }}true{{ end }}">
                         <button type="submit" class="btn btn-sm">
                             {{ if .Enabled }}Disable{{ else }}Enable{{ end }}
                         </button>

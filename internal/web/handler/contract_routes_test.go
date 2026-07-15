@@ -34,3 +34,23 @@ func TestDesktopClientContractRoutes(t *testing.T) {
 		})
 	}
 }
+
+func TestWebNavigationRoutes(t *testing.T) {
+	router := chi.NewRouter()
+	(&HomeHandler{}).RegisterRoutes(router)
+	(&UserAdminHandler{}).RegisterRoutes(router)
+
+	for _, route := range []struct {
+		method string
+		path   string
+	}{
+		{http.MethodGet, "/messages"},
+		{http.MethodGet, "/messages/trash"},
+		{http.MethodPost, "/admin/users/8c607f06-69cf-4170-af4e-6a2bfcf43eae/enabled"},
+	} {
+		t.Run(route.method+" "+route.path, func(t *testing.T) {
+			context := chi.NewRouteContext()
+			assert.True(t, router.Match(context, route.method, route.path))
+		})
+	}
+}
