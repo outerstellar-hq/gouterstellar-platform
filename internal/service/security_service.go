@@ -30,6 +30,16 @@ type SecurityConfig struct {
 	LockoutDuration        time.Duration
 }
 
+type SecurityDependencies struct {
+	UserRepository      persistence.UserRepository
+	PasswordEncoder     security.PasswordEncoder
+	SessionRepository   persistence.SessionRepository
+	AuditRepository     persistence.AuditRepository
+	NotificationService *NotificationService
+	EmailService        EmailService
+	TOTPService         *TOTPService
+}
+
 const (
 	MinPasswordLength     = 8
 	MaxUsernameLength     = 50
@@ -46,6 +56,7 @@ type SecurityService struct {
 	auditor             Auditor
 	notificationService *NotificationService
 	emailService        EmailService
+	totpService         *TOTPService
 	config              SecurityConfig
 	now                 func() time.Time
 	dummyHashOnce       sync.Once
@@ -53,31 +64,27 @@ type SecurityService struct {
 }
 
 func NewSecurityService(
-	userRepo persistence.UserRepository,
-	passwordEncoder security.PasswordEncoder,
-	sessionRepo persistence.SessionRepository,
-	auditRepo persistence.AuditRepository,
-	notificationService *NotificationService,
-	emailService EmailService,
+	dependencies SecurityDependencies,
 	config SecurityConfig,
 ) *SecurityService {
 	return &SecurityService{
-		userRepo:        userRepo,
-		passwordEncoder: passwordEncoder,
-		sessionRepo:     sessionRepo,
-		auditRepo:       auditRepo,
+		userRepo:        dependencies.UserRepository,
+		passwordEncoder: dependencies.PasswordEncoder,
+		sessionRepo:     dependencies.SessionRepository,
+		auditRepo:       dependencies.AuditRepository,
 		// The auditor wraps the same repo so the write path is uniform with the
 		// other services. auditRepo is retained for the audit-read methods
 		// (GetAuditLog/GetAuditLogPaged/CountAuditEntries).
-		auditor:             NewAuditService(auditRepo),
-		notificationService: notificationService,
-		emailService:        emailService,
+		auditor:             NewAuditService(dependencies.AuditRepository),
+		notificationService: dependencies.NotificationService,
+		emailService:        dependencies.EmailService,
+		totpService:         dependencies.TOTPService,
 		config:              config,
 		now:                 time.Now,
 	}
 }
 
-func (s *SecurityService) Authenticate(ctx context.Context, username, password string) (*model.User, error) {
+func (s *SecurityService) Authenticate(ctx context.Context, username, password string) (model.AuthenticationResult, error) {
 	pltUser, err := s.userRepo.FindByUsername(ctx, username)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
@@ -133,13 +140,24 @@ func (s *SecurityService) Authenticate(ctx context.Context, username, password s
 		}
 	}
 
+	if user.TOTPEnabled {
+		if s.totpService == nil {
+			slog.Error("TOTP is enabled for user but the service is unavailable", "userID", user.ID)
+			return nil, errInvalidCredentials
+		}
+		partialToken, err := s.totpService.CreateChallenge(ctx, user.ID)
+		if err != nil {
+			return nil, errInvalidCredentials
+		}
+		return model.TOTPRequired{PartialToken: partialToken}, nil
+	}
+
 	if err := s.userRepo.UpdateLastActivity(ctx, user.ID); err != nil {
 		slog.Warn("Failed to update last activity", "userID", user.ID, "error", err)
 	}
-
 	s.AuditLogin(ctx, &user.ID, &user.Username)
 
-	return user, nil
+	return model.Authenticated{User: user}, nil
 }
 
 func (s *SecurityService) UnlockAccount(ctx context.Context, adminID, targetID uuid.UUID) error {
@@ -158,6 +176,11 @@ func (s *SecurityService) UnlockAccount(ctx context.Context, adminID, targetID u
 	}
 	if err := s.userRepo.ResetLoginFailures(ctx, targetID); err != nil {
 		return fmt.Errorf("unlock account: %w", err)
+	}
+	if s.totpService != nil {
+		if err := s.totpService.ResetFailures(ctx, targetID); err != nil {
+			return fmt.Errorf("unlock account: %w", err)
+		}
 	}
 
 	targetModel := security.PltUserToModel(target)
@@ -488,6 +511,11 @@ func (s *SecurityService) DeleteExpiredSessions(ctx context.Context) error {
 	_, err := s.sessionRepo.DeleteExpired(ctx)
 	if err != nil {
 		return fmt.Errorf("delete expired sessions: %w", err)
+	}
+	if s.totpService != nil {
+		if err := s.totpService.DeleteExpiredChallenges(ctx); err != nil {
+			return err
+		}
 	}
 	return nil
 }

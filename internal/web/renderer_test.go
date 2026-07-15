@@ -93,3 +93,45 @@ func TestAdminUsersRendersLockedAccountControl(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "/admin/users/user-id/unlock")
 	assert.Contains(t, rec.Body.String(), "Unlock (10)")
 }
+
+func TestLoginRendersTOTPChallenge(t *testing.T) {
+	r, err := NewRenderer(TemplateFS(), TemplateFuncMap(), "1.0.0")
+	require.NoError(t, err)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/auth", nil)
+
+	err = r.RenderPage(rec, req, "auth_login", viewmodel.AuthPage{
+		TOTPRequired: true,
+		PartialToken: "pt_example",
+	})
+
+	require.NoError(t, err)
+	assert.Contains(t, rec.Body.String(), "/auth/totp/verify")
+	assert.Contains(t, rec.Body.String(), "pt_example")
+	assert.Contains(t, rec.Body.String(), "autocomplete=\"one-time-code\"")
+}
+
+func TestSettingsRendersTOTPEnrollmentAndBackupCodes(t *testing.T) {
+	r, err := NewRenderer(TemplateFS(), TemplateFuncMap(), "1.0.0")
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodGet, "/settings?tab=security", nil)
+
+	setupRec := httptest.NewRecorder()
+	err = r.RenderPage(setupRec, req, "settings", viewmodel.SettingsPage{
+		ActiveTab: "security",
+		TOTPSetup: &viewmodel.TOTPSetupData{Secret: "SECRET", QRDataURI: "data:image/png;base64,AAAA"},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, setupRec.Body.String(), "QR code for setting up two-factor authentication")
+	assert.Contains(t, setupRec.Body.String(), "SECRET")
+
+	backupRec := httptest.NewRecorder()
+	err = r.RenderPage(backupRec, req, "settings", viewmodel.SettingsPage{
+		ActiveTab:       "security",
+		TOTPEnabled:     true,
+		TOTPBackupCodes: []string{"BACKUP-CODE"},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, backupRec.Body.String(), "BACKUP-CODE")
+	assert.Contains(t, backupRec.Body.String(), "will not be shown again")
+}

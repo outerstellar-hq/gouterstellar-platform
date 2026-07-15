@@ -115,6 +115,18 @@ type SessionRepository interface {
 	ListForUser(ctx context.Context, userID uuid.UUID) ([]db.ListSessionsForUserRow, error)
 }
 
+type TOTPRepository interface {
+	CreateChallenge(ctx context.Context, tokenHash string, userID uuid.UUID, expiresAt time.Time) error
+	TakeChallengeAttempt(ctx context.Context, tokenHash string, maxAttempts int32) (db.PltTotpChallenge, error)
+	DeleteChallenge(ctx context.Context, tokenHash string) (bool, error)
+	DeleteExpiredChallenges(ctx context.Context) (int64, error)
+	Enable(ctx context.Context, userID uuid.UUID, secret, backupCodes string) error
+	Disable(ctx context.Context, userID uuid.UUID) error
+	IncrementFailedAttempts(ctx context.Context, userID uuid.UUID) (int32, error)
+	ResetFailedAttempts(ctx context.Context, userID uuid.UUID) error
+	ReplaceBackupCodes(ctx context.Context, userID uuid.UUID, expected string, replacement *string) (bool, error)
+}
+
 type ApiKeyRepository interface {
 	CreateApiKey(ctx context.Context, userID uuid.UUID, keyHash, keyPrefix, name string) (db.PltApiKey, error)
 	FindByKeyHash(ctx context.Context, keyHash string) (db.PltApiKey, error)

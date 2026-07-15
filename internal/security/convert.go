@@ -26,6 +26,10 @@ func PltUserToModel(u db.PltUser) *model.User {
 		Layout:                    u.Layout,
 		FailedLoginAttempts:       u.FailedLoginAttempts,
 		LockedUntil:               pgtypeTimestamptzToTimePtr(u.LockedUntil),
+		TOTPSecret:                u.TotpSecret,
+		TOTPEnabled:               u.TotpEnabled,
+		TOTPBackupCodes:           u.TotpBackupCodes,
+		FailedTOTPAttempts:        u.FailedTotpAttempts,
 	}
 }
 

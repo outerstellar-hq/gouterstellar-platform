@@ -50,6 +50,8 @@ type AuthPage struct {
 	Error              string
 	CSRFToken          string
 	GoogleLoginEnabled bool
+	TOTPRequired       bool
+	PartialToken       string
 }
 
 type AdminUsersPage struct {
@@ -96,13 +98,23 @@ type NotificationItem struct {
 }
 
 type SettingsPage struct {
-	ActiveTab string
-	Profile   ProfileData
-	ApiKeys   []ApiKeyItem
-	Theme     string
-	Language  string
-	Layout    string
-	NewApiKey string
+	ActiveTab                string
+	Profile                  ProfileData
+	ApiKeys                  []ApiKeyItem
+	Theme                    string
+	Language                 string
+	Layout                   string
+	NewApiKey                string
+	TOTPEnabled              bool
+	TOTPRemainingBackupCodes int
+	TOTPSetup                *TOTPSetupData
+	TOTPBackupCodes          []string
+	Error                    string
+}
+
+type TOTPSetupData struct {
+	Secret    string
+	QRDataURI string
 }
 
 // SettingsSessionsPage is the view model for the active-sessions management page.

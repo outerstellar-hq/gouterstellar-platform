@@ -54,7 +54,7 @@ func buildOpenAPISpec() map[string]interface{} {
 		"paths": map[string]interface{}{
 			// Sync
 			"/sync": map[string]interface{}{
-				"get": op("Pull message changes since timestamp", true, ok("Sync pull response")),
+				"get":  op("Pull message changes since timestamp", true, ok("Sync pull response")),
 				"post": op("Push message changes", true, ok("Sync push response")),
 			},
 			"/sync/contacts": map[string]interface{}{
@@ -66,6 +66,27 @@ func buildOpenAPISpec() map[string]interface{} {
 				"post": op("Authenticate and create session", false, map[string]interface{}{
 					"200": map[string]interface{}{"description": "Login successful"},
 					"401": map[string]interface{}{"description": "Invalid credentials"},
+				}),
+			},
+			"/auth/totp/verify": map[string]interface{}{
+				"post": op("Verify a TOTP or backup code and create a session", false, map[string]interface{}{
+					"200": map[string]interface{}{"description": "TOTP verified"},
+					"401": map[string]interface{}{"description": "Invalid, expired, or locked challenge"},
+				}),
+			},
+			"/auth/totp/setup": map[string]interface{}{
+				"post": op("Create an authenticator enrollment secret", true, ok("TOTP setup")),
+			},
+			"/auth/totp/confirm": map[string]interface{}{
+				"post": op("Verify and enable authenticator enrollment", true, map[string]interface{}{
+					"201": map[string]interface{}{"description": "TOTP enabled with one-time backup codes"},
+					"400": map[string]interface{}{"description": "Invalid code"},
+				}),
+			},
+			"/auth/totp/disable": map[string]interface{}{
+				"post": op("Disable TOTP after password confirmation", true, map[string]interface{}{
+					"200": map[string]interface{}{"description": "TOTP disabled"},
+					"401": map[string]interface{}{"description": "Invalid password"},
 				}),
 			},
 			"/auth/register": map[string]interface{}{

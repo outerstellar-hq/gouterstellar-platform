@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
+	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
 )
 
@@ -203,13 +204,22 @@ func testSecurityConfig() SecurityConfig {
 	}
 }
 
+func newTestSecurityService(userRepo *mockUserRepo, encoder *mockPasswordEncoder, sessionRepo *mockSessionRepo, auditRepo *mockAuditRepo) *SecurityService {
+	return NewSecurityService(SecurityDependencies{
+		UserRepository:    userRepo,
+		PasswordEncoder:   encoder,
+		SessionRepository: sessionRepo,
+		AuditRepository:   auditRepo,
+	}, testSecurityConfig())
+}
+
 func TestAuthenticate_Success(t *testing.T) {
 	userRepo := new(mockUserRepo)
 	sessionRepo := new(mockSessionRepo)
 	auditRepo := new(mockAuditRepo)
 	encoder := new(mockPasswordEncoder)
 
-	svc := NewSecurityService(userRepo, encoder, sessionRepo, auditRepo, nil, nil, testSecurityConfig())
+	svc := newTestSecurityService(userRepo, encoder, sessionRepo, auditRepo)
 
 	testUser := makeTestUser("alice", "USER", true)
 	userRepo.On("FindByUsername", mock.Anything, "alice").Return(testUser, nil)
@@ -217,9 +227,10 @@ func TestAuthenticate_Success(t *testing.T) {
 	userRepo.On("UpdateLastActivity", mock.Anything, testUser.ID).Return(nil)
 	auditRepo.On("LogAudit", mock.Anything, mock.AnythingOfType("*uuid.UUID"), mock.AnythingOfType("*string"), (*uuid.UUID)(nil), (*string)(nil), "USER_LOGIN", "Login successful").Return(db.PltAuditLog{}, nil)
 
-	user, err := svc.Authenticate(context.Background(), "alice", "password123")
+	result, err := svc.Authenticate(context.Background(), "alice", "password123")
 
 	assert.NoError(t, err)
+	user := result.(model.Authenticated).User
 	assert.Equal(t, "alice", user.Username)
 	assert.True(t, user.Enabled)
 	userRepo.AssertExpectations(t)
@@ -231,7 +242,7 @@ func TestAuthenticate_UserNotFound(t *testing.T) {
 	auditRepo := new(mockAuditRepo)
 	encoder := new(mockPasswordEncoder)
 
-	svc := NewSecurityService(userRepo, encoder, sessionRepo, auditRepo, nil, nil, testSecurityConfig())
+	svc := newTestSecurityService(userRepo, encoder, sessionRepo, auditRepo)
 
 	userRepo.On("FindByUsername", mock.Anything, "nonexistent").Return(db.PltUser{}, pgx.ErrNoRows)
 	encoder.On("Encode", "outerstellar-dummy-password").Return("dummy-hash", nil)
@@ -249,7 +260,7 @@ func TestAuthenticate_AccountDisabled(t *testing.T) {
 	auditRepo := new(mockAuditRepo)
 	encoder := new(mockPasswordEncoder)
 
-	svc := NewSecurityService(userRepo, encoder, sessionRepo, auditRepo, nil, nil, testSecurityConfig())
+	svc := newTestSecurityService(userRepo, encoder, sessionRepo, auditRepo)
 
 	testUser := makeTestUser("bob", "USER", false)
 	userRepo.On("FindByUsername", mock.Anything, "bob").Return(testUser, nil)
@@ -266,7 +277,7 @@ func TestAuthenticate_LocksAtFailureThreshold(t *testing.T) {
 	userRepo := new(mockUserRepo)
 	auditRepo := new(mockAuditRepo)
 	encoder := new(mockPasswordEncoder)
-	svc := NewSecurityService(userRepo, encoder, new(mockSessionRepo), auditRepo, nil, nil, testSecurityConfig())
+	svc := newTestSecurityService(userRepo, encoder, new(mockSessionRepo), auditRepo)
 	now := time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC)
 	svc.now = func() time.Time { return now }
 
@@ -287,7 +298,7 @@ func TestAuthenticate_RejectsLockedAccount(t *testing.T) {
 	userRepo := new(mockUserRepo)
 	auditRepo := new(mockAuditRepo)
 	encoder := new(mockPasswordEncoder)
-	svc := NewSecurityService(userRepo, encoder, new(mockSessionRepo), auditRepo, nil, nil, testSecurityConfig())
+	svc := newTestSecurityService(userRepo, encoder, new(mockSessionRepo), auditRepo)
 	now := time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC)
 	svc.now = func() time.Time { return now }
 
@@ -307,7 +318,7 @@ func TestAuthenticate_ClearsExpiredLockAfterSuccess(t *testing.T) {
 	userRepo := new(mockUserRepo)
 	auditRepo := new(mockAuditRepo)
 	encoder := new(mockPasswordEncoder)
-	svc := NewSecurityService(userRepo, encoder, new(mockSessionRepo), auditRepo, nil, nil, testSecurityConfig())
+	svc := newTestSecurityService(userRepo, encoder, new(mockSessionRepo), auditRepo)
 	now := time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC)
 	svc.now = func() time.Time { return now }
 
@@ -323,13 +334,13 @@ func TestAuthenticate_ClearsExpiredLockAfterSuccess(t *testing.T) {
 	result, err := svc.Authenticate(context.Background(), "alice", "password123")
 
 	assert.NoError(t, err)
-	assert.Equal(t, user.ID, result.ID)
+	assert.Equal(t, user.ID, result.(model.Authenticated).User.ID)
 	userRepo.AssertExpectations(t)
 }
 
 func TestAuthenticate_DatabaseFailureFailsClosed(t *testing.T) {
 	userRepo := new(mockUserRepo)
-	svc := NewSecurityService(userRepo, new(mockPasswordEncoder), new(mockSessionRepo), new(mockAuditRepo), nil, nil, testSecurityConfig())
+	svc := newTestSecurityService(userRepo, new(mockPasswordEncoder), new(mockSessionRepo), new(mockAuditRepo))
 	userRepo.On("FindByUsername", mock.Anything, "alice").Return(db.PltUser{}, errors.New("database unavailable"))
 
 	_, err := svc.Authenticate(context.Background(), "alice", "password123")
@@ -340,7 +351,9 @@ func TestAuthenticate_DatabaseFailureFailsClosed(t *testing.T) {
 func TestUnlockAccount_ResetsFailuresAndAudits(t *testing.T) {
 	userRepo := new(mockUserRepo)
 	auditRepo := new(mockAuditRepo)
-	svc := NewSecurityService(userRepo, new(mockPasswordEncoder), new(mockSessionRepo), auditRepo, nil, nil, testSecurityConfig())
+	svc := newTestSecurityService(userRepo, new(mockPasswordEncoder), new(mockSessionRepo), auditRepo)
+	totpRepo := new(fakeTOTPRepo)
+	svc.totpService = newTOTPTestService(totpRepo, userRepo)
 	admin := makeTestUser("admin", "ADMIN", true)
 	target := makeTestUser("alice", "USER", true)
 	userRepo.On("FindByID", mock.Anything, admin.ID).Return(admin, nil)
@@ -351,6 +364,7 @@ func TestUnlockAccount_ResetsFailuresAndAudits(t *testing.T) {
 	err := svc.UnlockAccount(context.Background(), admin.ID, target.ID)
 
 	assert.NoError(t, err)
+	assert.True(t, totpRepo.reset)
 	userRepo.AssertExpectations(t)
 }
 
@@ -360,7 +374,7 @@ func TestRegister_Success(t *testing.T) {
 	auditRepo := new(mockAuditRepo)
 	encoder := new(mockPasswordEncoder)
 
-	svc := NewSecurityService(userRepo, encoder, sessionRepo, auditRepo, nil, nil, testSecurityConfig())
+	svc := newTestSecurityService(userRepo, encoder, sessionRepo, auditRepo)
 
 	userRepo.On("FindByUsername", mock.Anything, "newuser").Return(db.PltUser{}, fmt.Errorf("not found"))
 	encoder.On("Encode", "password123").Return("hashed", nil)
@@ -380,7 +394,7 @@ func TestRegister_ShortPassword(t *testing.T) {
 	auditRepo := new(mockAuditRepo)
 	encoder := new(mockPasswordEncoder)
 
-	svc := NewSecurityService(userRepo, encoder, sessionRepo, auditRepo, nil, nil, testSecurityConfig())
+	svc := newTestSecurityService(userRepo, encoder, sessionRepo, auditRepo)
 
 	_, err := svc.Register(context.Background(), "newuser", "short")
 
@@ -393,7 +407,7 @@ func TestRegister_DuplicateUsername(t *testing.T) {
 	auditRepo := new(mockAuditRepo)
 	encoder := new(mockPasswordEncoder)
 
-	svc := NewSecurityService(userRepo, encoder, sessionRepo, auditRepo, nil, nil, testSecurityConfig())
+	svc := newTestSecurityService(userRepo, encoder, sessionRepo, auditRepo)
 
 	userRepo.On("FindByUsername", mock.Anything, "existing").Return(makeTestUser("existing", "USER", true), nil)
 

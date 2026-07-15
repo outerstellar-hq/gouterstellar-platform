@@ -29,6 +29,10 @@ type User struct {
 	Layout                    *string
 	FailedLoginAttempts       int32
 	LockedUntil               *time.Time
+	TOTPSecret                *string
+	TOTPEnabled               bool
+	TOTPBackupCodes           *string
+	FailedTOTPAttempts        int32
 }
 
 type UserSummary struct {

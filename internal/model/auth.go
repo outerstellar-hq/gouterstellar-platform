@@ -11,9 +11,58 @@ type RegisterRequest struct {
 }
 
 type AuthTokenResponse struct {
-	Token    string `json:"token"`
-	Username string `json:"username"`
-	Role     string `json:"role"`
+	Status       string `json:"status,omitempty"`
+	Token        string `json:"token,omitempty"`
+	PartialToken string `json:"partialToken,omitempty"`
+	Username     string `json:"username,omitempty"`
+	Role         string `json:"role,omitempty"`
+}
+
+type AuthenticationResult interface {
+	isAuthenticationResult()
+}
+
+type Authenticated struct {
+	User *User
+}
+
+func (Authenticated) isAuthenticationResult() {}
+
+type TOTPRequired struct {
+	PartialToken string
+}
+
+func (TOTPRequired) isAuthenticationResult() {}
+
+type TOTPVerifyRequest struct {
+	PartialToken string `json:"partialToken"`
+	Code         string `json:"code"`
+}
+
+type TOTPVerifyResponse struct {
+	Status   string `json:"status"`
+	Token    string `json:"token,omitempty"`
+	Username string `json:"username,omitempty"`
+	Role     string `json:"role,omitempty"`
+}
+
+type TOTPSetupResponse struct {
+	Secret    string `json:"secret"`
+	QRDataURI string `json:"qrDataUri"`
+}
+
+type TOTPConfirmRequest struct {
+	Secret string `json:"secret"`
+	Code   string `json:"code"`
+}
+
+type TOTPConfirmResponse struct {
+	Status      string   `json:"status"`
+	BackupCodes []string `json:"backupCodes,omitempty"`
+}
+
+type TOTPDisableRequest struct {
+	Password string `json:"password"`
 }
 
 type ChangePasswordRequest struct {
@@ -38,6 +87,7 @@ type UserProfileResponse struct {
 	AvatarURL                 *string `json:"avatarUrl"`
 	EmailNotificationsEnabled bool    `json:"emailNotificationsEnabled"`
 	PushNotificationsEnabled  bool    `json:"pushNotificationsEnabled"`
+	TOTPEnabled               bool    `json:"totpEnabled"`
 }
 
 type SetUserEnabledRequest struct {

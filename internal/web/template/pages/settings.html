@@ -5,6 +5,7 @@
     <nav class="settings-tabs">
         <a href="/settings?tab=profile" {{ if eq .BodyData.ActiveTab "profile" }}class="active"{{ end }}>Profile</a>
         <a href="/settings?tab=password" {{ if eq .BodyData.ActiveTab "password" }}class="active"{{ end }}>Password</a>
+        <a href="/settings?tab=security" {{ if eq .BodyData.ActiveTab "security" }}class="active"{{ end }}>Security</a>
         <a href="/settings?tab=api-keys" {{ if eq .BodyData.ActiveTab "api-keys" }}class="active"{{ end }}>API Keys</a>
         <a href="/settings?tab=notifications" {{ if eq .BodyData.ActiveTab "notifications" }}class="active"{{ end }}>Notifications</a>
         <a href="/settings?tab=appearance" {{ if eq .BodyData.ActiveTab "appearance" }}class="active"{{ end }}>Appearance</a>
@@ -52,6 +53,55 @@
             </div>
             <button type="submit" class="btn btn-primary">Change Password</button>
         </form>
+    </div>
+    {{ end }}
+
+    {{ if eq .BodyData.ActiveTab "security" }}
+    <div class="settings-tab-content active">
+        <h2>Two-Factor Authentication</h2>
+        {{ if .BodyData.Error }}
+        <div class="alert alert-error" role="alert">{{ .BodyData.Error }}</div>
+        {{ end }}
+
+        {{ if .BodyData.TOTPBackupCodes }}
+        <div class="alert alert-warning" role="status">
+            <strong>Two-factor authentication is enabled.</strong>
+            Save these backup codes now. Each code works once and they will not be shown again.
+        </div>
+        <ul class="backup-codes" aria-label="Backup codes">
+            {{ range .BodyData.TOTPBackupCodes }}<li><code>{{ . }}</code></li>{{ end }}
+        </ul>
+        {{ else if .BodyData.TOTPEnabled }}
+        <p><span class="badge badge-success">Enabled</span></p>
+        <p>{{ .BodyData.TOTPRemainingBackupCodes }} backup codes remain.</p>
+        <form method="POST" action="/settings/totp/disable">
+            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+            <div class="form-group">
+                <label for="totp-disable-password">Confirm your password to disable two-factor authentication</label>
+                <input type="password" id="totp-disable-password" name="password" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="btn btn-danger">Disable Two-Factor Authentication</button>
+        </form>
+        {{ else if .BodyData.TOTPSetup }}
+        <p>Scan this QR code with your authenticator app, then enter the 6-digit code it displays.</p>
+        <img src="{{ .BodyData.TOTPSetup.QRDataURI }}" alt="QR code for setting up two-factor authentication" width="200" height="200">
+        <p>Manual setup key: <code>{{ .BodyData.TOTPSetup.Secret }}</code></p>
+        <form method="POST" action="/settings/totp/confirm">
+            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+            <input type="hidden" name="secret" value="{{ .BodyData.TOTPSetup.Secret }}">
+            <div class="form-group">
+                <label for="totp-confirm-code">Authentication code</label>
+                <input type="text" id="totp-confirm-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" required autofocus>
+            </div>
+            <button type="submit" class="btn btn-primary">Enable Two-Factor Authentication</button>
+        </form>
+        {{ else }}
+        <p>Add an authenticator app as a second step when signing in.</p>
+        <form method="POST" action="/settings/totp/setup">
+            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+            <button type="submit" class="btn btn-primary">Set Up Two-Factor Authentication</button>
+        </form>
+        {{ end }}
     </div>
     {{ end }}
 

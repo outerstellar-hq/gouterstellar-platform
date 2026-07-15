@@ -38,6 +38,7 @@ type repos struct {
 	deviceTokenRepo   persistence.DeviceTokenRepository
 	passwordResetRepo persistence.PasswordResetRepository
 	oauthRepo         persistence.OAuthRepository
+	totpRepo          persistence.TOTPRepository
 }
 
 // buildRepos constructs all repository implementations from the pool. The sync
@@ -56,6 +57,7 @@ func buildRepos(pool *pgxpool.Pool) repos {
 		deviceTokenRepo:   persistence.NewDeviceTokenRepository(pool),
 		passwordResetRepo: persistence.NewPasswordResetRepository(pool),
 		oauthRepo:         persistence.NewOAuthRepository(pool),
+		totpRepo:          persistence.NewTOTPRepository(pool),
 	}
 }
 
@@ -66,6 +68,7 @@ type services struct {
 	messageSvc        *service.MessageService
 	contactSvc        *service.ContactService
 	securitySvc       *service.SecurityService
+	totpSvc           *service.TOTPService
 	notificationSvc   *service.NotificationService
 	outboxProcessor   *service.OutboxProcessor
 	passwordResetSvc  *service.PasswordResetService
@@ -101,18 +104,23 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 		return nil, err
 	}
 
+	securityConfig := service.SecurityConfig{
+		SessionTimeout:         time.Duration(cfg.SessionTimeoutMinutes) * time.Minute,
+		MaxFailedLoginAttempts: cfg.MaxFailedLoginAttempts,
+		LockoutDuration:        time.Duration(cfg.LockoutDurationSeconds) * time.Second,
+	}
+	totpSvc := service.NewTOTPService(r.totpRepo, r.userRepo, passwordEncoder, service.NewAuditService(r.auditRepo), securityConfig)
 	securitySvc := service.NewSecurityService(
-		r.userRepo,
-		passwordEncoder,
-		r.sessionRepo,
-		r.auditRepo,
-		notificationSvc,
-		emailSvc,
-		service.SecurityConfig{
-			SessionTimeout:         time.Duration(cfg.SessionTimeoutMinutes) * time.Minute,
-			MaxFailedLoginAttempts: cfg.MaxFailedLoginAttempts,
-			LockoutDuration:        time.Duration(cfg.LockoutDurationSeconds) * time.Second,
+		service.SecurityDependencies{
+			UserRepository:      r.userRepo,
+			PasswordEncoder:     passwordEncoder,
+			SessionRepository:   r.sessionRepo,
+			AuditRepository:     r.auditRepo,
+			NotificationService: notificationSvc,
+			EmailService:        emailSvc,
+			TOTPService:         totpSvc,
 		},
+		securityConfig,
 	)
 
 	apiKeySvc := security.NewApiKeyService(r.apiKeyRepo, r.userRepo)
@@ -147,6 +155,7 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 		messageSvc:        messageSvc,
 		contactSvc:        contactSvc,
 		securitySvc:       securitySvc,
+		totpSvc:           totpSvc,
 		notificationSvc:   notificationSvc,
 		outboxProcessor:   outboxProcessor,
 		passwordResetSvc:  passwordResetSvc,
@@ -295,8 +304,8 @@ func buildApp(cfg *config.Config, r repos, svcs *services, templateFS fs.FS, reg
 	}
 
 	syncAPI := handler.NewSyncAPI(svcs.messageSvc, svcs.contactSvc, svcs.analytics)
-	authAPI := handler.NewAuthAPI(svcs.securitySvc, svcs.apiKeySvc, svcs.passwordResetSvc, cfg.SessionCookieSecure, svcs.analytics, svcs.jwtSvc)
-	authHandler := handler.NewAuthHandler(svcs.securitySvc, svcs.passwordResetSvc, renderer, cfg.SessionCookieSecure, svcs.analytics, svcs.googleProvider != nil)
+	authAPI := handler.NewAuthAPI(svcs.securitySvc, svcs.totpSvc, svcs.apiKeySvc, svcs.passwordResetSvc, cfg.SessionCookieSecure, svcs.analytics, svcs.jwtSvc)
+	authHandler := handler.NewAuthHandler(svcs.securitySvc, svcs.totpSvc, svcs.passwordResetSvc, renderer, cfg.SessionCookieSecure, svcs.analytics, svcs.googleProvider != nil)
 	homeHandler := handler.NewHomeHandler(svcs.messageSvc, svcs.contactSvc, svcs.securitySvc, renderer, cfg.Version)
 	messagesHandler := handler.NewMessagesHandler(svcs.messageSvc, renderer)
 	contactsHandler := handler.NewContactsHandler(svcs.contactSvc, renderer)
@@ -319,7 +328,7 @@ func buildApp(cfg *config.Config, r repos, svcs *services, templateFS fs.FS, reg
 	// flow that fails at code exchange.
 	oauthHandler := handler.NewOAuthHandler(svcs.securitySvc, svcs.oauthSvc, cfg.SessionCookieSecure, nil, googleProviderIfc, cfg.AppBaseURL)
 	searchHandler := handler.NewSearchHandler(svcs.messageSvc, svcs.contactSvc, renderer)
-	settingsHandler := handler.NewSettingsHandler(svcs.securitySvc, svcs.apiKeySvc, renderer)
+	settingsHandler := handler.NewSettingsHandler(svcs.securitySvc, svcs.totpSvc, svcs.apiKeySvc, renderer)
 	errorHandler := handler.NewErrorHandler(renderer, cfg.Version)
 	devDashboardHandler := handler.NewDevDashboardHandler(svcs.outboxProcessor, svcs.securitySvc, svcs.messageSvc, renderer, cfg.DevDashboardEnabled)
 	componentsHandler := handler.NewComponentsHandler(svcs.messageSvc, svcs.contactSvc, renderer)

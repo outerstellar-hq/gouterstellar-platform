@@ -5,6 +5,8 @@
 package db
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -138,6 +140,14 @@ type PltSyncState struct {
 	StateValue int64  `json:"state_value"`
 }
 
+type PltTotpChallenge struct {
+	TokenHash    string    `json:"token_hash"`
+	UserID       uuid.UUID `json:"user_id"`
+	AttemptCount int32     `json:"attempt_count"`
+	ExpiresAt    time.Time `json:"expires_at"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
 type PltUser struct {
 	ID                        uuid.UUID          `json:"id"`
 	Username                  string             `json:"username"`
@@ -155,4 +165,8 @@ type PltUser struct {
 	Layout                    *string            `json:"layout"`
 	FailedLoginAttempts       int32              `json:"failed_login_attempts"`
 	LockedUntil               pgtype.Timestamptz `json:"locked_until"`
+	TotpSecret                *string            `json:"totp_secret"`
+	TotpEnabled               bool               `json:"totp_enabled"`
+	TotpBackupCodes           *string            `json:"totp_backup_codes"`
+	FailedTotpAttempts        int32              `json:"failed_totp_attempts"`
 }

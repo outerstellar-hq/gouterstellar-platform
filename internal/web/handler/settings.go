@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -17,13 +18,15 @@ import (
 
 type SettingsHandler struct {
 	securityService *service.SecurityService
+	totpService     *service.TOTPService
 	apiKeyService   *security.ApiKeyService
 	renderer        *web.Renderer
 }
 
-func NewSettingsHandler(secSvc *service.SecurityService, apiKeySvc *security.ApiKeyService, renderer *web.Renderer) *SettingsHandler {
+func NewSettingsHandler(secSvc *service.SecurityService, totpSvc *service.TOTPService, apiKeySvc *security.ApiKeyService, renderer *web.Renderer) *SettingsHandler {
 	return &SettingsHandler{
 		securityService: secSvc,
+		totpService:     totpSvc,
 		apiKeyService:   apiKeySvc,
 		renderer:        renderer,
 	}
@@ -34,6 +37,9 @@ func (h *SettingsHandler) ContributeRoutes(ctx *extplatform.ContributionContext)
 	ctx.Routes.Protected(http.MethodGet, "/settings", "Settings page", http.HandlerFunc(h.Show))
 	ctx.Routes.Protected(http.MethodPost, "/settings/profile", "Update profile", http.HandlerFunc(h.UpdateProfile))
 	ctx.Routes.Protected(http.MethodPost, "/settings/password", "Change password", http.HandlerFunc(h.ChangePassword))
+	ctx.Routes.Protected(http.MethodPost, "/settings/totp/setup", "Create TOTP setup", http.HandlerFunc(h.SetupTOTP))
+	ctx.Routes.Protected(http.MethodPost, "/settings/totp/confirm", "Confirm TOTP setup", http.HandlerFunc(h.ConfirmTOTP))
+	ctx.Routes.Protected(http.MethodPost, "/settings/totp/disable", "Disable TOTP", http.HandlerFunc(h.DisableTOTP))
 	ctx.Routes.Protected(http.MethodPost, "/settings/preferences", "Update preferences", http.HandlerFunc(h.UpdatePreferences))
 	ctx.Routes.Protected(http.MethodPost, "/settings/api-keys", "Create API key", http.HandlerFunc(h.CreateApiKey))
 	ctx.Routes.Protected(http.MethodPost, "/settings/api-keys/{id}/delete", "Delete API key", http.HandlerFunc(h.DeleteApiKey))
@@ -44,6 +50,10 @@ func (h *SettingsHandler) ContributeRoutes(ctx *extplatform.ContributionContext)
 }
 
 func (h *SettingsHandler) Show(w http.ResponseWriter, r *http.Request) {
+	h.renderSettings(w, r, nil, nil, "")
+}
+
+func (h *SettingsHandler) renderSettings(w http.ResponseWriter, r *http.Request, setup *viewmodel.TOTPSetupData, backupCodes []string, message string) {
 	user := web.UserFromRequest(r)
 	if user == nil {
 		http.Redirect(w, r, "/auth", http.StatusSeeOther)
@@ -51,6 +61,9 @@ func (h *SettingsHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 
 	activeTab := r.URL.Query().Get("tab")
+	if setup != nil || backupCodes != nil || message != "" {
+		activeTab = "security"
+	}
 	if activeTab == "" {
 		activeTab = "profile"
 	}
@@ -100,18 +113,103 @@ func (h *SettingsHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 
 	newApiKey := r.URL.Query().Get("new_key")
+	remainingBackupCodes, err := h.totpService.BackupCodeCount(user.TOTPBackupCodes)
+	if err != nil {
+		handleServiceError(w, err)
+		return
+	}
 
 	if err := h.renderer.RenderPage(w, r, "settings", viewmodel.SettingsPage{
-		ActiveTab: activeTab,
-		Profile:   profile,
-		ApiKeys:   apiKeys,
-		Theme:     theme,
-		Language:  language,
-		Layout:    layout,
-		NewApiKey: newApiKey,
+		ActiveTab:                activeTab,
+		Profile:                  profile,
+		ApiKeys:                  apiKeys,
+		Theme:                    theme,
+		Language:                 language,
+		Layout:                   layout,
+		NewApiKey:                newApiKey,
+		TOTPEnabled:              user.TOTPEnabled || len(backupCodes) > 0,
+		TOTPRemainingBackupCodes: max(remainingBackupCodes, len(backupCodes)),
+		TOTPSetup:                setup,
+		TOTPBackupCodes:          backupCodes,
+		Error:                    message,
 	}); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
+}
+
+func (h *SettingsHandler) SetupTOTP(w http.ResponseWriter, r *http.Request) {
+	user := web.UserFromRequest(r)
+	if user == nil {
+		http.Redirect(w, r, "/auth", http.StatusSeeOther)
+		return
+	}
+	if user.TOTPEnabled {
+		h.renderSettings(w, r, nil, nil, "Two-factor authentication is already enabled.")
+		return
+	}
+	accountName := user.Email
+	if accountName == "" {
+		accountName = user.Username
+	}
+	setup, err := h.totpService.GenerateSetup(accountName)
+	if err != nil {
+		handleServiceError(w, err)
+		return
+	}
+	h.renderSettings(w, r, &viewmodel.TOTPSetupData{Secret: setup.Secret, QRDataURI: setup.QRDataURI}, nil, "")
+}
+
+func (h *SettingsHandler) ConfirmTOTP(w http.ResponseWriter, r *http.Request) {
+	user := web.UserFromRequest(r)
+	if user == nil {
+		http.Redirect(w, r, "/auth", http.StatusSeeOther)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid form submission")
+		return
+	}
+	secret := r.FormValue("secret")
+	codes, err := h.totpService.ConfirmEnrollment(r.Context(), user.ID, secret, r.FormValue("code"))
+	if errors.Is(err, service.ErrTOTPInvalidCode) {
+		accountName := user.Email
+		if accountName == "" {
+			accountName = user.Username
+		}
+		setup, setupErr := h.totpService.RestoreSetup(accountName, secret)
+		if setupErr != nil {
+			handleServiceError(w, setupErr)
+			return
+		}
+		h.renderSettings(w, r, &viewmodel.TOTPSetupData{Secret: setup.Secret, QRDataURI: setup.QRDataURI}, nil, "The authentication code was not valid.")
+		return
+	}
+	if err != nil {
+		handleServiceError(w, err)
+		return
+	}
+	h.renderSettings(w, r, nil, codes, "")
+}
+
+func (h *SettingsHandler) DisableTOTP(w http.ResponseWriter, r *http.Request) {
+	user := web.UserFromRequest(r)
+	if user == nil {
+		http.Redirect(w, r, "/auth", http.StatusSeeOther)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid form submission")
+		return
+	}
+	if err := h.totpService.Disable(r.Context(), user.ID, r.FormValue("password")); err != nil {
+		if errors.Is(err, service.ErrInvalidPassword) {
+			h.renderSettings(w, r, nil, nil, "The password was not valid.")
+			return
+		}
+		handleServiceError(w, err)
+		return
+	}
+	http.Redirect(w, r, "/settings?tab=security", http.StatusSeeOther)
 }
 
 func (h *SettingsHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {

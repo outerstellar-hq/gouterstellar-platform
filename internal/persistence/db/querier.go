@@ -28,16 +28,21 @@ type Querier interface {
 	CreateServerContact(ctx context.Context, arg CreateServerContactParams) (PltContact, error)
 	CreateServerMessage(ctx context.Context, arg CreateServerMessageParams) (PltMessage, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (PltSession, error)
+	CreateTOTPChallenge(ctx context.Context, arg CreateTOTPChallengeParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (PltUser, error)
 	DeleteAllDeviceTokensForUser(ctx context.Context, userID uuid.UUID) (int64, error)
 	DeleteApiKey(ctx context.Context, arg DeleteApiKeyParams) (int64, error)
 	DeleteDeviceToken(ctx context.Context, arg DeleteDeviceTokenParams) (int64, error)
 	DeleteExpiredSessions(ctx context.Context) (int64, error)
+	DeleteExpiredTOTPChallenges(ctx context.Context) (int64, error)
 	DeleteNotification(ctx context.Context, arg DeleteNotificationParams) (int64, error)
 	DeleteOAuthConnection(ctx context.Context, arg DeleteOAuthConnectionParams) (int64, error)
 	DeleteSessionByTokenHash(ctx context.Context, tokenHash string) error
 	DeleteSessionsByUserID(ctx context.Context, userID uuid.UUID) error
+	DeleteTOTPChallenge(ctx context.Context, tokenHash string) (int64, error)
 	DeleteUserByID(ctx context.Context, id uuid.UUID) error
+	DisableUserTOTP(ctx context.Context, id uuid.UUID) error
+	EnableUserTOTP(ctx context.Context, arg EnableUserTOTPParams) error
 	FindAllUsers(ctx context.Context) ([]PltUser, error)
 	FindApiKeyByHash(ctx context.Context, keyHash string) (PltApiKey, error)
 	FindApiKeysByUserID(ctx context.Context, userID uuid.UUID) ([]PltApiKey, error)
@@ -61,6 +66,7 @@ type Querier interface {
 	GetOutboxStats(ctx context.Context) (GetOutboxStatsRow, error)
 	GetSyncState(ctx context.Context, stateKey string) (PltSyncState, error)
 	IncrementFailedLoginAttempts(ctx context.Context, id uuid.UUID) (int32, error)
+	IncrementFailedTOTPAttempts(ctx context.Context, id uuid.UUID) (int32, error)
 	InsertContactEmail(ctx context.Context, arg InsertContactEmailParams) error
 	InsertContactPhone(ctx context.Context, arg InsertContactPhoneParams) error
 	InsertContactSocial(ctx context.Context, arg InsertContactSocialParams) error
@@ -97,6 +103,8 @@ type Querier interface {
 	MarkOutboxFailed(ctx context.Context, arg MarkOutboxFailedParams) (MarkOutboxFailedRow, error)
 	MarkOutboxProcessed(ctx context.Context, id uuid.UUID) (MarkOutboxProcessedRow, error)
 	MarkPasswordResetUsed(ctx context.Context, token string) (PltPasswordResetToken, error)
+	ReplaceTOTPBackupCodes(ctx context.Context, arg ReplaceTOTPBackupCodesParams) (int64, error)
+	ResetFailedTOTPAttempts(ctx context.Context, id uuid.UUID) error
 	ResetLoginFailures(ctx context.Context, id uuid.UUID) error
 	ResolveConflictContact(ctx context.Context, syncID string) (PltContact, error)
 	ResolveConflictMessage(ctx context.Context, syncID string) (PltMessage, error)
@@ -118,6 +126,7 @@ type Querier interface {
 	SetSyncState(ctx context.Context, arg SetSyncStateParams) error
 	SoftDeleteContact(ctx context.Context, syncID string) (PltContact, error)
 	SoftDeleteMessage(ctx context.Context, syncID string) (PltMessage, error)
+	TakeTOTPChallengeAttempt(ctx context.Context, arg TakeTOTPChallengeAttemptParams) (PltTotpChallenge, error)
 	UpdateApiKeyLastUsed(ctx context.Context, id int64) error
 	UpdateAvatarURL(ctx context.Context, arg UpdateAvatarURLParams) (PltUser, error)
 	UpdateContact(ctx context.Context, arg UpdateContactParams) (PltContact, error)
