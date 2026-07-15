@@ -9,37 +9,40 @@
     <link rel="stylesheet" href="/static/css/main.css">
     {{ if .CustomCSS }}<style>{{ .CustomCSS }}</style>{{ end }}
 </head>
-<body class="{{ if .IsDark }}dark{{ end }} layout-{{ .Layout }}" hx-boost="true">
+<body class="{{ if .IsDark }}dark {{ end }}layout-{{ .Layout }}" hx-boost="true">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <div class="app-shell{{ if not .User }} app-shell-public{{ end }}">
     {{ if .User }}
-    <nav>
-        <div class="brand">Outerstellar</div>
+    <nav class="app-nav" aria-label="Primary navigation">
+        <a href="/" class="brand">Outerstellar</a>
         <div class="nav-links">
             {{ range .NavItems }}
-            <a href="{{ .URL }}" class="nav-link{{ if .Active }} active{{ end }}">{{ .Label }}</a>
+            <a href="{{ .URL }}" class="nav-link{{ if .Active }} active{{ end }}"{{ if .Active }} aria-current="page"{{ end }}>{{ .Label }}</a>
             {{ end }}
             {{ if .User.IsAdmin }}
-            <a href="/admin/users" class="nav-link{{ if eq .Body "admin_users" }} active{{ end }}">{{ translate $.Language "nav.admin" }}</a>
+            <a href="/admin/users" class="nav-link{{ if eq .Body "admin_users" }} active{{ end }}"{{ if eq .Body "admin_users" }} aria-current="page"{{ end }}>{{ translate $.Language "nav.admin" }}</a>
             {{ end }}
         </div>
         <div class="user-section">
             <div id="notification-bell" hx-get="/components/notification-bell" hx-trigger="load, every 60s" hx-swap="innerHTML">
                 <a href="/notifications" class="notification-bell notification-bell-fallback">Notifications</a>
             </div>
-            <span>{{ .User.Username }}</span>
+            <span class="user-name">{{ .User.Username }}</span>
             <form method="POST" action="/auth/logout"><input type="hidden" name="csrf_token" value="{{ .CSRFToken }}"><button type="submit">{{ translate $.Language "nav.logout" }}</button></form>
         </div>
     </nav>
     {{ end }}
-    <main>
+    <main id="main-content" class="app-main" tabindex="-1">
         {{ range .Messages }}
         <div class="toast toast-{{ .Type }}">{{ .Message }}</div>
         {{ end }}
         {{ template "content" . }}
     </main>
-    <footer>
+    <footer class="app-footer">
         <span>v{{ .Version }}</span>
         <span>Request: {{ .RequestID }}</span>
     </footer>
+    </div>
     <script src="/static/js/htmx.min.js"></script>
     <script src="/static/js/platform.js"></script>
 </body>
