@@ -34,6 +34,13 @@ type MessageItem struct {
 	CSRFToken    string
 }
 
+type MessageEditPage struct {
+	SyncID  string
+	Author  string
+	Content string
+	Error   string
+}
+
 type VoteControls struct {
 	SyncID       string
 	Upvotes      int32

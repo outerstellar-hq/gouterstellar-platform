@@ -81,6 +81,7 @@ func handleServiceError(w http.ResponseWriter, err error) {
 	var contactNotFound *model.ContactNotFoundError
 	var pollNotFound *model.PollNotFoundError
 	var pollConflict *model.PollConflictError
+	var optimisticLock *model.OptimisticLockError
 
 	switch {
 	case errors.As(err, &userNotFound):
@@ -104,6 +105,8 @@ func handleServiceError(w http.ResponseWriter, err error) {
 	case errors.As(err, &pollNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
 	case errors.As(err, &pollConflict):
+		writeError(w, http.StatusConflict, err.Error())
+	case errors.As(err, &optimisticLock):
 		writeError(w, http.StatusConflict, err.Error())
 	default:
 		slog.Error("Unhandled service error", "error", err)

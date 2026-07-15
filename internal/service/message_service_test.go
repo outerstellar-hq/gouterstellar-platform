@@ -229,6 +229,15 @@ func TestCreateServerMessage_BlankValidation(t *testing.T) {
 	assert.IsType(t, &model.ValidationError{}, err)
 }
 
+func TestUpdateMessage_BlankValidation(t *testing.T) {
+	svc := NewMessageService(nil, nil, nil, nil, nil, nil, nil)
+
+	_, err := svc.UpdateMessage(context.Background(), "srv_test", "alice", " ")
+
+	assert.Error(t, err)
+	assert.IsType(t, &model.ValidationError{}, err)
+}
+
 func TestListMessagesReturnsRepositoryErrors(t *testing.T) {
 	repo := new(mockMessageRepo)
 	cache := persistence.NewMessageCache(60)

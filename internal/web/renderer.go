@@ -221,6 +221,8 @@ func pageTitle(page string) string {
 		return "Contact"
 	case "messages":
 		return "Messages"
+	case "message_edit":
+		return "Edit Message"
 	case "trash":
 		return "Trash"
 	case "search":
