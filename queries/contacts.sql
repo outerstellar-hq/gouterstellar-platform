@@ -5,18 +5,24 @@ WHERE deleted = false
 ORDER BY name ASC
 LIMIT $1 OFFSET $2;
 
--- name: CountContacts :one
-SELECT COUNT(*) FROM plt_contacts WHERE deleted = false;
-
--- name: ListDeletedContacts :many
+-- name: SearchContacts :many
+-- Returns one page of non-deleted contacts whose name or company match the
+-- query (case-insensitive ILIKE). Mirrors SearchMessages. company is nullable,
+-- so COALESCE protects the ILIKE from NULL operands.
 SELECT id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict
 FROM plt_contacts
-WHERE deleted = true
+WHERE deleted = false
+AND (name ILIKE '%' || $1::text || '%' OR COALESCE(company, '') ILIKE '%' || $1::text || '%')
 ORDER BY name ASC
-LIMIT $1 OFFSET $2;
+LIMIT $2 OFFSET $3;
 
--- name: CountDeletedContacts :one
-SELECT COUNT(*) FROM plt_contacts WHERE deleted = true;
+-- name: CountSearchContacts :one
+SELECT COUNT(*) FROM plt_contacts
+WHERE deleted = false
+AND (name ILIKE '%' || $1::text || '%' OR COALESCE(company, '') ILIKE '%' || $1::text || '%');
+
+-- name: CountContacts :one
+SELECT COUNT(*) FROM plt_contacts WHERE deleted = false;
 
 -- name: ListDirtyContacts :many
 SELECT id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict
@@ -62,17 +68,13 @@ RETURNING id, sync_id, name, company, company_address, department, created_at, u
 
 -- name: SoftDeleteContact :one
 UPDATE plt_contacts
-SET deleted = true, dirty = true,
-    updated_at_epoch_ms = (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT,
-    version = version + 1
+SET deleted = true, dirty = true, version = version + 1
 WHERE sync_id = $1
 RETURNING id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict;
 
 -- name: RestoreContact :one
 UPDATE plt_contacts
-SET deleted = false, dirty = true,
-    updated_at_epoch_ms = (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT,
-    version = version + 1
+SET deleted = false, dirty = true, version = version + 1
 WHERE sync_id = $1
 RETURNING id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict;
 
@@ -100,6 +102,9 @@ UPDATE plt_contacts SET dirty = false WHERE dirty = true;
 -- name: ListContactEmails :many
 SELECT email FROM plt_contact_emails WHERE contact_id = $1;
 
+-- name: ListContactEmailsBatch :many
+SELECT contact_id, email FROM plt_contact_emails WHERE contact_id = ANY($1::bigint[]);
+
 -- name: SetContactEmails :exec
 DELETE FROM plt_contact_emails WHERE contact_id = $1;
 
@@ -109,6 +114,9 @@ INSERT INTO plt_contact_emails (contact_id, email) VALUES ($1, $2);
 -- name: ListContactPhones :many
 SELECT phone FROM plt_contact_phones WHERE contact_id = $1;
 
+-- name: ListContactPhonesBatch :many
+SELECT contact_id, phone FROM plt_contact_phones WHERE contact_id = ANY($1::bigint[]);
+
 -- name: SetContactPhones :exec
 DELETE FROM plt_contact_phones WHERE contact_id = $1;
 
@@ -117,6 +125,9 @@ INSERT INTO plt_contact_phones (contact_id, phone) VALUES ($1, $2);
 
 -- name: ListContactSocials :many
 SELECT social_media FROM plt_contact_socials WHERE contact_id = $1;
+
+-- name: ListContactSocialsBatch :many
+SELECT contact_id, social_media FROM plt_contact_socials WHERE contact_id = ANY($1::bigint[]);
 
 -- name: SetContactSocials :exec
 DELETE FROM plt_contact_socials WHERE contact_id = $1;

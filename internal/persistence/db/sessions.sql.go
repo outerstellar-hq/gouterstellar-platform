@@ -105,6 +105,45 @@ func (q *Queries) FindSessionByTokenHashIncludingExpired(ctx context.Context, to
 	return i, err
 }
 
+const listSessionsForUser = `-- name: ListSessionsForUser :many
+SELECT token_hash, user_id, created_at, expires_at
+FROM plt_sessions
+WHERE user_id = $1 AND expires_at > CURRENT_TIMESTAMP
+ORDER BY created_at DESC
+`
+
+type ListSessionsForUserRow struct {
+	TokenHash string           `json:"token_hash"`
+	UserID    uuid.UUID        `json:"user_id"`
+	CreatedAt pgtype.Timestamp `json:"created_at"`
+	ExpiresAt pgtype.Timestamp `json:"expires_at"`
+}
+
+func (q *Queries) ListSessionsForUser(ctx context.Context, userID uuid.UUID) ([]ListSessionsForUserRow, error) {
+	rows, err := q.db.Query(ctx, listSessionsForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSessionsForUserRow{}
+	for rows.Next() {
+		var i ListSessionsForUserRow
+		if err := rows.Scan(
+			&i.TokenHash,
+			&i.UserID,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateSessionExpiresAt = `-- name: UpdateSessionExpiresAt :one
 UPDATE plt_sessions SET expires_at = $2 WHERE token_hash = $1
 RETURNING id, token_hash, user_id, created_at, expires_at

@@ -1,3 +1,0 @@
-{{ define "content" }}
-{{ range .Contacts }}<article class="card"><strong>{{ .Name }}</strong><form method="POST" action="/contacts/{{ .SyncID }}/restore"><button class="btn btn-primary" type="submit">Restore</button></form></article>{{ else }}<p class="empty-state">No deleted contacts.</p>{{ end }}
-{{ end }}

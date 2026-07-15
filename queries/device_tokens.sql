@@ -11,9 +11,6 @@ RETURNING id, user_id, platform, token, app_bundle, created_at, last_seen;
 -- name: DeleteDeviceToken :execrows
 DELETE FROM plt_device_tokens WHERE id = $1 AND user_id = $2;
 
--- name: DeleteDeviceTokenByValue :execrows
-DELETE FROM plt_device_tokens WHERE token = $1 AND user_id = $2;
-
 -- name: FindDeviceTokensByUserID :many
 SELECT id, user_id, platform, token, app_bundle, created_at, last_seen
 FROM plt_device_tokens

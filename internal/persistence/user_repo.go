@@ -2,10 +2,8 @@ package persistence
 
 import (
 	"context"
-	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
@@ -76,22 +74,15 @@ func (r *userRepo) UpdateEnabled(ctx context.Context, id uuid.UUID, enabled bool
 	})
 }
 
+func (r *userRepo) UpdatePasswordHash(ctx context.Context, userID uuid.UUID, passwordHash string) error {
+	return r.q.UpdatePasswordHash(ctx, db.UpdatePasswordHashParams{
+		ID:           userID,
+		PasswordHash: passwordHash,
+	})
+}
+
 func (r *userRepo) UpdateLastActivity(ctx context.Context, id uuid.UUID) error {
 	return r.q.UpdateLastActivity(ctx, id)
-}
-
-func (r *userRepo) IncrementFailedLoginAttempts(ctx context.Context, id uuid.UUID) (int32, error) {
-	return r.q.IncrementFailedLoginAttempts(ctx, id)
-}
-
-func (r *userRepo) ResetLoginFailures(ctx context.Context, id uuid.UUID) error {
-	return r.q.ResetLoginFailures(ctx, id)
-}
-
-func (r *userRepo) LockUserUntil(ctx context.Context, id uuid.UUID, until time.Time) error {
-	return r.q.LockUserUntil(ctx, db.LockUserUntilParams{
-		ID: id, LockedUntil: pgtype.Timestamptz{Time: until, Valid: true},
-	})
 }
 
 func (r *userRepo) DeleteByID(ctx context.Context, id uuid.UUID) error {

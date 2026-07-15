@@ -54,3 +54,7 @@ func (r *sessionRepo) DeleteByUserID(ctx context.Context, userID uuid.UUID) erro
 func (r *sessionRepo) DeleteExpired(ctx context.Context) (int64, error) {
 	return r.q.DeleteExpiredSessions(ctx)
 }
+
+func (r *sessionRepo) ListForUser(ctx context.Context, userID uuid.UUID) ([]db.ListSessionsForUserRow, error) {
+	return r.q.ListSessionsForUser(ctx, userID)
+}

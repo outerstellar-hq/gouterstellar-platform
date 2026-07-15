@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
 
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
@@ -28,14 +28,16 @@ func NewSearchHandler(
 	}
 }
 
-func (h *SearchHandler) RegisterRoutes(r chi.Router) {
-	r.Get("/search", h.Search)
+// ContributeRoutes registers the search route (protected).
+func (h *SearchHandler) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.Protected(http.MethodGet, "/search", "Search", http.HandlerFunc(h.Search))
+	return nil
 }
 
 func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
 	if query == "" {
-		if err := h.renderer.Render(w, r, "search.html", viewmodel.MessagesPage{
+		if err := h.renderer.RenderPage(w, r, "search", viewmodel.MessagesPage{
 			Query: query,
 		}); err != nil {
 			http.Error(w, "Template error", http.StatusInternalServerError)
@@ -47,9 +49,9 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	pageSize := getIntParam(r, "pageSize", 20)
 	offset := (page - 1) * pageSize
 
-	result, err := h.messageService.ListMessages(r.Context(), safeInt32(pageSize), safeInt32(offset))
+	result, err := h.messageService.SearchMessages(r.Context(), query, safeInt32(pageSize), safeInt32(offset))
 	if err != nil {
-		_ = h.renderer.RenderWithStatus(w, r, "error.html", viewmodel.ErrorPage{
+		_ = h.renderer.RenderWithStatus(w, r, "error", viewmodel.ErrorPage{
 			StatusCode: http.StatusInternalServerError,
 			Title:      "Error",
 			Message:    "Search failed",
@@ -80,7 +82,7 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 		PageSize:    result.Metadata.PageSize,
 	}
 
-	if err := h.renderer.Render(w, r, "search.html", viewmodel.MessagesPage{
+	if err := h.renderer.RenderPage(w, r, "search", viewmodel.MessagesPage{
 		Messages:   messageItems,
 		Pagination: pagination,
 		Query:      query,

@@ -17,8 +17,6 @@ func PltUserToModel(u db.PltUser) *model.User {
 		PasswordHash:              u.PasswordHash,
 		Role:                      model.UserRole(u.Role),
 		Enabled:                   u.Enabled,
-		FailedLoginAttempts:       u.FailedLoginAttempts,
-		LockedUntil:               pgtypeTimestamptzToTimePtr(u.LockedUntil),
 		LastActivityAt:            pgtypeTimestampToTimePtr(u.LastActivityAt),
 		AvatarURL:                 u.AvatarUrl,
 		EmailNotificationsEnabled: u.EmailNotificationsEnabled,
@@ -27,13 +25,6 @@ func PltUserToModel(u db.PltUser) *model.User {
 		Theme:                     u.Theme,
 		Layout:                    u.Layout,
 	}
-}
-
-func pgtypeTimestamptzToTimePtr(t pgtype.Timestamptz) *time.Time {
-	if !t.Valid {
-		return nil
-	}
-	return &t.Time
 }
 
 func pgtypeTimestampToTimePtr(t pgtype.Timestamp) *time.Time {

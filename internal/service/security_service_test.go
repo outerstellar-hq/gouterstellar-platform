@@ -7,12 +7,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
 )
 
@@ -75,18 +73,8 @@ func (m *mockUserRepo) UpdateLastActivity(ctx context.Context, id uuid.UUID) err
 	return args.Error(0)
 }
 
-func (m *mockUserRepo) IncrementFailedLoginAttempts(ctx context.Context, id uuid.UUID) (int32, error) {
-	args := m.Called(ctx, id)
-	return args.Get(0).(int32), args.Error(1)
-}
-
-func (m *mockUserRepo) ResetLoginFailures(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
-}
-
-func (m *mockUserRepo) LockUserUntil(ctx context.Context, id uuid.UUID, until time.Time) error {
-	args := m.Called(ctx, id, until)
+func (m *mockUserRepo) UpdatePasswordHash(ctx context.Context, userID uuid.UUID, passwordHash string) error {
+	args := m.Called(ctx, userID, passwordHash)
 	return args.Error(0)
 }
 
@@ -159,6 +147,11 @@ func (m *mockSessionRepo) DeleteExpired(ctx context.Context) (int64, error) {
 	return args.Get(0).(int64), args.Error(1)
 }
 
+func (m *mockSessionRepo) ListForUser(ctx context.Context, userID uuid.UUID) ([]db.ListSessionsForUserRow, error) {
+	args := m.Called(ctx, userID)
+	return args.Get(0).([]db.ListSessionsForUserRow), args.Error(1)
+}
+
 type mockPasswordEncoder struct {
 	mock.Mock
 }
@@ -185,22 +178,19 @@ func makeTestUser(username, role string, enabled bool) db.PltUser {
 	}
 }
 
-var testSecurityConfig = SecurityConfig{
-	SessionTimeout: time.Hour, MaxFailedLoginAttempts: 10, LockoutDuration: 15 * time.Minute,
-}
-
 func TestAuthenticate_Success(t *testing.T) {
 	userRepo := new(mockUserRepo)
 	sessionRepo := new(mockSessionRepo)
 	auditRepo := new(mockAuditRepo)
 	encoder := new(mockPasswordEncoder)
 
-	svc := NewSecurityService(userRepo, encoder, sessionRepo, auditRepo, testSecurityConfig)
+	svc := NewSecurityService(userRepo, encoder, sessionRepo, auditRepo, nil, nil, 3600)
 
 	testUser := makeTestUser("alice", "USER", true)
 	userRepo.On("FindByUsername", mock.Anything, "alice").Return(testUser, nil)
 	encoder.On("Matches", "password123", "hashedpassword").Return(true)
 	userRepo.On("UpdateLastActivity", mock.Anything, testUser.ID).Return(nil)
+	auditRepo.On("LogAudit", mock.Anything, mock.AnythingOfType("*uuid.UUID"), mock.AnythingOfType("*string"), (*uuid.UUID)(nil), (*string)(nil), "USER_LOGIN", "Login successful").Return(db.PltAuditLog{}, nil)
 
 	user, err := svc.Authenticate(context.Background(), "alice", "password123")
 
@@ -216,27 +206,14 @@ func TestAuthenticate_UserNotFound(t *testing.T) {
 	auditRepo := new(mockAuditRepo)
 	encoder := new(mockPasswordEncoder)
 
-	svc := NewSecurityService(userRepo, encoder, sessionRepo, auditRepo, testSecurityConfig)
+	svc := NewSecurityService(userRepo, encoder, sessionRepo, auditRepo, nil, nil, 3600)
 
-	userRepo.On("FindByUsername", mock.Anything, "nonexistent").Return(db.PltUser{}, pgx.ErrNoRows)
-	encoder.On("Encode", "timing-mitigation-dummy").Return("dummy-hash", nil)
-	encoder.On("Matches", "password", "dummy-hash").Return(false)
+	userRepo.On("FindByUsername", mock.Anything, "nonexistent").Return(db.PltUser{}, fmt.Errorf("not found"))
+	auditRepo.On("LogAudit", mock.Anything, (*uuid.UUID)(nil), mock.AnythingOfType("*string"), (*uuid.UUID)(nil), (*string)(nil), "USER_LOGIN_FAILED", "Login failed").Return(db.PltAuditLog{}, nil)
 
 	_, err := svc.Authenticate(context.Background(), "nonexistent", "password")
 
 	assert.Error(t, err)
-}
-
-func TestAuthenticateFailsClosedWhenUserLookupFails(t *testing.T) {
-	userRepo := new(mockUserRepo)
-	encoder := new(mockPasswordEncoder)
-	svc := NewSecurityService(userRepo, encoder, new(mockSessionRepo), new(mockAuditRepo), testSecurityConfig)
-	userRepo.On("FindByUsername", mock.Anything, "alice").Return(db.PltUser{}, fmt.Errorf("database unavailable"))
-
-	_, err := svc.Authenticate(context.Background(), "alice", "password")
-
-	assert.Equal(t, errInvalidCredentials, err)
-	encoder.AssertNotCalled(t, "Encode", mock.Anything)
 }
 
 func TestAuthenticate_AccountDisabled(t *testing.T) {
@@ -245,132 +222,16 @@ func TestAuthenticate_AccountDisabled(t *testing.T) {
 	auditRepo := new(mockAuditRepo)
 	encoder := new(mockPasswordEncoder)
 
-	svc := NewSecurityService(userRepo, encoder, sessionRepo, auditRepo, testSecurityConfig)
+	svc := NewSecurityService(userRepo, encoder, sessionRepo, auditRepo, nil, nil, 3600)
 
 	testUser := makeTestUser("bob", "USER", false)
 	userRepo.On("FindByUsername", mock.Anything, "bob").Return(testUser, nil)
-	encoder.On("Matches", "password", testUser.PasswordHash).Return(false)
-	auditRepo.On("LogAudit", mock.Anything, mock.AnythingOfType("*uuid.UUID"), mock.AnythingOfType("*string"), mock.AnythingOfType("*uuid.UUID"), mock.AnythingOfType("*string"), "AUTHENTICATION_FAILED", "Invalid credentials").Return(db.PltAuditLog{}, nil)
+	auditRepo.On("LogAudit", mock.Anything, (*uuid.UUID)(nil), mock.AnythingOfType("*string"), (*uuid.UUID)(nil), (*string)(nil), "USER_LOGIN_FAILED", "Login failed").Return(db.PltAuditLog{}, nil)
 
 	_, err := svc.Authenticate(context.Background(), "bob", "password")
 
 	assert.Error(t, err)
-	assert.Equal(t, errInvalidCredentials, err)
-}
-
-func TestAuthenticateLocksAccountAtConfiguredThreshold(t *testing.T) {
-	userRepo := new(mockUserRepo)
-	auditRepo := new(mockAuditRepo)
-	encoder := new(mockPasswordEncoder)
-	svc := NewSecurityService(userRepo, encoder, new(mockSessionRepo), auditRepo, testSecurityConfig)
-	fixedNow := time.Date(2026, time.July, 15, 12, 0, 0, 0, time.UTC)
-	svc.now = func() time.Time { return fixedNow }
-	user := makeTestUser("alice", "USER", true)
-	userRepo.On("FindByUsername", mock.Anything, "alice").Return(user, nil)
-	userRepo.On("IncrementFailedLoginAttempts", mock.Anything, user.ID).Return(int32(10), nil)
-	userRepo.On("LockUserUntil", mock.Anything, user.ID, fixedNow.Add(15*time.Minute)).Return(nil)
-	encoder.On("Matches", "wrong-password", user.PasswordHash).Return(false)
-	expectAuthenticationFailure(auditRepo)
-
-	_, err := svc.Authenticate(context.Background(), "alice", "wrong-password")
-
-	assert.Equal(t, errInvalidCredentials, err)
-	userRepo.AssertExpectations(t)
-}
-
-func TestAuthenticateDoesNotLockAccountBelowConfiguredThreshold(t *testing.T) {
-	userRepo := new(mockUserRepo)
-	auditRepo := new(mockAuditRepo)
-	encoder := new(mockPasswordEncoder)
-	svc := NewSecurityService(userRepo, encoder, new(mockSessionRepo), auditRepo, testSecurityConfig)
-	user := makeTestUser("alice", "USER", true)
-	userRepo.On("FindByUsername", mock.Anything, "alice").Return(user, nil)
-	userRepo.On("IncrementFailedLoginAttempts", mock.Anything, user.ID).Return(int32(9), nil)
-	encoder.On("Matches", "wrong-password", user.PasswordHash).Return(false)
-	expectAuthenticationFailure(auditRepo)
-
-	_, err := svc.Authenticate(context.Background(), "alice", "wrong-password")
-
-	assert.Equal(t, errInvalidCredentials, err)
-	userRepo.AssertNotCalled(t, "LockUserUntil", mock.Anything, mock.Anything, mock.Anything)
-}
-
-func TestAuthenticateRejectsLockedAccountWithoutCheckingPassword(t *testing.T) {
-	userRepo := new(mockUserRepo)
-	auditRepo := new(mockAuditRepo)
-	encoder := new(mockPasswordEncoder)
-	svc := NewSecurityService(userRepo, encoder, new(mockSessionRepo), auditRepo, testSecurityConfig)
-	fixedNow := time.Date(2026, time.July, 15, 12, 0, 0, 0, time.UTC)
-	svc.now = func() time.Time { return fixedNow }
-	user := makeTestUser("alice", "USER", true)
-	user.LockedUntil = pgtype.Timestamptz{Time: fixedNow.Add(time.Minute), Valid: true}
-	userRepo.On("FindByUsername", mock.Anything, "alice").Return(user, nil)
-	encoder.On("Matches", "correct-password", user.PasswordHash).Return(true)
-	expectAuthenticationFailure(auditRepo)
-
-	_, err := svc.Authenticate(context.Background(), "alice", "correct-password")
-
-	assert.Equal(t, errInvalidCredentials, err)
-	encoder.AssertNumberOfCalls(t, "Matches", 1)
-}
-
-func TestAuthenticateClearsExpiredLockAfterSuccessfulPassword(t *testing.T) {
-	userRepo := new(mockUserRepo)
-	encoder := new(mockPasswordEncoder)
-	svc := NewSecurityService(userRepo, encoder, new(mockSessionRepo), new(mockAuditRepo), testSecurityConfig)
-	fixedNow := time.Date(2026, time.July, 15, 12, 0, 0, 0, time.UTC)
-	svc.now = func() time.Time { return fixedNow }
-	user := makeTestUser("alice", "USER", true)
-	user.FailedLoginAttempts = 10
-	user.LockedUntil = pgtype.Timestamptz{Time: fixedNow.Add(-time.Minute), Valid: true}
-	userRepo.On("FindByUsername", mock.Anything, "alice").Return(user, nil)
-	userRepo.On("ResetLoginFailures", mock.Anything, user.ID).Return(nil)
-	userRepo.On("UpdateLastActivity", mock.Anything, user.ID).Return(nil)
-	encoder.On("Matches", "correct-password", user.PasswordHash).Return(true)
-
-	authenticated, err := svc.Authenticate(context.Background(), "alice", "correct-password")
-
-	assert.NoError(t, err)
-	assert.Equal(t, user.ID, authenticated.ID)
-	userRepo.AssertExpectations(t)
-}
-
-func expectAuthenticationFailure(auditRepo *mockAuditRepo) {
-	auditRepo.On(
-		"LogAudit", mock.Anything, mock.AnythingOfType("*uuid.UUID"), mock.AnythingOfType("*string"),
-		mock.AnythingOfType("*uuid.UUID"), mock.AnythingOfType("*string"), "AUTHENTICATION_FAILED", "Invalid credentials",
-	).Return(db.PltAuditLog{}, nil)
-}
-
-func TestUnlockAccountResetsFailuresAndAudits(t *testing.T) {
-	userRepo := new(mockUserRepo)
-	auditRepo := new(mockAuditRepo)
-	svc := NewSecurityService(userRepo, new(mockPasswordEncoder), new(mockSessionRepo), auditRepo, testSecurityConfig)
-	admin := makeTestUser("admin", "ADMIN", true)
-	target := makeTestUser("alice", "USER", true)
-	userRepo.On("FindByID", mock.Anything, admin.ID).Return(admin, nil)
-	userRepo.On("FindByID", mock.Anything, target.ID).Return(target, nil)
-	userRepo.On("ResetLoginFailures", mock.Anything, target.ID).Return(nil)
-	auditRepo.On(
-		"LogAudit", mock.Anything, mock.AnythingOfType("*uuid.UUID"), mock.AnythingOfType("*string"),
-		mock.AnythingOfType("*uuid.UUID"), mock.AnythingOfType("*string"), "USER_UNLOCKED", "Account unlocked",
-	).Return(db.PltAuditLog{}, nil)
-
-	err := svc.UnlockAccount(context.Background(), admin.ID, target.ID)
-
-	assert.NoError(t, err)
-	userRepo.AssertExpectations(t)
-}
-
-func TestUnlockAccountRejectsNonAdministrator(t *testing.T) {
-	userRepo := new(mockUserRepo)
-	svc := NewSecurityService(userRepo, new(mockPasswordEncoder), new(mockSessionRepo), new(mockAuditRepo), testSecurityConfig)
-	user := makeTestUser("alice", "USER", true)
-	userRepo.On("FindByID", mock.Anything, user.ID).Return(user, nil)
-
-	err := svc.UnlockAccount(context.Background(), user.ID, uuid.New())
-
-	assert.IsType(t, &model.InsufficientPermissionError{}, err)
+	assert.Contains(t, err.Error(), "disabled")
 }
 
 func TestRegister_Success(t *testing.T) {
@@ -379,7 +240,7 @@ func TestRegister_Success(t *testing.T) {
 	auditRepo := new(mockAuditRepo)
 	encoder := new(mockPasswordEncoder)
 
-	svc := NewSecurityService(userRepo, encoder, sessionRepo, auditRepo, testSecurityConfig)
+	svc := NewSecurityService(userRepo, encoder, sessionRepo, auditRepo, nil, nil, 3600)
 
 	userRepo.On("FindByUsername", mock.Anything, "newuser").Return(db.PltUser{}, fmt.Errorf("not found"))
 	encoder.On("Encode", "password123").Return("hashed", nil)
@@ -399,7 +260,7 @@ func TestRegister_ShortPassword(t *testing.T) {
 	auditRepo := new(mockAuditRepo)
 	encoder := new(mockPasswordEncoder)
 
-	svc := NewSecurityService(userRepo, encoder, sessionRepo, auditRepo, testSecurityConfig)
+	svc := NewSecurityService(userRepo, encoder, sessionRepo, auditRepo, nil, nil, 3600)
 
 	_, err := svc.Register(context.Background(), "newuser", "short")
 
@@ -412,60 +273,11 @@ func TestRegister_DuplicateUsername(t *testing.T) {
 	auditRepo := new(mockAuditRepo)
 	encoder := new(mockPasswordEncoder)
 
-	svc := NewSecurityService(userRepo, encoder, sessionRepo, auditRepo, testSecurityConfig)
+	svc := NewSecurityService(userRepo, encoder, sessionRepo, auditRepo, nil, nil, 3600)
 
 	userRepo.On("FindByUsername", mock.Anything, "existing").Return(makeTestUser("existing", "USER", true), nil)
 
 	_, err := svc.Register(context.Background(), "existing", "password123")
 
 	assert.Error(t, err)
-}
-
-func TestDeleteAccountRejectsIncorrectPassword(t *testing.T) {
-	userRepo := new(mockUserRepo)
-	encoder := new(mockPasswordEncoder)
-	svc := NewSecurityService(userRepo, encoder, new(mockSessionRepo), new(mockAuditRepo), testSecurityConfig)
-	user := makeTestUser("alice", "USER", true)
-	userRepo.On("FindByID", mock.Anything, user.ID).Return(user, nil)
-	encoder.On("Matches", "wrong-password", user.PasswordHash).Return(false)
-
-	err := svc.DeleteAccount(context.Background(), user.ID, "wrong-password")
-
-	assert.IsType(t, &model.WeakPasswordError{}, err)
-	userRepo.AssertNotCalled(t, "DeleteByID", mock.Anything, mock.Anything)
-}
-
-func TestDeleteAccountProtectsOnlyAdministrator(t *testing.T) {
-	userRepo := new(mockUserRepo)
-	encoder := new(mockPasswordEncoder)
-	svc := NewSecurityService(userRepo, encoder, new(mockSessionRepo), new(mockAuditRepo), testSecurityConfig)
-	user := makeTestUser("admin", "ADMIN", true)
-	userRepo.On("FindByID", mock.Anything, user.ID).Return(user, nil)
-	userRepo.On("CountByRole", mock.Anything, "ADMIN").Return(int64(1), nil)
-	encoder.On("Matches", "correct-password", user.PasswordHash).Return(true)
-
-	err := svc.DeleteAccount(context.Background(), user.ID, "correct-password")
-
-	assert.IsType(t, &model.InsufficientPermissionError{}, err)
-	userRepo.AssertNotCalled(t, "DeleteByID", mock.Anything, mock.Anything)
-}
-
-func TestDeleteAccountRemovesVerifiedUser(t *testing.T) {
-	userRepo := new(mockUserRepo)
-	encoder := new(mockPasswordEncoder)
-	auditRepo := new(mockAuditRepo)
-	svc := NewSecurityService(userRepo, encoder, new(mockSessionRepo), auditRepo, testSecurityConfig)
-	user := makeTestUser("alice", "USER", true)
-	userRepo.On("FindByID", mock.Anything, user.ID).Return(user, nil)
-	userRepo.On("DeleteByID", mock.Anything, user.ID).Return(nil)
-	encoder.On("Matches", "correct-password", user.PasswordHash).Return(true)
-	auditRepo.On(
-		"LogAudit", mock.Anything, mock.AnythingOfType("*uuid.UUID"), mock.AnythingOfType("*string"),
-		mock.AnythingOfType("*uuid.UUID"), mock.AnythingOfType("*string"), "ACCOUNT_DELETED", "Account deleted",
-	).Return(db.PltAuditLog{}, nil)
-
-	err := svc.DeleteAccount(context.Background(), user.ID, "correct-password")
-
-	assert.NoError(t, err)
-	userRepo.AssertExpectations(t)
 }

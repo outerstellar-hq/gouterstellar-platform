@@ -6,36 +6,40 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
-	"sort"
 	"strings"
 	"sync"
 )
 
-type Translatable interface {
-	UpdateTexts()
-}
-
 type I18nService struct {
-	mu             sync.RWMutex
-	locale         string
-	translations   map[string]map[string]string
-	dynamicBundles map[string]map[string]string
-	listeners      []Translatable
-	fsys           embed.FS
-	basePath       string
+	mu           sync.RWMutex
+	locale       string
+	translations map[string]map[string]string
+	fsys         embed.FS
+	basePath     string
 }
 
 var placeholderRe = regexp.MustCompile(`\{(\d+)\}`)
 
 func NewI18nService(fsys embed.FS, basePath string) *I18nService {
 	svc := &I18nService{
-		locale:         "en",
-		translations:   make(map[string]map[string]string),
-		dynamicBundles: make(map[string]map[string]string),
-		fsys:           fsys,
-		basePath:       basePath,
+		locale:       "en",
+		translations: make(map[string]map[string]string),
+		fsys:         fsys,
+		basePath:     basePath,
 	}
+	// Preload every supported locale so TranslateForLocale can resolve any
+	// language under the read lock without mutating the service locale. The
+	// default locale is loaded first; others are best-effort (missing files
+	// yield an empty bundle and fall back to "en" at lookup time).
 	svc.translations["en"] = svc.loadLocale("en")
+	for _, lang := range AvailableLanguages() {
+		if lang.Code == "en" {
+			continue
+		}
+		if _, ok := svc.translations[lang.Code]; !ok {
+			svc.translations[lang.Code] = svc.loadLocale(lang.Code)
+		}
+	}
 	return svc
 }
 
@@ -50,11 +54,6 @@ func (s *I18nService) SetLocale(locale string) {
 	s.locale = locale
 	if _, ok := s.translations[locale]; !ok {
 		s.translations[locale] = s.loadLocale(locale)
-	}
-	s.dynamicBundles[locale] = make(map[string]string)
-
-	for _, l := range s.listeners {
-		l.UpdateTexts()
 	}
 
 	slog.Info("i18n locale changed", "locale", locale)
@@ -76,12 +75,6 @@ func (s *I18nService) TranslateOrDefault(key, defaultVal string, params ...inter
 
 	locale := s.locale
 
-	if dyn, ok := s.dynamicBundles[locale]; ok {
-		if val, found := dyn[key]; found {
-			return injectParams(val, params)
-		}
-	}
-
 	if bundle, ok := s.translations[locale]; ok {
 		if val, found := bundle[key]; found {
 			return injectParams(val, params)
@@ -99,111 +92,39 @@ func (s *I18nService) TranslateOrDefault(key, defaultVal string, params ...inter
 	return injectParams(defaultVal, params)
 }
 
-func (s *I18nService) HasKey(key string) bool {
+// TranslateForLocale translates a key for the given locale without changing
+// the service's current locale. This is safe under concurrent renders that
+// use different languages: it reads the locale's bundle under the read lock
+// and never mutates the service-wide locale. If the requested locale's
+// bundle is not loaded, it falls back to the default locale ("en"); if the
+// key is absent from the locale's bundle, it also falls back to "en".
+func (s *I18nService) TranslateForLocale(locale, key string) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	locale := s.locale
-
-	if dyn, ok := s.dynamicBundles[locale]; ok {
-		if _, found := dyn[key]; found {
-			return true
+	bundle, ok := s.translations[locale]
+	if !ok {
+		// Fall back to default locale ("en").
+		bundle, ok = s.translations["en"]
+		if !ok {
+			return key
 		}
 	}
 
-	if bundle, ok := s.translations[locale]; ok {
-		if _, found := bundle[key]; found {
-			return true
-		}
+	if val, found := bundle[key]; found {
+		return val
 	}
 
-	return false
-}
-
-func (s *I18nService) Keys() []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	seen := make(map[string]bool)
-	var keys []string
-
-	addKeys := func(m map[string]string) {
-		for k := range m {
-			if !seen[k] {
-				seen[k] = true
-				keys = append(keys, k)
+	// Fall back to the default locale's bundle for the key.
+	if locale != "en" {
+		if defaultBundle, ok := s.translations["en"]; ok {
+			if val, found := defaultBundle[key]; found {
+				return val
 			}
 		}
 	}
 
-	if dyn, ok := s.dynamicBundles[s.locale]; ok {
-		addKeys(dyn)
-	}
-	if bundle, ok := s.translations[s.locale]; ok {
-		addKeys(bundle)
-	}
-
-	sort.Strings(keys)
-	return keys
-}
-
-func (s *I18nService) AddListener(l Translatable) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.listeners = append(s.listeners, l)
-}
-
-func (s *I18nService) RemoveListener(l Translatable) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for i, listener := range s.listeners {
-		if listener == l {
-			s.listeners = append(s.listeners[:i], s.listeners[i+1:]...)
-			return
-		}
-	}
-}
-
-func (s *I18nService) Reload() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.translations = make(map[string]map[string]string)
-	s.translations["en"] = s.loadLocale("en")
-
-	if s.locale != "en" {
-		s.translations[s.locale] = s.loadLocale(s.locale)
-	}
-
-	s.dynamicBundles[s.locale] = make(map[string]string)
-
-	for _, l := range s.listeners {
-		l.UpdateTexts()
-	}
-
-	slog.Info("i18n translations reloaded")
-}
-
-func (s *I18nService) LoadFromProperties(data []byte, key string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	props := parseProperties(data)
-
-	locale := s.locale
-	if _, ok := s.dynamicBundles[locale]; !ok {
-		s.dynamicBundles[locale] = make(map[string]string)
-	}
-
-	for k, v := range props {
-		if key != "" {
-			s.dynamicBundles[locale][key+"."+k] = v
-		} else {
-			s.dynamicBundles[locale][k] = v
-		}
-	}
-
-	slog.Info("i18n loaded dynamic properties", "key", key, "count", len(props))
+	return key
 }
 
 func (s *I18nService) loadLocale(locale string) map[string]string {

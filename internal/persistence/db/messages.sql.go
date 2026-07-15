@@ -9,17 +9,6 @@ import (
 	"context"
 )
 
-const countDeletedMessages = `-- name: CountDeletedMessages :one
-SELECT COUNT(*) FROM plt_messages WHERE deleted = true
-`
-
-func (q *Queries) CountDeletedMessages(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countDeletedMessages)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const countDirtyMessages = `-- name: CountDirtyMessages :one
 SELECT COUNT(*) FROM plt_messages WHERE dirty = true AND deleted = false
 `
@@ -37,6 +26,32 @@ SELECT COUNT(*) FROM plt_messages WHERE deleted = false
 
 func (q *Queries) CountMessages(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, countMessages)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countMessagesByYear = `-- name: CountMessagesByYear :one
+SELECT COUNT(*) FROM plt_messages
+WHERE deleted = false
+AND EXTRACT(YEAR FROM TO_TIMESTAMP(updated_at_epoch_ms / 1000.0)) = $1
+`
+
+func (q *Queries) CountMessagesByYear(ctx context.Context, updatedAtEpochMs int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countMessagesByYear, updatedAtEpochMs)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSearchMessages = `-- name: CountSearchMessages :one
+SELECT COUNT(*) FROM plt_messages
+WHERE deleted = false
+AND (content ILIKE '%' || $1::text || '%' OR author ILIKE '%' || $1::text || '%')
+`
+
+func (q *Queries) CountSearchMessages(ctx context.Context, dollar_1 string) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchMessages, dollar_1)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -180,51 +195,6 @@ func (q *Queries) FindChangesSince(ctx context.Context, updatedAtEpochMs int64) 
 	return items, nil
 }
 
-const listDeletedMessages = `-- name: ListDeletedMessages :many
-SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
-FROM plt_messages
-WHERE deleted = true
-ORDER BY deleted_at DESC
-LIMIT $1 OFFSET $2
-`
-
-type ListDeletedMessagesParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
-}
-
-func (q *Queries) ListDeletedMessages(ctx context.Context, arg ListDeletedMessagesParams) ([]PltMessage, error) {
-	rows, err := q.db.Query(ctx, listDeletedMessages, arg.Limit, arg.Offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []PltMessage{}
-	for rows.Next() {
-		var i PltMessage
-		if err := rows.Scan(
-			&i.ID,
-			&i.SyncID,
-			&i.Author,
-			&i.Content,
-			&i.CreatedAt,
-			&i.UpdatedAtEpochMs,
-			&i.Deleted,
-			&i.Dirty,
-			&i.DeletedAt,
-			&i.Version,
-			&i.SyncConflict,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listDirtyMessages = `-- name: ListDirtyMessages :many
 SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
 FROM plt_messages
@@ -264,6 +234,35 @@ func (q *Queries) ListDirtyMessages(ctx context.Context) ([]PltMessage, error) {
 	return items, nil
 }
 
+const listMessageYears = `-- name: ListMessageYears :many
+SELECT DISTINCT EXTRACT(YEAR FROM TO_TIMESTAMP(updated_at_epoch_ms / 1000.0))::int AS year
+FROM plt_messages
+WHERE deleted = false
+ORDER BY year DESC
+`
+
+// Distinct calendar years (descending) for which non-deleted messages exist.
+// Used to populate the year filter on the messages page.
+func (q *Queries) ListMessageYears(ctx context.Context) ([]int32, error) {
+	rows, err := q.db.Query(ctx, listMessageYears)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int32{}
+	for rows.Next() {
+		var year int32
+		if err := rows.Scan(&year); err != nil {
+			return nil, err
+		}
+		items = append(items, year)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMessages = `-- name: ListMessages :many
 SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
 FROM plt_messages
@@ -279,6 +278,57 @@ type ListMessagesParams struct {
 
 func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]PltMessage, error) {
 	rows, err := q.db.Query(ctx, listMessages, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PltMessage{}
+	for rows.Next() {
+		var i PltMessage
+		if err := rows.Scan(
+			&i.ID,
+			&i.SyncID,
+			&i.Author,
+			&i.Content,
+			&i.CreatedAt,
+			&i.UpdatedAtEpochMs,
+			&i.Deleted,
+			&i.Dirty,
+			&i.DeletedAt,
+			&i.Version,
+			&i.SyncConflict,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMessagesByYear = `-- name: ListMessagesByYear :many
+SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
+FROM plt_messages
+WHERE deleted = false
+AND EXTRACT(YEAR FROM TO_TIMESTAMP(updated_at_epoch_ms / 1000.0)) = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListMessagesByYearParams struct {
+	UpdatedAtEpochMs int64 `json:"updated_at_epoch_ms"`
+	Limit            int32 `json:"limit"`
+	Offset           int32 `json:"offset"`
+}
+
+// Returns one page of non-deleted messages whose updated_at falls in the given
+// calendar year (interpreted in the database session time zone). updated_at is
+// stored as epoch milliseconds, so it is converted to a timestamp with
+// TO_TIMESTAMP(epoch / 1000.0) before EXTRACT.
+func (q *Queries) ListMessagesByYear(ctx context.Context, arg ListMessagesByYearParams) ([]PltMessage, error) {
+	rows, err := q.db.Query(ctx, listMessagesByYear, arg.UpdatedAtEpochMs, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -377,9 +427,7 @@ func (q *Queries) ResolveConflictMessage(ctx context.Context, syncID string) (Pl
 
 const restoreMessage = `-- name: RestoreMessage :one
 UPDATE plt_messages
-SET deleted = false, deleted_at = NULL, dirty = true,
-    updated_at_epoch_ms = (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT,
-    version = version + 1
+SET deleted = false, deleted_at = NULL, dirty = true, version = version + 1
 WHERE sync_id = $1
 RETURNING id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
 `
@@ -403,11 +451,56 @@ func (q *Queries) RestoreMessage(ctx context.Context, syncID string) (PltMessage
 	return i, err
 }
 
+const searchMessages = `-- name: SearchMessages :many
+SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
+FROM plt_messages
+WHERE deleted = false
+AND (content ILIKE '%' || $1::text || '%' OR author ILIKE '%' || $1::text || '%')
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type SearchMessagesParams struct {
+	Column1 string `json:"column_1"`
+	Limit   int32  `json:"limit"`
+	Offset  int32  `json:"offset"`
+}
+
+func (q *Queries) SearchMessages(ctx context.Context, arg SearchMessagesParams) ([]PltMessage, error) {
+	rows, err := q.db.Query(ctx, searchMessages, arg.Column1, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PltMessage{}
+	for rows.Next() {
+		var i PltMessage
+		if err := rows.Scan(
+			&i.ID,
+			&i.SyncID,
+			&i.Author,
+			&i.Content,
+			&i.CreatedAt,
+			&i.UpdatedAtEpochMs,
+			&i.Deleted,
+			&i.Dirty,
+			&i.DeletedAt,
+			&i.Version,
+			&i.SyncConflict,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const softDeleteMessage = `-- name: SoftDeleteMessage :one
 UPDATE plt_messages
-SET deleted = true, deleted_at = CURRENT_TIMESTAMP, dirty = true,
-    updated_at_epoch_ms = (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT,
-    version = version + 1
+SET deleted = true, deleted_at = CURRENT_TIMESTAMP, dirty = true, version = version + 1
 WHERE sync_id = $1
 RETURNING id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
 `

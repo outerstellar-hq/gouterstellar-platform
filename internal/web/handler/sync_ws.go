@@ -7,8 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
+
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
 
 	"github.com/rygel/gouterstellar-platform/internal/persistence"
 	"github.com/rygel/gouterstellar-platform/internal/service"
@@ -36,8 +37,10 @@ func NewSyncWebSocket(
 	}
 }
 
-func (h *SyncWebSocket) RegisterRoutes(r chi.Router) {
-	r.Get("/ws/sync", h.Handle)
+// ContributeRoutes registers the WebSocket sync route (protected).
+func (h *SyncWebSocket) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.Protected(http.MethodGet, "/ws/sync", "WebSocket sync", http.HandlerFunc(h.Handle))
+	return nil
 }
 
 var upgrader = websocket.Upgrader{
@@ -82,8 +85,14 @@ func (h *SyncWebSocket) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 	h.publisher.Register(client)
 
+	// done coordinates shutdown of the read loop and the ping writer: when
+	// the read loop exits (client disconnect or read error) it closes done,
+	// which stops the ping writer too.
+	done := make(chan struct{})
+
 	go func() {
 		defer h.publisher.Unregister(client)
+		defer close(done)
 		conn.SetReadLimit(512)
 		_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		conn.SetPongHandler(func(string) error {
@@ -94,6 +103,24 @@ func (h *SyncWebSocket) Handle(w http.ResponseWriter, r *http.Request) {
 			_, _, err := conn.ReadMessage()
 			if err != nil {
 				break
+			}
+		}
+	}()
+
+	// Ping writer: sends a WebSocket ping every 30s to keep the connection
+	// alive through proxies/load balancers and to detect dead peers. Stops
+	// when the read loop exits (done closed) or a write fails.
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(10*time.Second)); err != nil {
+					return
+				}
+			case <-done:
+				return
 			}
 		}
 	}()

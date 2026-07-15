@@ -20,8 +20,6 @@ type User struct {
 	PasswordHash              string
 	Role                      UserRole
 	Enabled                   bool
-	FailedLoginAttempts       int32
-	LockedUntil               *time.Time
 	LastActivityAt            *time.Time
 	AvatarURL                 *string
 	EmailNotificationsEnabled bool
@@ -32,23 +30,19 @@ type User struct {
 }
 
 type UserSummary struct {
-	ID                  string
-	Username            string
-	Email               string
-	Role                string
-	Enabled             bool
-	FailedLoginAttempts int32
-	LockedUntil         *time.Time
+	ID       string
+	Username string
+	Email    string
+	Role     string
+	Enabled  bool
 }
 
 func (u *User) ToSummary() UserSummary {
 	return UserSummary{
-		ID:                  u.ID.String(),
-		Username:            u.Username,
-		Email:               u.Email,
-		Role:                string(u.Role),
-		Enabled:             u.Enabled,
-		FailedLoginAttempts: u.FailedLoginAttempts,
-		LockedUntil:         u.LockedUntil,
+		ID:       u.ID.String(),
+		Username: u.Username,
+		Email:    u.Email,
+		Role:     string(u.Role),
+		Enabled:  u.Enabled,
 	}
 }

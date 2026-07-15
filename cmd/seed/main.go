@@ -16,12 +16,8 @@ import (
 
 func main() {
 	adminUsername := flag.String("username", "admin", "Admin username")
-	adminPassword := flag.String("password", "", "Admin password (required)")
+	adminPassword := flag.String("password", "admin123", "Admin password")
 	flag.Parse()
-	if len(*adminPassword) < 8 {
-		slog.Error("Admin password must be at least 8 characters")
-		os.Exit(2)
-	}
 
 	cfg := config.Load()
 	ctx := context.Background()

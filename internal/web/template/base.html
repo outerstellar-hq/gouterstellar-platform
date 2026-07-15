@@ -4,30 +4,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ .Title }} - Outerstellar Platform</title>
     <meta name="csrf-token" content="{{ .CSRFToken }}">
+    <title>{{ .Title }} - Outerstellar Platform</title>
     <link rel="stylesheet" href="/static/css/main.css">
-    <script src="/static/js/platform.js" defer></script>
     {{ if .CustomCSS }}<style>{{ .CustomCSS }}</style>{{ end }}
 </head>
-<body class="{{ if .IsDark }}dark{{ end }}">
+<body class="{{ if .IsDark }}dark{{ end }} layout-{{ .Layout }}" hx-boost="true">
     {{ if .User }}
-    <nav class="app-nav" aria-label="Primary navigation">
-        <a class="brand" href="/">Outerstellar</a>
+    <nav>
+        <div class="nav-brand">Outerstellar</div>
         <div class="nav-links">
-            <a href="/" class="nav-link{{ if eq .Body "home" }} active{{ end }}">Home</a>
-            <a href="/messages" class="nav-link{{ if eq .Body "messages" }} active{{ end }}">Messages</a>
-            <a href="/messages/trash" class="nav-link{{ if eq .Body "trash" }} active{{ end }}">Trash</a>
-            <a href="/contacts" class="nav-link{{ if eq .Body "contacts" }} active{{ end }}">Contacts</a>
-            <a href="/notifications" class="nav-link{{ if eq .Body "notifications" }} active{{ end }}">Notifications</a>
-            {{ if .User.IsAdmin }}
-            <a href="/admin/users" class="nav-link{{ if eq .Body "admin_users" }} active{{ end }}">Admin</a>
+            {{ range .NavItems }}
+            <a href="{{ .URL }}" class="nav-link{{ if .Active }} active{{ end }}">{{ .Label }}</a>
             {{ end }}
-            <a href="/settings" class="nav-link{{ if eq .Body "settings" }} active{{ end }}">Settings</a>
+            {{ if .User.IsAdmin }}
+            <a href="/admin/users" class="nav-link{{ if eq .Body "admin_users" }} active{{ end }}">{{ translate $.Language "nav.admin" }}</a>
+            {{ end }}
         </div>
-        <div class="user-section">
+        <div class="nav-user">
             <span>{{ .User.Username }}</span>
-            <form method="POST" action="/auth/logout"><button type="submit">Logout</button></form>
+            <form method="POST" action="/auth/logout"><input type="hidden" name="csrf_token" value="{{ .CSRFToken }}"><button type="submit">{{ translate $.Language "nav.logout" }}</button></form>
         </div>
     </nav>
     {{ end }}
@@ -35,12 +31,14 @@
         {{ range .Messages }}
         <div class="toast toast-{{ .Type }}">{{ .Message }}</div>
         {{ end }}
-        {{ template "content" .BodyData }}
+        {{ template "content" . }}
     </main>
-    <footer class="app-footer">
+    <footer>
         <span>v{{ .Version }}</span>
         <span>Request: {{ .RequestID }}</span>
     </footer>
+    <script src="/static/js/htmx.min.js"></script>
+    <script src="/static/js/platform.js"></script>
 </body>
 </html>
 {{ end }}

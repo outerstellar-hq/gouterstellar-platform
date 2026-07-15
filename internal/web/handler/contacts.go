@@ -2,9 +2,12 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
 
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/service"
@@ -24,37 +27,14 @@ func NewContactsHandler(contactSvc *service.ContactService, renderer *web.Render
 	}
 }
 
-func (h *ContactsHandler) RegisterRoutes(r chi.Router) {
-	r.Get("/contacts", h.List)
-	r.Get("/contacts/{syncId}", h.Detail)
-	r.Post("/contacts/create", h.Create)
-	r.Post("/contacts/{syncId}/update", h.Update)
-	r.Post("/contacts/{syncId}/delete", h.Delete)
-	r.Post("/contacts/{syncId}/restore", h.Restore)
-	r.Get("/contacts/trash/list", h.TrashList)
-}
-
-func (h *ContactsHandler) Restore(w http.ResponseWriter, r *http.Request) {
-	if err := h.contactService.RestoreContact(r.Context(), chi.URLParam(r, "syncId")); err != nil {
-		handleServiceError(w, err)
-		return
-	}
-	http.Redirect(w, r, "/messages/trash", http.StatusFound)
-}
-
-func (h *ContactsHandler) TrashList(w http.ResponseWriter, r *http.Request) {
-	contacts, err := h.contactService.ListDeletedContacts(r.Context(), 100, 0)
-	if err != nil {
-		handleServiceError(w, err)
-		return
-	}
-	items := make([]viewmodel.ContactItem, len(contacts))
-	for i, contact := range contacts {
-		items[i] = viewmodel.ContactItem{SyncID: contact.SyncID, Name: contact.Name, Emails: contact.Emails, Phones: contact.Phones, Company: contact.Company, Deleted: true}
-	}
-	if err := h.renderer.Render(w, r, "components/contact_trash_list.html", viewmodel.ContactsPage{Contacts: items}); err != nil {
-		http.Error(w, "Template error", http.StatusInternalServerError)
-	}
+// ContributeRoutes registers the contacts UI routes (protected).
+func (h *ContactsHandler) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.Protected(http.MethodGet, "/contacts", "Contacts list", http.HandlerFunc(h.List))
+	ctx.Routes.Protected(http.MethodGet, "/contacts/{syncId}", "Contact detail", http.HandlerFunc(h.Detail))
+	ctx.Routes.Protected(http.MethodPost, "/contacts/create", "Create contact", http.HandlerFunc(h.Create))
+	ctx.Routes.Protected(http.MethodPost, "/contacts/{syncId}/update", "Update contact", http.HandlerFunc(h.Update))
+	ctx.Routes.Protected(http.MethodPost, "/contacts/{syncId}/delete", "Delete contact", http.HandlerFunc(h.Delete))
+	return nil
 }
 
 func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -62,9 +42,24 @@ func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {
 	pageSize := getIntParam(r, "pageSize", 20)
 	offset := (page - 1) * pageSize
 
-	contacts, err := h.contactService.ListContacts(r.Context(), safeInt32(pageSize), safeInt32(offset))
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+
+	// SearchContacts returns (items, total, err) and scopes both the rows and
+	// the count to the query. When there is no query we fall back to the plain
+	// list + count so the unfiltered page stays cache-friendly in the repo.
+	var contacts []model.ContactSummary
+	var total int64
+	var err error
+	if query != "" {
+		contacts, total, err = h.contactService.SearchContacts(r.Context(), query, safeInt32(pageSize), safeInt32(offset))
+	} else {
+		contacts, err = h.contactService.ListContacts(r.Context(), safeInt32(pageSize), safeInt32(offset))
+		if err == nil {
+			total, _ = h.contactService.CountContacts(r.Context())
+		}
+	}
 	if err != nil {
-		_ = h.renderer.RenderWithStatus(w, r, "error.html", viewmodel.ErrorPage{
+		_ = h.renderer.RenderWithStatus(w, r, "error", viewmodel.ErrorPage{
 			StatusCode: http.StatusInternalServerError,
 			Title:      "Error",
 			Message:    "Failed to load contacts",
@@ -72,7 +67,6 @@ func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	total, _ := h.contactService.CountContacts(r.Context())
 	totalPages := int(total) / pageSize
 	if int(total)%pageSize > 0 {
 		totalPages++
@@ -102,9 +96,10 @@ func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {
 		PageSize:    pageSize,
 	}
 
-	if err := h.renderer.Render(w, r, "contacts.html", viewmodel.ContactsPage{
+	if err := h.renderer.RenderPage(w, r, "contacts", viewmodel.ContactsPage{
 		Contacts:   contactItems,
 		Pagination: pagination,
+		Query:      query,
 	}); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
@@ -119,7 +114,23 @@ func (h *ContactsHandler) Detail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, contact)
+	item := viewmodel.ContactItem{
+		SyncID:         contact.SyncID,
+		Name:           contact.Name,
+		Emails:         contact.Emails,
+		Phones:         contact.Phones,
+		Social:         contact.SocialMedia,
+		Company:        contact.Company,
+		CompanyAddress: contact.CompanyAddress,
+		Department:     contact.Department,
+		UpdatedAt:      formatEpochMs(contact.UpdatedAtEpochMs),
+		Dirty:          contact.Dirty,
+		Deleted:        contact.Deleted,
+	}
+
+	if err := h.renderer.RenderPage(w, r, "contact_detail", viewmodel.ContactDetailPage{Contact: item}); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
 }
 
 func (h *ContactsHandler) Create(w http.ResponseWriter, r *http.Request) {

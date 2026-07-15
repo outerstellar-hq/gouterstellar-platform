@@ -7,45 +7,49 @@ import (
 	"log/slog"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/persistence"
 	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
 )
 
-const (
-	MaxMessageAuthorLength  = 100
-	MaxMessageContentLength = 500
-)
-
 type MessageService struct {
-	repo      persistence.MessageRepository
-	outbox    persistence.OutboxRepository
-	txMgr     *persistence.TransactionManager
-	cache     *persistence.MessageCache
-	eventPub  EventPublisher
-	auditRepo persistence.AuditRepository
+	repo                persistence.MessageRepository
+	outbox              persistence.OutboxRepository
+	txMgr               TransactionRunner
+	cache               *persistence.MessageCache
+	eventPub            EventPublisher
+	notificationService *NotificationService
+	emailService        EmailService
+	pipeline            *WritePipeline
 }
 
 func NewMessageService(
 	repo persistence.MessageRepository,
 	outbox persistence.OutboxRepository,
-	txMgr *persistence.TransactionManager,
+	txMgr TransactionRunner,
 	cache *persistence.MessageCache,
 	eventPub EventPublisher,
-	auditRepo persistence.AuditRepository,
+	notificationService *NotificationService,
+	emailService EmailService,
 ) *MessageService {
-	return &MessageService{
-		repo:      repo,
-		outbox:    outbox,
-		txMgr:     txMgr,
-		cache:     cache,
-		eventPub:  eventPub,
-		auditRepo: auditRepo,
+	s := &MessageService{
+		repo:                repo,
+		outbox:              outbox,
+		txMgr:               txMgr,
+		cache:               cache,
+		eventPub:            eventPub,
+		notificationService: notificationService,
+		emailService:        emailService,
 	}
+	// The pipeline reuses the service's already-wired cache/event/notifier/email
+	// dependencies so side-effects fire through the same instances. Built once
+	// at construction so each mutation just calls the relevant hook.
+	s.pipeline = NewWritePipeline(cache, eventPub, notificationService, emailService)
+	return s
 }
 
 func (s *MessageService) ListMessages(ctx context.Context, limit, offset int32) (*model.PagedResult[model.MessageSummary], error) {
@@ -83,23 +87,94 @@ func (s *MessageService) ListMessages(ctx context.Context, limit, offset int32) 
 	}, nil
 }
 
+// SearchMessages returns a page of non-deleted messages whose content or author
+// match the given query (case-insensitive ILIKE). Search results are not cached
+// because they are highly variable and rarely re-requested with the same terms.
+func (s *MessageService) SearchMessages(ctx context.Context, query string, limit, offset int32) (*model.PagedResult[model.MessageSummary], error) {
+	total, err := s.repo.CountSearchMessages(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("count search messages: %w", err)
+	}
+
+	messages, err := s.repo.SearchMessages(ctx, query, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("search messages: %w", err)
+	}
+
+	summaries := make([]model.MessageSummary, len(messages))
+	for i, m := range messages {
+		summaries[i] = pltMessageToSummary(m)
+	}
+
+	page := int(offset)/int(limit) + 1
+	return &model.PagedResult[model.MessageSummary]{
+		Items:    summaries,
+		Metadata: model.NewPaginationMetadata(page, int(limit), total),
+	}, nil
+}
+
+// ListMessagesByYear returns one page of non-deleted messages whose updated_at
+// timestamp falls in the given calendar year. The year filter is evaluated at
+// the database level so paging counts stay correct.
+func (s *MessageService) ListMessagesByYear(ctx context.Context, year int, limit, offset int32) (*model.PagedResult[model.MessageSummary], error) {
+	total, err := s.repo.CountMessagesByYear(ctx, year)
+	if err != nil {
+		return nil, fmt.Errorf("count messages by year: %w", err)
+	}
+
+	messages, err := s.repo.ListMessagesByYear(ctx, year, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("list messages by year: %w", err)
+	}
+
+	summaries := make([]model.MessageSummary, len(messages))
+	for i, m := range messages {
+		summaries[i] = pltMessageToSummary(m)
+	}
+
+	page := int(offset)/int(limit) + 1
+	return &model.PagedResult[model.MessageSummary]{
+		Items:    summaries,
+		Metadata: model.NewPaginationMetadata(page, int(limit), total),
+	}, nil
+}
+
+// GetMessageYears returns the distinct calendar years (descending) for which
+// non-deleted messages exist. Used to populate the year filter UI. sqlc emits
+// []int32 from the EXTRACT expression, so the values are widened to int here to
+// match the viewmodel's []int slice.
+func (s *MessageService) GetMessageYears(ctx context.Context) ([]int, error) {
+	years, err := s.repo.ListMessageYears(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list message years: %w", err)
+	}
+	result := make([]int, len(years))
+	for i, y := range years {
+		result[i] = int(y)
+	}
+	return result, nil
+}
+
 func (s *MessageService) ListDeletedMessages(ctx context.Context, limit, offset int32) (*model.PagedResult[model.MessageSummary], error) {
-	messages, err := s.repo.ListDeletedMessages(ctx, limit, offset)
+	messages, err := s.repo.ListMessages(ctx, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("list deleted messages: %w", err)
+		return nil, fmt.Errorf("list messages: %w", err)
 	}
-	total, err := s.repo.CountDeletedMessages(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("count deleted messages: %w", err)
+
+	var deleted []model.MessageSummary
+	for _, m := range messages {
+		if m.Deleted {
+			deleted = append(deleted, pltMessageToSummary(m))
+		}
 	}
-	deleted := make([]model.MessageSummary, len(messages))
-	for i, message := range messages {
-		deleted[i] = pltMessageToSummary(message)
+
+	if deleted == nil {
+		deleted = []model.MessageSummary{}
 	}
 
 	return &model.PagedResult[model.MessageSummary]{
 		Items:    deleted,
-		Metadata: model.NewPaginationMetadata(int(offset)/int(limit)+1, int(limit), total),
+		Metadata: model.NewPaginationMetadata(int(offset)/int(limit)+1, int(limit), int64(len(deleted))),
 	}, nil
 }
 
@@ -135,45 +210,66 @@ func (s *MessageService) ListDirtyMessages(ctx context.Context) ([]model.StoredM
 }
 
 func (s *MessageService) CreateServerMessage(ctx context.Context, author, content string) (*model.StoredMessage, error) {
-	if err := validateMessage(author, content); err != nil {
-		return nil, err
+	if strings.TrimSpace(author) == "" || strings.TrimSpace(content) == "" {
+		return nil, &model.ValidationError{Errors: []string{"Author and content must not be blank"}}
 	}
 
 	syncID := "srv_" + uuid.New().String()
 	now := time.Now().UnixMilli()
 
-	m, err := s.repo.CreateServerMessage(ctx, syncID, author, content, now)
+	var m db.PltMessage
+	err := s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
+		created, err := s.repo.WithTx(tx).CreateServerMessage(ctx, syncID, author, content, now)
+		if err != nil {
+			return fmt.Errorf("create server message: %w", err)
+		}
+		if err := s.saveOutboxEntryTx(ctx, tx, syncID, created); err != nil {
+			return err
+		}
+		m = created
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("create server message: %w", err)
+		return nil, err
 	}
 
 	stored := pltMessageToStored(m)
-
-	s.saveOutboxEntry(ctx, syncID, m)
-	s.cache.InvalidateByPrefix("messages:")
-	s.eventPub.PublishRefresh("messages")
+	s.pipeline.AfterMessageCreated(ctx, author, content)
 
 	return stored, nil
 }
 
 func (s *MessageService) CreateLocalMessage(ctx context.Context, author, content string) (*model.StoredMessage, error) {
-	if err := validateMessage(author, content); err != nil {
-		return nil, err
+	if strings.TrimSpace(author) == "" || strings.TrimSpace(content) == "" {
+		return nil, &model.ValidationError{Errors: []string{"Author and content must not be blank"}}
 	}
 
 	syncID := "loc_" + uuid.New().String()
 	now := time.Now().UnixMilli()
 
-	m, err := s.repo.CreateLocalMessage(ctx, syncID, author, content, now)
+	var m db.PltMessage
+	err := s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
+		created, err := s.repo.WithTx(tx).CreateLocalMessage(ctx, syncID, author, content, now)
+		if err != nil {
+			return fmt.Errorf("create local message: %w", err)
+		}
+		if err := s.saveOutboxEntryTx(ctx, tx, syncID, created); err != nil {
+			return err
+		}
+		m = created
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("create local message: %w", err)
+		return nil, err
 	}
 
 	stored := pltMessageToStored(m)
-
-	s.saveOutboxEntry(ctx, syncID, m)
+	// Local creates don't notify or email — they only refresh the cache and
+	// broadcast the change. AfterMessageCreated is overkill here (it would fire
+	// notifications), so invalidate the prefix directly. A future hook could
+	// model "local create" explicitly if notifications are ever wanted.
 	s.cache.InvalidateByPrefix("messages:")
-	s.eventPub.PublishRefresh("messages")
+	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
 
 	return stored, nil
 }
@@ -242,7 +338,7 @@ func (s *MessageService) ProcessPushRequest(ctx context.Context, req *model.Sync
 	}
 
 	s.cache.InvalidateAll()
-	s.eventPub.PublishRefresh("messages")
+	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
 
 	return &model.SyncPushResponse{
 		AppliedCount: appliedCount,
@@ -255,57 +351,46 @@ func (s *MessageService) Restore(ctx context.Context, syncID string) error {
 	if err != nil {
 		return fmt.Errorf("restore message: %w", err)
 	}
-	s.cache.Invalidate("message:" + syncID)
-	s.cache.InvalidateByPrefix("messages:")
-	s.eventPub.PublishRefresh("messages")
+	s.pipeline.AfterMessageChange(ctx, syncID)
 	return nil
 }
 
 func (s *MessageService) DeleteMessage(ctx context.Context, syncID string) error {
-	m, err := s.repo.SoftDeleteMessage(ctx, syncID)
+	err := s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
+		deleted, err := s.repo.WithTx(tx).SoftDeleteMessage(ctx, syncID)
+		if err != nil {
+			return fmt.Errorf("delete message: %w", err)
+		}
+		return s.saveOutboxEntryTx(ctx, tx, syncID, deleted)
+	})
 	if err != nil {
-		return fmt.Errorf("delete message: %w", err)
+		return err
 	}
 
-	s.saveOutboxEntry(ctx, syncID, m)
-	s.cache.Invalidate("message:" + syncID)
-	s.cache.InvalidateByPrefix("messages:")
-	s.eventPub.PublishRefresh("messages")
+	s.pipeline.AfterMessageChange(ctx, syncID)
 	return nil
 }
 
 func (s *MessageService) UpdateMessage(ctx context.Context, msg *model.StoredMessage) (*model.StoredMessage, error) {
-	if err := validateMessage(msg.Author, msg.Content); err != nil {
-		return nil, err
-	}
-	updated, err := s.repo.UpdateMessage(ctx, msg.SyncID, msg.Author, msg.Content, msg.UpdatedAtEpochMs, msg.Dirty, msg.Version)
+	var updated db.PltMessage
+	err := s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
+		u, err := s.repo.WithTx(tx).UpdateMessage(ctx, msg.SyncID, msg.Author, msg.Content, msg.UpdatedAtEpochMs, msg.Dirty, msg.Version)
+		if err != nil {
+			return fmt.Errorf("update message: %w", err)
+		}
+		if err := s.saveOutboxEntryTx(ctx, tx, msg.SyncID, u); err != nil {
+			return err
+		}
+		updated = u
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("update message: %w", err)
+		return nil, err
 	}
 
 	stored := pltMessageToStored(updated)
-	s.saveOutboxEntry(ctx, msg.SyncID, updated)
-	s.cache.Invalidate("message:" + msg.SyncID)
-	s.cache.InvalidateByPrefix("messages:")
-	s.eventPub.PublishRefresh("messages")
+	s.pipeline.AfterMessageChange(ctx, msg.SyncID)
 	return stored, nil
-}
-
-func validateMessage(author, content string) error {
-	var validationErrors []string
-	if strings.TrimSpace(author) == "" || strings.TrimSpace(content) == "" {
-		validationErrors = append(validationErrors, "Author and content must not be blank")
-	}
-	if utf8.RuneCountInString(author) > MaxMessageAuthorLength {
-		validationErrors = append(validationErrors, fmt.Sprintf("Author must be at most %d characters", MaxMessageAuthorLength))
-	}
-	if utf8.RuneCountInString(content) > MaxMessageContentLength {
-		validationErrors = append(validationErrors, fmt.Sprintf("Content must be at most %d characters", MaxMessageContentLength))
-	}
-	if len(validationErrors) > 0 {
-		return &model.ValidationError{Errors: validationErrors}
-	}
-	return nil
 }
 
 func (s *MessageService) ResolveConflict(ctx context.Context, syncID string, strategy model.ConflictStrategy) error {
@@ -340,23 +425,20 @@ func (s *MessageService) ResolveConflict(ctx context.Context, syncID string, str
 		}
 	}
 
-	s.cache.Invalidate("message:" + syncID)
-	s.cache.InvalidateByPrefix("messages:")
-	s.eventPub.PublishRefresh("messages")
+	s.pipeline.AfterMessageChange(ctx, syncID)
 	return nil
 }
 
-func (s *MessageService) saveOutboxEntry(ctx context.Context, syncID string, m db.PltMessage) {
+// saveOutboxEntryTx serializes and inserts an outbox entry within a caller-
+// supplied transaction. It is the transactional counterpart of saveOutboxEntry
+// and keeps the outbox write atomic with the mutation that produced it.
+func (s *MessageService) saveOutboxEntryTx(ctx context.Context, tx pgx.Tx, syncID string, m db.PltMessage) error {
 	syncMsg := pltMessageToSyncMessage(m)
 	payload, err := model.SyncMessageToJSON(syncMsg)
 	if err != nil {
-		slog.Error("Failed to serialize outbox payload", "syncID", syncID, "error", err)
-		return
+		return fmt.Errorf("serialize outbox payload: %w", err)
 	}
-
-	if err := s.outbox.SaveOutbox(ctx, uuid.New(), "MESSAGE_SYNC", payload, "PENDING"); err != nil {
-		slog.Error("Failed to save outbox entry", "syncID", syncID, "error", err)
-	}
+	return s.outbox.SaveOutboxTx(ctx, tx, uuid.New(), "MESSAGE_SYNC", payload, "PENDING")
 }
 
 func pltMessageToStored(m db.PltMessage) *model.StoredMessage {
@@ -392,4 +474,27 @@ func pltMessageToSyncMessage(m db.PltMessage) model.SyncMessage {
 		UpdatedAtEpochMs: m.UpdatedAtEpochMs,
 		Deleted:          m.Deleted,
 	}
+}
+
+// CountMessages returns the total number of non-deleted messages.
+func (s *MessageService) CountMessages(ctx context.Context) (int64, error) {
+	return s.repo.CountMessages(ctx)
+}
+
+// InvalidateCache flushes all cached message entries. It is exposed for the dev
+// dashboard's manual cache-invalidation control so operators can force a fresh
+// read from the database without restarting the process.
+func (s *MessageService) InvalidateCache() {
+	s.cache.InvalidateAll()
+}
+
+// truncateContent caps a string to maxNotificationBodyLen characters, appending
+// an ellipsis when truncated, so notification bodies stay readable. It is shared
+// by the WritePipeline's notification path.
+func truncateContent(s string) string {
+	const maxNotificationBodyLen = 100
+	if len(s) <= maxNotificationBodyLen {
+		return s
+	}
+	return s[:maxNotificationBodyLen] + "…"
 }

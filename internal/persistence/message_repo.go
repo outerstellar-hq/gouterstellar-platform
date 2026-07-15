@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
@@ -17,6 +18,13 @@ func NewMessageRepository(pool *pgxpool.Pool) MessageRepository {
 	return &messageRepo{q: db.New(pool), pool: pool}
 }
 
+// WithTx returns a copy of this repository whose underlying sqlc Queries is
+// bound to the given transaction. Operations on the returned repository
+// participate in the transaction and only persist when the transaction commits.
+func (r *messageRepo) WithTx(tx pgx.Tx) MessageRepository {
+	return &messageRepo{q: r.q.WithTx(tx), pool: nil}
+}
+
 func (r *messageRepo) ListMessages(ctx context.Context, limit, offset int32) ([]db.PltMessage, error) {
 	return r.q.ListMessages(ctx, db.ListMessagesParams{
 		Limit:  limit,
@@ -24,16 +32,39 @@ func (r *messageRepo) ListMessages(ctx context.Context, limit, offset int32) ([]
 	})
 }
 
+func (r *messageRepo) ListMessagesByYear(ctx context.Context, year int, limit, offset int32) ([]db.PltMessage, error) {
+	return r.q.ListMessagesByYear(ctx, db.ListMessagesByYearParams{
+		UpdatedAtEpochMs: int64(year),
+		Limit:            limit,
+		Offset:           offset,
+	})
+}
+
+func (r *messageRepo) CountMessagesByYear(ctx context.Context, year int) (int64, error) {
+	return r.q.CountMessagesByYear(ctx, int64(year))
+}
+
+// ListMessageYears returns distinct calendar years (descending) for non-deleted
+// messages. sqlc emits []int32 because the year is produced by EXTRACT on a
+// numeric expression, not read from a BIGINT column.
+func (r *messageRepo) ListMessageYears(ctx context.Context) ([]int32, error) {
+	return r.q.ListMessageYears(ctx)
+}
+
+func (r *messageRepo) SearchMessages(ctx context.Context, query string, limit, offset int32) ([]db.PltMessage, error) {
+	return r.q.SearchMessages(ctx, db.SearchMessagesParams{
+		Column1: query,
+		Limit:   limit,
+		Offset:  offset,
+	})
+}
+
+func (r *messageRepo) CountSearchMessages(ctx context.Context, query string) (int64, error) {
+	return r.q.CountSearchMessages(ctx, query)
+}
+
 func (r *messageRepo) CountMessages(ctx context.Context) (int64, error) {
 	return r.q.CountMessages(ctx)
-}
-
-func (r *messageRepo) ListDeletedMessages(ctx context.Context, limit, offset int32) ([]db.PltMessage, error) {
-	return r.q.ListDeletedMessages(ctx, db.ListDeletedMessagesParams{Limit: limit, Offset: offset})
-}
-
-func (r *messageRepo) CountDeletedMessages(ctx context.Context) (int64, error) {
-	return r.q.CountDeletedMessages(ctx)
 }
 
 func (r *messageRepo) FindBySyncID(ctx context.Context, syncID string) (db.PltMessage, error) {

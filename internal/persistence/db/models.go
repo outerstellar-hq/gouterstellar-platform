@@ -153,6 +153,4 @@ type PltUser struct {
 	Language                  *string            `json:"language"`
 	Theme                     *string            `json:"theme"`
 	Layout                    *string            `json:"layout"`
-	FailedLoginAttempts       int32              `json:"failed_login_attempts"`
-	LockedUntil               pgtype.Timestamptz `json:"locked_until"`
 }

@@ -12,6 +12,59 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const claimPendingOutbox = `-- name: ClaimPendingOutbox :many
+UPDATE plt_outbox
+SET status = 'PROCESSING', retry_count = retry_count + 1
+WHERE id IN (
+    SELECT id FROM plt_outbox
+    WHERE status = 'PENDING' OR (status = 'PROCESSING' AND retry_count < 5)
+    ORDER BY created_at ASC
+    LIMIT $1
+    FOR UPDATE SKIP LOCKED
+)
+RETURNING id, payload_type, payload, status, created_at, processed_at, retry_count, last_error
+`
+
+type ClaimPendingOutboxRow struct {
+	ID          uuid.UUID        `json:"id"`
+	PayloadType string           `json:"payload_type"`
+	Payload     string           `json:"payload"`
+	Status      string           `json:"status"`
+	CreatedAt   pgtype.Timestamp `json:"created_at"`
+	ProcessedAt pgtype.Timestamp `json:"processed_at"`
+	RetryCount  *int32           `json:"retry_count"`
+	LastError   *string          `json:"last_error"`
+}
+
+func (q *Queries) ClaimPendingOutbox(ctx context.Context, limit int32) ([]ClaimPendingOutboxRow, error) {
+	rows, err := q.db.Query(ctx, claimPendingOutbox, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ClaimPendingOutboxRow{}
+	for rows.Next() {
+		var i ClaimPendingOutboxRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PayloadType,
+			&i.Payload,
+			&i.Status,
+			&i.CreatedAt,
+			&i.ProcessedAt,
+			&i.RetryCount,
+			&i.LastError,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getOutboxStats = `-- name: GetOutboxStats :one
 SELECT
     COUNT(*) AS total,
@@ -38,6 +91,54 @@ func (q *Queries) GetOutboxStats(ctx context.Context) (GetOutboxStatsRow, error)
 		&i.Failed,
 	)
 	return i, err
+}
+
+const listDeadLetterOutbox = `-- name: ListDeadLetterOutbox :many
+SELECT id, payload_type, payload, status, created_at, processed_at, retry_count, last_error
+FROM plt_outbox
+WHERE status = 'DEAD_LETTER'
+ORDER BY created_at ASC
+LIMIT $1
+`
+
+type ListDeadLetterOutboxRow struct {
+	ID          uuid.UUID        `json:"id"`
+	PayloadType string           `json:"payload_type"`
+	Payload     string           `json:"payload"`
+	Status      string           `json:"status"`
+	CreatedAt   pgtype.Timestamp `json:"created_at"`
+	ProcessedAt pgtype.Timestamp `json:"processed_at"`
+	RetryCount  *int32           `json:"retry_count"`
+	LastError   *string          `json:"last_error"`
+}
+
+func (q *Queries) ListDeadLetterOutbox(ctx context.Context, limit int32) ([]ListDeadLetterOutboxRow, error) {
+	rows, err := q.db.Query(ctx, listDeadLetterOutbox, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDeadLetterOutboxRow{}
+	for rows.Next() {
+		var i ListDeadLetterOutboxRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PayloadType,
+			&i.Payload,
+			&i.Status,
+			&i.CreatedAt,
+			&i.ProcessedAt,
+			&i.RetryCount,
+			&i.LastError,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listFailedOutbox = `-- name: ListFailedOutbox :many
@@ -229,4 +330,44 @@ func (q *Queries) SaveOutbox(ctx context.Context, arg SaveOutboxParams) error {
 		arg.Status,
 	)
 	return err
+}
+
+const updateOutboxStatus = `-- name: UpdateOutboxStatus :one
+UPDATE plt_outbox
+SET status = $2, last_error = $3
+WHERE id = $1
+RETURNING id, payload_type, payload, status, created_at, processed_at, retry_count, last_error
+`
+
+type UpdateOutboxStatusParams struct {
+	ID        uuid.UUID `json:"id"`
+	Status    string    `json:"status"`
+	LastError *string   `json:"last_error"`
+}
+
+type UpdateOutboxStatusRow struct {
+	ID          uuid.UUID        `json:"id"`
+	PayloadType string           `json:"payload_type"`
+	Payload     string           `json:"payload"`
+	Status      string           `json:"status"`
+	CreatedAt   pgtype.Timestamp `json:"created_at"`
+	ProcessedAt pgtype.Timestamp `json:"processed_at"`
+	RetryCount  *int32           `json:"retry_count"`
+	LastError   *string          `json:"last_error"`
+}
+
+func (q *Queries) UpdateOutboxStatus(ctx context.Context, arg UpdateOutboxStatusParams) (UpdateOutboxStatusRow, error) {
+	row := q.db.QueryRow(ctx, updateOutboxStatus, arg.ID, arg.Status, arg.LastError)
+	var i UpdateOutboxStatusRow
+	err := row.Scan(
+		&i.ID,
+		&i.PayloadType,
+		&i.Payload,
+		&i.Status,
+		&i.CreatedAt,
+		&i.ProcessedAt,
+		&i.RetryCount,
+		&i.LastError,
+	)
+	return i, err
 }

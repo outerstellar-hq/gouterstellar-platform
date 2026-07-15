@@ -20,12 +20,14 @@ func (q *Queries) CountContacts(ctx context.Context) (int64, error) {
 	return count, err
 }
 
-const countDeletedContacts = `-- name: CountDeletedContacts :one
-SELECT COUNT(*) FROM plt_contacts WHERE deleted = true
+const countSearchContacts = `-- name: CountSearchContacts :one
+SELECT COUNT(*) FROM plt_contacts
+WHERE deleted = false
+AND (name ILIKE '%' || $1::text || '%' OR COALESCE(company, '') ILIKE '%' || $1::text || '%')
 `
 
-func (q *Queries) CountDeletedContacts(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countDeletedContacts)
+func (q *Queries) CountSearchContacts(ctx context.Context, dollar_1 string) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchContacts, dollar_1)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -247,6 +249,30 @@ func (q *Queries) ListContactEmails(ctx context.Context, contactID int64) ([]str
 	return items, nil
 }
 
+const listContactEmailsBatch = `-- name: ListContactEmailsBatch :many
+SELECT contact_id, email FROM plt_contact_emails WHERE contact_id = ANY($1::bigint[])
+`
+
+func (q *Queries) ListContactEmailsBatch(ctx context.Context, dollar_1 []int64) ([]PltContactEmail, error) {
+	rows, err := q.db.Query(ctx, listContactEmailsBatch, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PltContactEmail{}
+	for rows.Next() {
+		var i PltContactEmail
+		if err := rows.Scan(&i.ContactID, &i.Email); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listContactPhones = `-- name: ListContactPhones :many
 SELECT phone FROM plt_contact_phones WHERE contact_id = $1
 `
@@ -264,6 +290,30 @@ func (q *Queries) ListContactPhones(ctx context.Context, contactID int64) ([]str
 			return nil, err
 		}
 		items = append(items, phone)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listContactPhonesBatch = `-- name: ListContactPhonesBatch :many
+SELECT contact_id, phone FROM plt_contact_phones WHERE contact_id = ANY($1::bigint[])
+`
+
+func (q *Queries) ListContactPhonesBatch(ctx context.Context, dollar_1 []int64) ([]PltContactPhone, error) {
+	rows, err := q.db.Query(ctx, listContactPhonesBatch, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PltContactPhone{}
+	for rows.Next() {
+		var i PltContactPhone
+		if err := rows.Scan(&i.ContactID, &i.Phone); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -295,6 +345,30 @@ func (q *Queries) ListContactSocials(ctx context.Context, contactID int64) ([]st
 	return items, nil
 }
 
+const listContactSocialsBatch = `-- name: ListContactSocialsBatch :many
+SELECT contact_id, social_media FROM plt_contact_socials WHERE contact_id = ANY($1::bigint[])
+`
+
+func (q *Queries) ListContactSocialsBatch(ctx context.Context, dollar_1 []int64) ([]PltContactSocial, error) {
+	rows, err := q.db.Query(ctx, listContactSocialsBatch, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PltContactSocial{}
+	for rows.Next() {
+		var i PltContactSocial
+		if err := rows.Scan(&i.ContactID, &i.SocialMedia); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listContacts = `-- name: ListContacts :many
 SELECT id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict
 FROM plt_contacts
@@ -310,52 +384,6 @@ type ListContactsParams struct {
 
 func (q *Queries) ListContacts(ctx context.Context, arg ListContactsParams) ([]PltContact, error) {
 	rows, err := q.db.Query(ctx, listContacts, arg.Limit, arg.Offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []PltContact{}
-	for rows.Next() {
-		var i PltContact
-		if err := rows.Scan(
-			&i.ID,
-			&i.SyncID,
-			&i.Name,
-			&i.Company,
-			&i.CompanyAddress,
-			&i.Department,
-			&i.CreatedAt,
-			&i.UpdatedAtEpochMs,
-			&i.Deleted,
-			&i.Dirty,
-			&i.Version,
-			&i.SyncConflict,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listDeletedContacts = `-- name: ListDeletedContacts :many
-SELECT id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict
-FROM plt_contacts
-WHERE deleted = true
-ORDER BY name ASC
-LIMIT $1 OFFSET $2
-`
-
-type ListDeletedContactsParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
-}
-
-func (q *Queries) ListDeletedContacts(ctx context.Context, arg ListDeletedContactsParams) ([]PltContact, error) {
-	rows, err := q.db.Query(ctx, listDeletedContacts, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -497,9 +525,7 @@ func (q *Queries) ResolveConflictContact(ctx context.Context, syncID string) (Pl
 
 const restoreContact = `-- name: RestoreContact :one
 UPDATE plt_contacts
-SET deleted = false, dirty = true,
-    updated_at_epoch_ms = (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT,
-    version = version + 1
+SET deleted = false, dirty = true, version = version + 1
 WHERE sync_id = $1
 RETURNING id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict
 `
@@ -522,6 +548,57 @@ func (q *Queries) RestoreContact(ctx context.Context, syncID string) (PltContact
 		&i.SyncConflict,
 	)
 	return i, err
+}
+
+const searchContacts = `-- name: SearchContacts :many
+SELECT id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict
+FROM plt_contacts
+WHERE deleted = false
+AND (name ILIKE '%' || $1::text || '%' OR COALESCE(company, '') ILIKE '%' || $1::text || '%')
+ORDER BY name ASC
+LIMIT $2 OFFSET $3
+`
+
+type SearchContactsParams struct {
+	Column1 string `json:"column_1"`
+	Limit   int32  `json:"limit"`
+	Offset  int32  `json:"offset"`
+}
+
+// Returns one page of non-deleted contacts whose name or company match the
+// query (case-insensitive ILIKE). Mirrors SearchMessages. company is nullable,
+// so COALESCE protects the ILIKE from NULL operands.
+func (q *Queries) SearchContacts(ctx context.Context, arg SearchContactsParams) ([]PltContact, error) {
+	rows, err := q.db.Query(ctx, searchContacts, arg.Column1, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PltContact{}
+	for rows.Next() {
+		var i PltContact
+		if err := rows.Scan(
+			&i.ID,
+			&i.SyncID,
+			&i.Name,
+			&i.Company,
+			&i.CompanyAddress,
+			&i.Department,
+			&i.CreatedAt,
+			&i.UpdatedAtEpochMs,
+			&i.Deleted,
+			&i.Dirty,
+			&i.Version,
+			&i.SyncConflict,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const setContactEmails = `-- name: SetContactEmails :exec
@@ -553,9 +630,7 @@ func (q *Queries) SetContactSocials(ctx context.Context, contactID int64) error 
 
 const softDeleteContact = `-- name: SoftDeleteContact :one
 UPDATE plt_contacts
-SET deleted = true, dirty = true,
-    updated_at_epoch_ms = (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT,
-    version = version + 1
+SET deleted = true, dirty = true, version = version + 1
 WHERE sync_id = $1
 RETURNING id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict
 `

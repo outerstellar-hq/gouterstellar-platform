@@ -6,6 +6,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
+
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
 )
@@ -18,12 +20,14 @@ func NewNotificationAPI(notifSvc *service.NotificationService) *NotificationAPI 
 	return &NotificationAPI{notificationService: notifSvc}
 }
 
-func (h *NotificationAPI) RegisterRoutes(r chi.Router) {
-	r.Get("/api/v1/notifications", h.List)
-	r.Get("/api/v1/notifications/unread-count", h.UnreadCount)
-	r.Put("/api/v1/notifications/{id}/read", h.MarkRead)
-	r.Put("/api/v1/notifications/read-all", h.MarkAllRead)
-	r.Delete("/api/v1/notifications/{id}", h.Delete)
+// ContributeRoutes registers the notification API routes (bearer auth applied by builder).
+func (h *NotificationAPI) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.API(http.MethodGet, "/api/v1/notifications", "List notifications", http.HandlerFunc(h.List))
+	ctx.Routes.API(http.MethodGet, "/api/v1/notifications/unread-count", "Unread count", http.HandlerFunc(h.UnreadCount))
+	ctx.Routes.API(http.MethodPut, "/api/v1/notifications/{id}/read", "Mark read", http.HandlerFunc(h.MarkRead))
+	ctx.Routes.API(http.MethodPut, "/api/v1/notifications/read-all", "Mark all read", http.HandlerFunc(h.MarkAllRead))
+	ctx.Routes.API(http.MethodDelete, "/api/v1/notifications/{id}", "Delete notification", http.HandlerFunc(h.Delete))
+	return nil
 }
 
 func (h *NotificationAPI) List(w http.ResponseWriter, r *http.Request) {

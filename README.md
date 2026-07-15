@@ -8,7 +8,7 @@ Go port of the [outerstellar-platform](https://github.com/outerstellar-hq/outers
 # Prerequisites: Go 1.24+, PostgreSQL 16+, Podman or Docker
 make build          # build the server
 make migrate-up     # apply database migrations
-go run ./cmd/seed -username admin -password '<strong-password>'
+make seed           # create initial admin user (admin / admin123)
 make dev            # run with dev profile (CSRF off, dev dashboard on)
 ```
 
@@ -29,14 +29,11 @@ Key settings:
 | Key | Default | Description |
 |-----|---------|-------------|
 | `port` | `8080` | Listen port |
-| `database_url` | `postgres://localhost:5432/outerstellar?sslmode=require` | PostgreSQL connection string; override for local development |
+| `database_url` | `postgres://outerstellar:outerstellar@localhost:5432/outerstellar?sslmode=disable` | PostgreSQL connection string |
 | `dev_mode` | `false` | Enable development mode |
 | `csrf_enabled` | `true` | Enable CSRF protection |
-| `session_cookie_secure` | `true` | Set Secure flag on session cookies |
+| `session_cookie_secure` | `false` | Set Secure flag on session cookies |
 | `session_timeout_minutes` | `30` | Session timeout |
-| `max_failed_login_attempts` | `10` | Failed passwords before temporary account lockout |
-| `lockout_duration_seconds` | `900` | Account lockout duration |
-| `metrics_token` | empty | Enables `/metrics` when set and protects it with bearer authentication |
 | `jwt.enabled` | `false` | Enable JWT token auth |
 | `email.enabled` | `false` | Enable email sending |
 
@@ -66,9 +63,7 @@ gouterstellar-platform/
 │   │   └── viewmodel/          # Template view models
 │   └── wire/                   # Manual dependency injection
 ├── pkg/
-│   ├── i18n/                   # Internationalization (locales, .properties, placeholder injection)
-│   ├── theme/                  # Theme service (SmartShader color math, CSS variable generation)
-│   └── plugin/                 # Plugin manager (factory registration, lifecycle)
+│   └── i18n/                   # Internationalization (locales, .properties, placeholder injection)
 ├── static/
 │   ├── css/main.css            # Stylesheet with light/dark theming
 │   └── js/platform.js          # Theme toggle, CSRF injection, toast auto-dismiss
@@ -144,7 +139,7 @@ go test -run TestAuthenticate ./... # run a specific test
 
 ```bash
 make migrate-up    # apply pending migrations
-go run ./cmd/seed -username admin -password '<strong-password>'
+make seed          # create admin user (pass -username / -password flags)
 ```
 
 ## API Endpoints
@@ -161,16 +156,16 @@ go run ./cmd/seed -username admin -password '<strong-password>'
 - `POST /api/v1/auth/logout` — invalidate session
 - `GET /api/v1/auth/profile` — get current user profile (Bearer auth)
 - `PUT /api/v1/auth/profile` — update profile
-- `PUT /api/v1/auth/password` — change password
+- `POST /api/v1/auth/change-password` — change password
 - `POST /api/v1/auth/api-keys` — create API key
 - `GET /api/v1/auth/api-keys` — list API keys
 - `DELETE /api/v1/auth/api-keys/{id}` — delete API key
 
 ### User Admin API (admin only)
-- `GET /api/v1/admin/users` — list users
-- `GET /api/v1/admin/users/count` — count users
-- `PUT /api/v1/admin/users/{id}/enabled` — enable/disable user
-- `PUT /api/v1/admin/users/{id}/role` — change user role
+- `GET /api/v1/users` — list users
+- `GET /api/v1/users/count` — count users
+- `PUT /api/v1/users/{id}/enabled` — enable/disable user
+- `PUT /api/v1/users/{id}/role` — change user role
 
 ### Web UI
 - `GET /auth` — login page

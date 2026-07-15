@@ -12,50 +12,43 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const consumePasswordReset = `-- name: ConsumePasswordReset :one
-WITH consumed AS (
-    UPDATE plt_password_reset_tokens
-    SET used = true
-    WHERE token = $1
-      AND used = false
-      AND expires_at > CURRENT_TIMESTAMP
-    RETURNING user_id
-)
-UPDATE plt_users
-SET password_hash = $2, failed_login_attempts = 0, locked_until = NULL
-FROM consumed
-WHERE plt_users.id = consumed.user_id
-RETURNING plt_users.id, username, email, password_hash, role, enabled, created_at,
-          last_activity_at, avatar_url, email_notifications_enabled,
-          push_notifications_enabled, language, theme, layout,
-          failed_login_attempts, locked_until
+const findPasswordResetByToken = `-- name: FindPasswordResetByToken :one
+SELECT id, user_id, token, expires_at, used, created_at
+FROM plt_password_reset_tokens
+WHERE token = $1
 `
 
-type ConsumePasswordResetParams struct {
-	Token        string `json:"token"`
-	PasswordHash string `json:"password_hash"`
-}
-
-func (q *Queries) ConsumePasswordReset(ctx context.Context, arg ConsumePasswordResetParams) (PltUser, error) {
-	row := q.db.QueryRow(ctx, consumePasswordReset, arg.Token, arg.PasswordHash)
-	var i PltUser
+func (q *Queries) FindPasswordResetByToken(ctx context.Context, token string) (PltPasswordResetToken, error) {
+	row := q.db.QueryRow(ctx, findPasswordResetByToken, token)
+	var i PltPasswordResetToken
 	err := row.Scan(
 		&i.ID,
-		&i.Username,
-		&i.Email,
-		&i.PasswordHash,
-		&i.Role,
-		&i.Enabled,
+		&i.UserID,
+		&i.Token,
+		&i.ExpiresAt,
+		&i.Used,
 		&i.CreatedAt,
-		&i.LastActivityAt,
-		&i.AvatarUrl,
-		&i.EmailNotificationsEnabled,
-		&i.PushNotificationsEnabled,
-		&i.Language,
-		&i.Theme,
-		&i.Layout,
-		&i.FailedLoginAttempts,
-		&i.LockedUntil,
+	)
+	return i, err
+}
+
+const markPasswordResetUsed = `-- name: MarkPasswordResetUsed :one
+UPDATE plt_password_reset_tokens
+SET used = true
+WHERE token = $1
+RETURNING id, user_id, token, expires_at, used, created_at
+`
+
+func (q *Queries) MarkPasswordResetUsed(ctx context.Context, token string) (PltPasswordResetToken, error) {
+	row := q.db.QueryRow(ctx, markPasswordResetUsed, token)
+	var i PltPasswordResetToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Token,
+		&i.ExpiresAt,
+		&i.Used,
+		&i.CreatedAt,
 	)
 	return i, err
 }

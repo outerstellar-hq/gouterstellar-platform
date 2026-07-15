@@ -34,11 +34,17 @@ func (p *WsEventPublisher) Unregister(client *WsClient) {
 	_ = client.Conn.Close()
 }
 
-func (p *WsEventPublisher) PublishRefresh(targetID string) {
+// PublishRefresh sends a refresh signal for targetID. When userID is non-empty,
+// only clients whose UserID matches receive it; when userID is empty the refresh
+// is broadcast to every connected client.
+func (p *WsEventPublisher) PublishRefresh(userID, targetID string) {
 	msg := "refresh:" + targetID
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	for client := range p.clients {
+		if userID != "" && client.UserID != userID {
+			continue
+		}
 		err := client.Conn.WriteMessage(websocket.TextMessage, []byte(msg))
 		if err != nil {
 			slog.Warn("WS write failed", "userID", client.UserID, "error", err)

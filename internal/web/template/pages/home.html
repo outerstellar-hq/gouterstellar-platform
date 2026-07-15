@@ -1,10 +1,10 @@
 {{ define "content" }}
 <div class="home-page">
     <h1>Welcome to Outerstellar Platform</h1>
-    <div class="stat-cards">
-        <a class="stat-card" href="/messages"><span class="stat-value">{{ .MessageCount }}</span><span class="stat-label">Messages</span></a>
-        <a class="stat-card" href="/contacts"><span class="stat-value">{{ .ContactCount }}</span><span class="stat-label">Contacts</span></a>
-        <div class="stat-card"><span class="stat-value">{{ .UserCount }}</span><span class="stat-label">Users</span></div>
+    <div class="stats">
+        <div class="stat-card"><h3>{{ .BodyData.MessageCount }}</h3><p>Messages</p></div>
+        <div class="stat-card"><h3>{{ .BodyData.ContactCount }}</h3><p>Contacts</p></div>
+        <div class="stat-card"><h3>{{ .BodyData.UserCount }}</h3><p>Users</p></div>
     </div>
 </div>
 {{ end }}

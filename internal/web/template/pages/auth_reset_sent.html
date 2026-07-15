@@ -1,7 +1,9 @@
 {{ define "content" }}
-<div class="auth-page"><div class="auth-card">
-    <h1>Check Your Email</h1>
-    <p>If the address matches an account, reset instructions have been sent.</p>
-    <p><a href="/auth">Return to sign in</a></p>
-</div></div>
+<div class="auth-page">
+    <div class="auth-card">
+        <h1>Check Your Email</h1>
+        <p>If an account exists with that email address, a password reset link has been sent.</p>
+        <a href="/auth" class="btn btn-secondary">Back to Sign In</a>
+    </div>
+</div>
 {{ end }}

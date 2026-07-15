@@ -1,123 +1,235 @@
 package web
 
 import (
-	"bytes"
 	"fmt"
 	"html/template"
 	"io/fs"
 	"net/http"
-	"path/filepath"
 	"strings"
 
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
 )
 
+// Renderer renders HTML pages through a shared layout (base.html) and
+// partials for HTMX fragment responses. Each page is pre-cloned from the
+// base template set so its {{ define "content" }} block resolves cleanly.
 type Renderer struct {
-	pages   map[string]*template.Template
-	version string
+	pages    map[string]*template.Template
+	partials *template.Template
+	version  string
 }
 
+// NewRenderer parses base.html + partials into a base set, then clones
+// it for each page file. Pages are keyed by filename without extension.
 func NewRenderer(templateFS fs.FS, funcs template.FuncMap, version string) (*Renderer, error) {
-	partials, err := fs.Glob(templateFS, "template/partials/*.html")
+	// Parse base into the shared base set.
+	baseBytes, err := fs.ReadFile(templateFS, "template/base.html")
 	if err != nil {
-		return nil, fmt.Errorf("find template partials: %w", err)
-	}
-	pageFiles, err := fs.Glob(templateFS, "template/pages/*.html")
-	if err != nil {
-		return nil, fmt.Errorf("find page templates: %w", err)
+		return nil, fmt.Errorf("read base.html: %w", err)
 	}
 
-	pages := make(map[string]*template.Template, len(pageFiles))
-	for _, pageFile := range pageFiles {
-		files := append([]string{"template/base.html"}, partials...)
-		files = append(files, pageFile)
-		parsed, parseErr := template.New(filepath.Base(pageFile)).Funcs(funcs).ParseFS(templateFS, files...)
-		if parseErr != nil {
-			return nil, fmt.Errorf("parse %s: %w", pageFile, parseErr)
+	base := template.New("").Funcs(funcs)
+	base, err = base.Parse(string(baseBytes))
+	if err != nil {
+		return nil, fmt.Errorf("parse base.html: %w", err)
+	}
+
+	// Parse partials into the base set so they're available in every clone.
+	partialEntries, err := fs.ReadDir(templateFS, "template/partials")
+	if err != nil {
+		return nil, fmt.Errorf("read partials dir: %w", err)
+	}
+	for _, entry := range partialEntries {
+		if !strings.HasSuffix(entry.Name(), ".html") {
+			continue
 		}
-		pages[filepath.Base(pageFile)] = parsed
+		content, err := fs.ReadFile(templateFS, "template/partials/"+entry.Name())
+		if err != nil {
+			return nil, fmt.Errorf("read partial %s: %w", entry.Name(), err)
+		}
+		base, err = base.Parse(string(content))
+		if err != nil {
+			return nil, fmt.Errorf("parse partial %s: %w", entry.Name(), err)
+		}
 	}
-	return &Renderer{pages: pages, version: version}, nil
+
+	// Clone for each page.
+	pages := make(map[string]*template.Template)
+	pageEntries, err := fs.ReadDir(templateFS, "template/pages")
+	if err != nil {
+		return nil, fmt.Errorf("read pages dir: %w", err)
+	}
+	for _, entry := range pageEntries {
+		if !strings.HasSuffix(entry.Name(), ".html") {
+			continue
+		}
+		pageName := strings.TrimSuffix(entry.Name(), ".html")
+		content, err := fs.ReadFile(templateFS, "template/pages/"+entry.Name())
+		if err != nil {
+			return nil, fmt.Errorf("read page %s: %w", entry.Name(), err)
+		}
+		clone, err := base.Clone()
+		if err != nil {
+			return nil, fmt.Errorf("clone for page %s: %w", pageName, err)
+		}
+		clone, err = clone.Parse(string(content))
+		if err != nil {
+			return nil, fmt.Errorf("parse page %s: %w", pageName, err)
+		}
+		pages[pageName] = clone
+	}
+
+	// Separate partials set for fragment rendering.
+	partials := template.New("").Funcs(funcs)
+	for _, entry := range partialEntries {
+		if !strings.HasSuffix(entry.Name(), ".html") {
+			continue
+		}
+		content, _ := fs.ReadFile(templateFS, "template/partials/"+entry.Name())
+		partials, err = partials.Parse(string(content))
+		if err != nil {
+			return nil, fmt.Errorf("parse partials set %s: %w", entry.Name(), err)
+		}
+	}
+
+	return &Renderer{pages: pages, partials: partials, version: version}, nil
 }
 
-func (r *Renderer) Render(w http.ResponseWriter, request *http.Request, name string, data interface{}) error {
-	return r.render(w, request, name, data, http.StatusOK)
-}
-
-func (r *Renderer) RenderWithStatus(w http.ResponseWriter, request *http.Request, name string, data interface{}, status int) error {
-	return r.render(w, request, name, data, status)
-}
-
-func (r *Renderer) render(w http.ResponseWriter, request *http.Request, name string, data interface{}, status int) error {
-	isFragment := strings.HasPrefix(filepath.ToSlash(name), "components/")
-	name = pageAlias(name)
-	page, ok := r.pages[name]
+// RenderPage renders a page wrapped in the shell layout.
+// page is the page name without .html (e.g. "home", "contacts").
+func (r *Renderer) RenderPage(w http.ResponseWriter, req *http.Request, page string, data interface{}) error {
+	tmpl, ok := r.pages[page]
 	if !ok {
-		return fmt.Errorf("template %q does not exist", name)
+		return fmt.Errorf("unknown page template: %q", page)
 	}
 
-	view := data
-	templateName := "content"
-	if !isFragment {
-		view = r.shell(request, name, data)
-		templateName = "base"
-	}
-
-	var content bytes.Buffer
-	if err := page.ExecuteTemplate(&content, templateName, view); err != nil {
-		return fmt.Errorf("render %s: %w", name, err)
-	}
+	shell := r.buildShell(req)
+	shell.Body = page
+	shell.BodyData = data
+	shell.Title = pageTitle(page)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	_, err := w.Write(content.Bytes())
-	return err
+	return tmpl.ExecuteTemplate(w, "base", shell)
 }
 
-func (r *Renderer) shell(request *http.Request, name string, data interface{}) viewmodel.ShellViewModel {
-	theme := "light"
-	language := "en"
-	var userContext *viewmodel.UserContext
-	if user := UserFromRequest(request); user != nil {
+// RenderWithStatus renders a page with a specific HTTP status code.
+func (r *Renderer) RenderWithStatus(w http.ResponseWriter, req *http.Request, page string, data interface{}, status int) error {
+	w.WriteHeader(status)
+	return r.RenderPage(w, req, page, data)
+}
+
+// RenderPartial renders a fragment without shell wrapping (for HTMX responses).
+func (r *Renderer) RenderPartial(w http.ResponseWriter, name string, data interface{}) error {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	return r.partials.ExecuteTemplate(w, name, data)
+}
+
+// HasPage reports whether the renderer has a parsed template for the given page.
+func (r *Renderer) HasPage(name string) bool {
+	_, ok := r.pages[name]
+	return ok
+}
+
+// buildShell constructs a ShellViewModel from request context.
+func (r *Renderer) buildShell(req *http.Request) *viewmodel.ShellViewModel {
+	shell := &viewmodel.ShellViewModel{
+		CSRFToken: CSRFTokenFromRequest(req),
+		RequestID: RequestIDFromContext(req.Context()),
+		Version:   r.version,
+		Theme:     "light",
+	}
+
+	shell.Layout = "sidebar"
+
+	if user := UserFromRequest(req); user != nil {
+		shell.User = &viewmodel.UserContext{
+			ID:       user.ID.String(),
+			Username: user.Username,
+			Role:     string(user.Role),
+			IsAdmin:  user.Role == model.RoleAdmin,
+		}
+		theme := "light"
 		if user.Theme != nil && *user.Theme != "" {
 			theme = *user.Theme
 		}
-		if user.Language != nil && *user.Language != "" {
-			language = *user.Language
+		shell.Theme = theme
+		shell.IsDark = theme == "dark"
+		if user.Layout != nil && *user.Layout != "" {
+			shell.Layout = *user.Layout
 		}
-		userContext = &viewmodel.UserContext{
-			ID: user.ID.String(), Username: user.Username, Role: string(user.Role), IsAdmin: user.Role == model.RoleAdmin,
+		if user.Language != nil {
+			shell.Language = *user.Language
 		}
 	}
-	page := strings.TrimSuffix(filepath.Base(name), filepath.Ext(name))
-	if page == "search" {
-		page = "messages"
+
+	// Resolve extension-contributed nav items from context and flag the one
+	// matching the current request path. The root URL ("/") only matches
+	// exactly so it isn't flagged active on every page; deeper URLs match by
+	// prefix so detail routes (e.g. /contacts/{id}) light up their parent.
+	if items := NavItemsFromContext(req.Context()); len(items) > 0 {
+		path := req.URL.Path
+		resolved := make([]viewmodel.NavItem, len(items))
+		for i, item := range items {
+			item.Active = navIsActive(item.URL, path)
+			resolved[i] = item
+		}
+		shell.NavItems = resolved
 	}
-	return viewmodel.ShellViewModel{
-		Title: titleForPage(page), User: userContext, Theme: theme, IsDark: theme == "dark", Language: language,
-		CSRFToken: CSRFTokenFromRequest(request), Version: r.version, RequestID: RequestIDFromContext(request.Context()),
-		Body: page, BodyData: data,
-	}
+
+	return shell
 }
 
-func titleForPage(page string) string {
-	titles := map[string]string{
-		"home": "Home", "messages": "Messages", "contacts": "Contacts", "notifications": "Notifications",
-		"settings": "Settings", "trash": "Trash", "admin_users": "User Management", "admin_audit": "Audit Log",
-		"auth_login": "Sign in", "auth_change_password": "Change password", "auth_reset_password": "Reset password",
-		"auth_reset_sent": "Password reset", "dev_dashboard": "Developer Dashboard", "error": "Error",
+// navIsActive decides whether a nav entry should be highlighted for the given
+// request path. The root entry is active only on an exact "/" match.
+func navIsActive(navURL, reqPath string) bool {
+	if navURL == "/" {
+		return reqPath == "/"
 	}
-	if title, ok := titles[page]; ok {
-		return title
+	if reqPath == navURL {
+		return true
 	}
-	return "Outerstellar Platform"
+	return strings.HasPrefix(reqPath, navURL+"/")
 }
 
-func pageAlias(name string) string {
-	base := filepath.Base(name)
-	if base == "search.html" {
-		return "messages.html"
+// pageTitle returns a human-readable title for a page name.
+func pageTitle(page string) string {
+	switch page {
+	case "home":
+		return "Dashboard"
+	case "auth_login":
+		return "Sign In"
+	case "auth_change_password":
+		return "Change Password"
+	case "auth_reset_password":
+		return "Reset Password"
+	case "auth_reset_confirm":
+		return "Set New Password"
+	case "auth_reset_sent":
+		return "Reset Sent"
+	case "contacts":
+		return "Contacts"
+	case "contact_detail":
+		return "Contact"
+	case "messages":
+		return "Messages"
+	case "search":
+		return "Search"
+	case "settings":
+		return "Settings"
+	case "settings_sessions":
+		return "Active Sessions"
+	case "notifications":
+		return "Notifications"
+	case "admin_users":
+		return "User Management"
+	case "admin_audit":
+		return "Audit Log"
+	case "dev_dashboard":
+		return "Dev Dashboard"
+	case "error":
+		return "Error"
+	default:
+		return strings.Title(page)
 	}
-	return base
 }

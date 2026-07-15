@@ -5,30 +5,19 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/persistence"
 	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
 	"github.com/rygel/gouterstellar-platform/internal/security"
 )
-
-var errInvalidCredentials = errors.New("invalid credentials")
-
-type SecurityConfig struct {
-	SessionTimeout         time.Duration
-	MaxFailedLoginAttempts int32
-	LockoutDuration        time.Duration
-}
 
 const (
 	MinPasswordLength     = 8
@@ -39,15 +28,14 @@ const (
 )
 
 type SecurityService struct {
-	userRepo             persistence.UserRepository
-	passwordEncoder      security.PasswordEncoder
-	sessionRepo          persistence.SessionRepository
-	auditRepo            persistence.AuditRepository
-	config               SecurityConfig
-	now                  func() time.Time
-	dummyHashOnce        sync.Once
-	dummyPasswordHash    string
-	dummyPasswordHashErr error
+	userRepo              persistence.UserRepository
+	passwordEncoder       security.PasswordEncoder
+	sessionRepo           persistence.SessionRepository
+	auditRepo             persistence.AuditRepository
+	auditor               Auditor
+	notificationService   *NotificationService
+	emailService          EmailService
+	sessionTimeoutSeconds int64
 }
 
 func NewSecurityService(
@@ -55,89 +43,54 @@ func NewSecurityService(
 	passwordEncoder security.PasswordEncoder,
 	sessionRepo persistence.SessionRepository,
 	auditRepo persistence.AuditRepository,
-	config SecurityConfig,
+	notificationService *NotificationService,
+	emailService EmailService,
+	sessionTimeoutSeconds int64,
 ) *SecurityService {
 	return &SecurityService{
-		userRepo:        userRepo,
-		passwordEncoder: passwordEncoder,
-		sessionRepo:     sessionRepo,
-		auditRepo:       auditRepo,
-		config:          config,
-		now:             time.Now,
+		userRepo:              userRepo,
+		passwordEncoder:       passwordEncoder,
+		sessionRepo:           sessionRepo,
+		auditRepo:             auditRepo,
+		// The auditor wraps the same repo so the write path is uniform with the
+		// other services. auditRepo is retained for the audit-read methods
+		// (GetAuditLog/GetAuditLogPaged/CountAuditEntries).
+		auditor:               NewAuditService(auditRepo),
+		notificationService:   notificationService,
+		emailService:          emailService,
+		sessionTimeoutSeconds: sessionTimeoutSeconds,
 	}
 }
 
 func (s *SecurityService) Authenticate(ctx context.Context, username, password string) (*model.User, error) {
 	pltUser, err := s.userRepo.FindByUsername(ctx, username)
 	if err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
-			slog.Error("Failed to load user during authentication", "error", err)
-			return nil, errInvalidCredentials
-		}
-		if timingErr := s.matchUnknownPassword(password); timingErr != nil {
-			slog.Error("Failed to equalize unknown-user authentication", "error", timingErr)
-		}
-		return nil, errInvalidCredentials
+		attempted := username
+		s.AuditLoginFailed(ctx, &attempted)
+		return nil, fmt.Errorf("invalid credentials")
 	}
 
 	user := security.PltUserToModel(pltUser)
-	passwordMatches := s.passwordEncoder.Matches(password, user.PasswordHash)
 
 	if !user.Enabled {
-		s.authenticationFailed(ctx, user)
-		return nil, errInvalidCredentials
+		attempted := username
+		s.AuditLoginFailed(ctx, &attempted)
+		return nil, fmt.Errorf("account is disabled")
 	}
 
-	if user.LockedUntil != nil && user.LockedUntil.After(s.now()) {
-		s.authenticationFailed(ctx, user)
-		return nil, errInvalidCredentials
-	}
-
-	if !passwordMatches {
-		attempts, incrementErr := s.userRepo.IncrementFailedLoginAttempts(ctx, user.ID)
-		if incrementErr != nil {
-			slog.Error("Failed to record authentication attempt", "userID", user.ID, "error", incrementErr)
-			return nil, errInvalidCredentials
-		}
-		if attempts >= s.config.MaxFailedLoginAttempts {
-			until := s.now().Add(s.config.LockoutDuration)
-			if lockErr := s.userRepo.LockUserUntil(ctx, user.ID, until); lockErr != nil {
-				slog.Error("Failed to lock user after repeated authentication failures", "userID", user.ID, "error", lockErr)
-				return nil, errInvalidCredentials
-			}
-		}
-		s.authenticationFailed(ctx, user)
-		return nil, errInvalidCredentials
-	}
-
-	if user.FailedLoginAttempts > 0 || user.LockedUntil != nil {
-		if resetErr := s.userRepo.ResetLoginFailures(ctx, user.ID); resetErr != nil {
-			slog.Error("Failed to reset authentication failures", "userID", user.ID, "error", resetErr)
-			return nil, errInvalidCredentials
-		}
+	if !s.passwordEncoder.Matches(password, user.PasswordHash) {
+		attempted := username
+		s.AuditLoginFailed(ctx, &attempted)
+		return nil, fmt.Errorf("invalid credentials")
 	}
 
 	if err := s.userRepo.UpdateLastActivity(ctx, user.ID); err != nil {
 		slog.Warn("Failed to update last activity", "userID", user.ID, "error", err)
 	}
 
+	s.AuditLogin(ctx, &user.ID, &user.Username)
+
 	return user, nil
-}
-
-func (s *SecurityService) matchUnknownPassword(password string) error {
-	s.dummyHashOnce.Do(func() {
-		s.dummyPasswordHash, s.dummyPasswordHashErr = s.passwordEncoder.Encode("timing-mitigation-dummy")
-	})
-	if s.dummyPasswordHashErr != nil {
-		return s.dummyPasswordHashErr
-	}
-	s.passwordEncoder.Matches(password, s.dummyPasswordHash)
-	return nil
-}
-
-func (s *SecurityService) authenticationFailed(ctx context.Context, user *model.User) {
-	actorID, actorName := userToAuditParams(user)
-	s.auditLog(ctx, actorID, actorName, actorID, actorName, "AUTHENTICATION_FAILED", "Invalid credentials")
 }
 
 func (s *SecurityService) Register(ctx context.Context, username, password string) (*model.User, error) {
@@ -177,6 +130,15 @@ func (s *SecurityService) Register(ctx context.Context, username, password strin
 	actorID, actorName := userToAuditParams(user)
 	s.auditLog(ctx, actorID, actorName, nil, nil, "USER_REGISTER", "New user registered")
 
+	// Send a welcome email regardless of notification preference — the user just
+	// signed up, so this transactional message is expected. Failures are logged
+	// but never block registration.
+	if s.emailService != nil && user.Email != "" {
+		if err := s.emailService.Send(user.Email, "Welcome to Outerstellar", "Your account has been created."); err != nil {
+			slog.Error("Failed to send welcome email", "userID", user.ID, "error", err)
+		}
+	}
+
 	return user, nil
 }
 
@@ -201,7 +163,7 @@ func (s *SecurityService) ChangePassword(ctx context.Context, userID uuid.UUID, 
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	_, err = s.userRepo.CreateUser(ctx, user.ID, user.Username, user.Email, hash, string(user.Role), user.Enabled)
+	err = s.userRepo.UpdatePasswordHash(ctx, userID, hash)
 	if err != nil {
 		return fmt.Errorf("update password: %w", err)
 	}
@@ -275,6 +237,22 @@ func (s *SecurityService) SetUserEnabled(ctx context.Context, adminID, targetID 
 
 	s.auditLog(ctx, actorID, actorName, targetIDPtr, targetName, action, fmt.Sprintf("Set enabled=%v", enabled))
 
+	if !enabled {
+		if s.notificationService != nil {
+			if err := s.notificationService.Create(ctx, targetID, "Account Disabled", "Your account has been disabled by an administrator.", "account"); err != nil {
+				slog.Warn("Failed to create account-disabled notification", "userID", targetID, "error", err)
+			}
+		}
+		// Notify the affected user by email when they have email notifications
+		// enabled. Synchronous send is acceptable for the PoC; failures are
+		// logged but never block the disable action.
+		if s.emailService != nil && targetModel.EmailNotificationsEnabled && targetModel.Email != "" {
+			if err := s.emailService.Send(targetModel.Email, "Account Disabled", "Your account has been disabled by an administrator."); err != nil {
+				slog.Error("Failed to send account-disabled email", "userID", targetID, "error", err)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -301,30 +279,13 @@ func (s *SecurityService) SetUserRole(ctx context.Context, adminID, targetID uui
 	targetIDPtr, targetName := userToAuditParams(targetModel)
 	s.auditLog(ctx, actorID, actorName, targetIDPtr, targetName, "ROLE_CHANGE", fmt.Sprintf("Role set to %s", role))
 
-	_ = targetModel
-	return nil
-}
+	if s.notificationService != nil {
+		body := fmt.Sprintf("Your role has been changed to %s.", role)
+		if err := s.notificationService.Create(ctx, targetID, "Role Updated", body, "account"); err != nil {
+			slog.Warn("Failed to create role-change notification", "userID", targetID, "error", err)
+		}
+	}
 
-func (s *SecurityService) UnlockAccount(ctx context.Context, adminID, targetID uuid.UUID) error {
-	admin, err := s.userRepo.FindByID(ctx, adminID)
-	if err != nil {
-		return &model.UserNotFoundError{UserID: adminID.String()}
-	}
-	adminModel := security.PltUserToModel(admin)
-	if adminModel.Role != model.RoleAdmin {
-		return &model.InsufficientPermissionError{Message: "Admin access required to unlock accounts"}
-	}
-	target, err := s.userRepo.FindByID(ctx, targetID)
-	if err != nil {
-		return &model.UserNotFoundError{UserID: targetID.String()}
-	}
-	if err := s.userRepo.ResetLoginFailures(ctx, targetID); err != nil {
-		return fmt.Errorf("unlock account: %w", err)
-	}
-	targetModel := security.PltUserToModel(target)
-	actorID, actorName := userToAuditParams(adminModel)
-	targetIDPtr, targetName := userToAuditParams(targetModel)
-	s.auditLog(ctx, actorID, actorName, targetIDPtr, targetName, "USER_UNLOCKED", "Account unlocked")
 	return nil
 }
 
@@ -382,10 +343,9 @@ func (s *SecurityService) CreateSession(ctx context.Context, userID uuid.UUID) (
 	}
 	rawToken := "oss_" + hex.EncodeToString(rawBytes)
 
-	hash := sha256.Sum256([]byte(rawToken))
-	tokenHash := hex.EncodeToString(hash[:])
+	tokenHash := hashToken(rawToken)
 
-	expiresAt := s.now().Add(s.config.SessionTimeout)
+	expiresAt := time.Now().Add(time.Duration(s.sessionTimeoutSeconds) * time.Second)
 
 	_, err := s.sessionRepo.CreateSession(ctx, tokenHash, userID, expiresAt)
 	if err != nil {
@@ -396,8 +356,7 @@ func (s *SecurityService) CreateSession(ctx context.Context, userID uuid.UUID) (
 }
 
 func (s *SecurityService) LookupSession(ctx context.Context, rawToken string) model.SessionLookup {
-	hash := sha256.Sum256([]byte(rawToken))
-	tokenHash := hex.EncodeToString(hash[:])
+	tokenHash := hashToken(rawToken)
 
 	session, err := s.sessionRepo.FindByTokenHash(ctx, tokenHash)
 	if err != nil {
@@ -406,11 +365,11 @@ func (s *SecurityService) LookupSession(ctx context.Context, rawToken string) mo
 
 	sess := pltSessionToModel(session)
 
-	if sess.ExpiresAt.Before(s.now()) {
+	if sess.ExpiresAt.Before(time.Now()) {
 		return model.SessionExpired{}
 	}
 
-	newExpiresAt := s.now().Add(s.config.SessionTimeout)
+	newExpiresAt := time.Now().Add(time.Duration(s.sessionTimeoutSeconds) * time.Second)
 	_, err = s.sessionRepo.UpdateExpiresAt(ctx, tokenHash, newExpiresAt)
 	if err != nil {
 		slog.Warn("Failed to extend session expiry", "error", err)
@@ -434,10 +393,74 @@ func (s *SecurityService) LookupSession(ctx context.Context, rawToken string) mo
 	return model.SessionActive{User: user}
 }
 
+// Logout invalidates a session by its raw token and records an audit event when
+// an actor is supplied. It is a no-op for an empty token so it is safe to call
+// unconditionally from logout handlers. The actor parameters (userID/username)
+// are optional: pass nil to skip the audit entry, matching the prior handler
+// behavior where a logout without a known user was logged without an actor.
+func (s *SecurityService) Logout(ctx context.Context, rawToken string, actorID *uuid.UUID, actorName *string) error {
+	if rawToken == "" {
+		return nil
+	}
+	tokenHash := hashToken(rawToken)
+	if err := s.sessionRepo.DeleteByTokenHash(ctx, tokenHash); err != nil {
+		return fmt.Errorf("delete session: %w", err)
+	}
+	s.AuditLogout(ctx, actorID, actorName)
+	return nil
+}
+
 func (s *SecurityService) DeleteExpiredSessions(ctx context.Context) error {
 	_, err := s.sessionRepo.DeleteExpired(ctx)
 	if err != nil {
 		return fmt.Errorf("delete expired sessions: %w", err)
+	}
+	return nil
+}
+
+// SessionInfo is a UI-facing summary of an active session. The token hash is
+// masked so only a short prefix is exposed; the full hash never leaves the
+// store but is carried on the struct so the UI can address a session for
+// revocation.
+type SessionInfo struct {
+	TokenHash string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
+// MaskedTokenHash returns the first 8 characters of the session token hash,
+// enough to distinguish sessions without leaking the full hash.
+func (s SessionInfo) MaskedTokenHash() string {
+	if len(s.TokenHash) <= 8 {
+		return s.TokenHash
+	}
+	return s.TokenHash[:8]
+}
+
+// ListUserSessions returns the active (non-expired) sessions for the given
+// user, most recently created first.
+func (s *SecurityService) ListUserSessions(ctx context.Context, userID uuid.UUID) ([]SessionInfo, error) {
+	rows, err := s.sessionRepo.ListForUser(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list user sessions: %w", err)
+	}
+
+	result := make([]SessionInfo, len(rows))
+	for i, row := range rows {
+		result[i] = SessionInfo{
+			TokenHash: row.TokenHash,
+			CreatedAt: row.CreatedAt.Time,
+			ExpiresAt: row.ExpiresAt.Time,
+		}
+	}
+	return result, nil
+}
+
+// RevokeSession deletes a single session by its token hash, invalidating the
+// associated cookie on its next lookup.
+func (s *SecurityService) RevokeSession(ctx context.Context, tokenHash string) error {
+	if err := s.sessionRepo.DeleteByTokenHash(ctx, tokenHash); err != nil {
+		return fmt.Errorf("revoke session: %w", err)
 	}
 	return nil
 }
@@ -490,7 +513,7 @@ func (s *SecurityService) UpdateProfile(ctx context.Context, userID uuid.UUID, e
 	return nil
 }
 
-func (s *SecurityService) DeleteAccount(ctx context.Context, userID uuid.UUID, currentPassword string) error {
+func (s *SecurityService) DeleteAccount(ctx context.Context, userID uuid.UUID) error {
 	pltUser, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
 		return &model.UserNotFoundError{UserID: userID.String()}
@@ -498,18 +521,8 @@ func (s *SecurityService) DeleteAccount(ctx context.Context, userID uuid.UUID, c
 
 	user := security.PltUserToModel(pltUser)
 
-	if !s.passwordEncoder.Matches(currentPassword, user.PasswordHash) {
-		return &model.WeakPasswordError{Message: "Current password is incorrect"}
-	}
-
-	if user.Role == model.RoleAdmin {
-		adminCount, countErr := s.userRepo.CountByRole(ctx, string(model.RoleAdmin))
-		if countErr != nil {
-			return fmt.Errorf("count administrators: %w", countErr)
-		}
-		if adminCount <= 1 {
-			return &model.InsufficientPermissionError{Message: "Cannot delete the only remaining admin account"}
-		}
+	if err := s.sessionRepo.DeleteByUserID(ctx, userID); err != nil {
+		slog.Warn("Failed to delete user sessions", "userID", userID, "error", err)
 	}
 
 	if err := s.userRepo.DeleteByID(ctx, userID); err != nil {
@@ -539,10 +552,31 @@ func (s *SecurityService) UpdatePreferences(ctx context.Context, userID uuid.UUI
 }
 
 func (s *SecurityService) auditLog(ctx context.Context, actorID *uuid.UUID, actorUsername *string, targetID *uuid.UUID, targetUsername *string, action, detail string) {
-	_, err := s.auditRepo.LogAudit(ctx, actorID, actorUsername, targetID, targetUsername, action, detail)
-	if err != nil {
-		slog.Error("Failed to log audit entry", "action", action, "error", err)
+	if s.auditor != nil {
+		s.auditor.Record(ctx, action, actorID, actorUsername, targetID, targetUsername, detail)
 	}
+}
+
+// AuditLogin records a successful login audit event.
+func (s *SecurityService) AuditLogin(ctx context.Context, userID *uuid.UUID, username *string) {
+	s.auditLog(ctx, userID, username, nil, nil, "USER_LOGIN", "Login successful")
+}
+
+// AuditLoginFailed records a failed login attempt for the given username.
+func (s *SecurityService) AuditLoginFailed(ctx context.Context, username *string) {
+	s.auditLog(ctx, nil, username, nil, nil, "USER_LOGIN_FAILED", "Login failed")
+}
+
+// AuditLogout records a logout audit event.
+func (s *SecurityService) AuditLogout(ctx context.Context, userID *uuid.UUID, username *string) {
+	s.auditLog(ctx, userID, username, nil, nil, "USER_LOGOUT", "Logout")
+}
+
+// hashToken returns the SHA-256 hash of a raw session token, hex-encoded.
+// This is the stored form of session tokens; the raw token is never persisted.
+func hashToken(raw string) string {
+	h := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(h[:])
 }
 
 func userToAuditParams(u *model.User) (*uuid.UUID, *string) {

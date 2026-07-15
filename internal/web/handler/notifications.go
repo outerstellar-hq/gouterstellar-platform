@@ -6,6 +6,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
+
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
 	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
@@ -23,11 +25,13 @@ func NewNotificationsHandler(notifSvc *service.NotificationService, renderer *we
 	}
 }
 
-func (h *NotificationsHandler) RegisterRoutes(r chi.Router) {
-	r.Get("/notifications", h.List)
-	r.Post("/notifications/{id}/read", h.MarkRead)
-	r.Post("/notifications/read-all", h.MarkAllRead)
-	r.Post("/notifications/{id}/delete", h.Delete)
+// ContributeRoutes registers the notifications UI routes (protected).
+func (h *NotificationsHandler) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.Protected(http.MethodGet, "/notifications", "Notifications list", http.HandlerFunc(h.List))
+	ctx.Routes.Protected(http.MethodPost, "/notifications/{id}/read", "Mark notification read", http.HandlerFunc(h.MarkRead))
+	ctx.Routes.Protected(http.MethodPost, "/notifications/read-all", "Mark all read", http.HandlerFunc(h.MarkAllRead))
+	ctx.Routes.Protected(http.MethodPost, "/notifications/{id}/delete", "Delete notification", http.HandlerFunc(h.Delete))
+	return nil
 }
 
 func (h *NotificationsHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -43,7 +47,7 @@ func (h *NotificationsHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	notifications, err := h.notificationService.ListForUser(r.Context(), user.ID, safeInt32(pageSize), safeInt32(offset))
 	if err != nil {
-		_ = h.renderer.RenderWithStatus(w, r, "error.html", viewmodel.ErrorPage{
+		_ = h.renderer.RenderWithStatus(w, r, "error", viewmodel.ErrorPage{
 			StatusCode: http.StatusInternalServerError,
 			Title:      "Error",
 			Message:    "Failed to load notifications",
@@ -65,7 +69,7 @@ func (h *NotificationsHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := h.renderer.Render(w, r, "notifications.html", viewmodel.NotificationsPage{
+	if err := h.renderer.RenderPage(w, r, "notifications", viewmodel.NotificationsPage{
 		Notifications: items,
 		UnreadCount:   int(unreadCount),
 	}); err != nil {

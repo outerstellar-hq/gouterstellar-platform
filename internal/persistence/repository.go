@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
@@ -12,9 +13,12 @@ import (
 
 type MessageRepository interface {
 	ListMessages(ctx context.Context, limit, offset int32) ([]db.PltMessage, error)
+	ListMessagesByYear(ctx context.Context, year int, limit, offset int32) ([]db.PltMessage, error)
+	CountMessagesByYear(ctx context.Context, year int) (int64, error)
+	ListMessageYears(ctx context.Context) ([]int32, error)
+	SearchMessages(ctx context.Context, query string, limit, offset int32) ([]db.PltMessage, error)
+	CountSearchMessages(ctx context.Context, query string) (int64, error)
 	CountMessages(ctx context.Context) (int64, error)
-	ListDeletedMessages(ctx context.Context, limit, offset int32) ([]db.PltMessage, error)
-	CountDeletedMessages(ctx context.Context) (int64, error)
 	FindBySyncID(ctx context.Context, syncID string) (db.PltMessage, error)
 	CreateServerMessage(ctx context.Context, syncID, author, content string, updatedAtEpochMs int64) (db.PltMessage, error)
 	CreateLocalMessage(ctx context.Context, syncID, author, content string, updatedAtEpochMs int64) (db.PltMessage, error)
@@ -28,13 +32,17 @@ type MessageRepository interface {
 	MarkConflictMessage(ctx context.Context, syncID string, conflict string) (db.PltMessage, error)
 	ResolveConflictMessage(ctx context.Context, syncID string) (db.PltMessage, error)
 	MarkCleanMessages(ctx context.Context) error
+	// WithTx returns a copy of this repository bound to the given transaction.
+	// Calls on the returned repository participate in the transaction and only
+	// commit when the transaction commits.
+	WithTx(tx pgx.Tx) MessageRepository
 }
 
 type ContactRepository interface {
 	ListContacts(ctx context.Context, limit, offset int32) ([]db.PltContact, error)
+	SearchContacts(ctx context.Context, query string, limit, offset int32) ([]db.PltContact, error)
+	CountSearchContacts(ctx context.Context, query string) (int64, error)
 	CountContacts(ctx context.Context) (int64, error)
-	ListDeletedContacts(ctx context.Context, limit, offset int32) ([]db.PltContact, error)
-	CountDeletedContacts(ctx context.Context) (int64, error)
 	ListDirtyContacts(ctx context.Context) ([]db.PltContact, error)
 	FindBySyncID(ctx context.Context, syncID string) (db.PltContact, error)
 	FindChangesSince(ctx context.Context, since int64) ([]db.PltContact, error)
@@ -47,12 +55,29 @@ type ContactRepository interface {
 	MarkConflictContact(ctx context.Context, syncID string, conflict string) (db.PltContact, error)
 	ResolveConflictContact(ctx context.Context, syncID string) (db.PltContact, error)
 	MarkCleanContacts(ctx context.Context) error
+	// WithTx returns a copy of this repository bound to the given transaction.
+	// Calls on the returned repository participate in the transaction and only
+	// commit when the transaction commits.
+	WithTx(tx pgx.Tx) ContactRepository
 	ListContactEmails(ctx context.Context, contactID int64) ([]string, error)
 	SetContactEmails(ctx context.Context, contactID int64, emails []string) error
 	ListContactPhones(ctx context.Context, contactID int64) ([]string, error)
 	SetContactPhones(ctx context.Context, contactID int64, phones []string) error
 	ListContactSocials(ctx context.Context, contactID int64) ([]string, error)
 	SetContactSocials(ctx context.Context, contactID int64, socials []string) error
+	// LoadSubTablesBatch fetches emails/phones/socials for all given contact IDs
+	// in three queries (one per sub-table), returning a map keyed by contact ID.
+	// It replaces the previous N+1 pattern of looping ListContactEmails/Phones/
+	// Socials per row.
+	LoadSubTablesBatch(ctx context.Context, contactIDs []int64) (ContactSubTables, error)
+}
+
+// ContactSubTables holds the emails/phones/socials for a set of contacts, keyed
+// by contact database ID. Returned by LoadSubTablesBatch.
+type ContactSubTables struct {
+	Emails  map[int64][]string
+	Phones  map[int64][]string
+	Socials map[int64][]string
 }
 
 type UserRepository interface {
@@ -66,10 +91,8 @@ type UserRepository interface {
 	CountByRole(ctx context.Context, role string) (int64, error)
 	UpdateRole(ctx context.Context, id uuid.UUID, role string) (db.PltUser, error)
 	UpdateEnabled(ctx context.Context, id uuid.UUID, enabled bool) (db.PltUser, error)
+	UpdatePasswordHash(ctx context.Context, userID uuid.UUID, passwordHash string) error
 	UpdateLastActivity(ctx context.Context, id uuid.UUID) error
-	IncrementFailedLoginAttempts(ctx context.Context, id uuid.UUID) (int32, error)
-	ResetLoginFailures(ctx context.Context, id uuid.UUID) error
-	LockUserUntil(ctx context.Context, id uuid.UUID, until time.Time) error
 	DeleteByID(ctx context.Context, id uuid.UUID) error
 	UpdateUsername(ctx context.Context, id uuid.UUID, username string) (db.PltUser, error)
 	UpdateAvatarURL(ctx context.Context, id uuid.UUID, avatarURL *string) (db.PltUser, error)
@@ -86,6 +109,7 @@ type SessionRepository interface {
 	DeleteByTokenHash(ctx context.Context, tokenHash string) error
 	DeleteByUserID(ctx context.Context, userID uuid.UUID) error
 	DeleteExpired(ctx context.Context) (int64, error)
+	ListForUser(ctx context.Context, userID uuid.UUID) ([]db.ListSessionsForUserRow, error)
 }
 
 type ApiKeyRepository interface {
@@ -97,12 +121,22 @@ type ApiKeyRepository interface {
 }
 
 type OutboxRepository interface {
-	SaveOutbox(ctx context.Context, id uuid.UUID, payloadType, payload, status string) error
 	ListPending(ctx context.Context, limit int32) ([]db.ListPendingOutboxRow, error)
 	MarkProcessed(ctx context.Context, id uuid.UUID) (db.MarkOutboxProcessedRow, error)
 	MarkFailed(ctx context.Context, id uuid.UUID, lastError *string) (db.MarkOutboxFailedRow, error)
 	GetStats(ctx context.Context) (db.GetOutboxStatsRow, error)
 	ListFailed(ctx context.Context, limit int32) ([]db.ListFailedOutboxRow, error)
+	ClaimPending(ctx context.Context, limit int32) ([]db.ClaimPendingOutboxRow, error)
+	UpdateStatus(ctx context.Context, id uuid.UUID, status string, lastError *string) (db.UpdateOutboxStatusRow, error)
+	ListDeadLetter(ctx context.Context, limit int32) ([]db.ListDeadLetterOutboxRow, error)
+	// WithTx returns a copy of this repository bound to the given transaction.
+	// Calls on the returned repository participate in the transaction and only
+	// commit when the transaction is committed by TransactionManager.InTransaction.
+	WithTx(tx pgx.Tx) OutboxRepository
+	// SaveOutboxTx inserts an outbox entry using an existing transaction so the
+	// insert participates in the caller's transaction. This is the transactional
+	// counterpart of SaveOutbox.
+	SaveOutboxTx(ctx context.Context, tx pgx.Tx, id uuid.UUID, payloadType, payload, status string) error
 }
 
 type AuditRepository interface {
@@ -124,7 +158,6 @@ type NotificationRepository interface {
 type DeviceTokenRepository interface {
 	UpsertDeviceToken(ctx context.Context, userID uuid.UUID, platform, token string, appBundle *string) (db.PltDeviceToken, error)
 	DeleteDeviceToken(ctx context.Context, id int64, userID uuid.UUID) (int64, error)
-	DeleteDeviceTokenByValue(ctx context.Context, token string, userID uuid.UUID) (int64, error)
 	FindByUserID(ctx context.Context, userID uuid.UUID) ([]db.PltDeviceToken, error)
 	DeleteAllForUser(ctx context.Context, userID uuid.UUID) (int64, error)
 }
@@ -138,5 +171,6 @@ type OAuthRepository interface {
 
 type PasswordResetRepository interface {
 	SavePasswordResetToken(ctx context.Context, userID uuid.UUID, token string, expiresAt time.Time) (db.PltPasswordResetToken, error)
-	Consume(ctx context.Context, token, passwordHash string) (db.PltUser, error)
+	FindByToken(ctx context.Context, token string) (db.PltPasswordResetToken, error)
+	MarkUsed(ctx context.Context, token string) (db.PltPasswordResetToken, error)
 }

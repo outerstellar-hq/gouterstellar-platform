@@ -2,13 +2,13 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/persistence"
@@ -16,20 +16,26 @@ import (
 )
 
 type ContactService struct {
-	repo     persistence.ContactRepository
-	outbox   persistence.OutboxRepository
-	eventPub EventPublisher
+	repo               persistence.ContactRepository
+	outbox             persistence.OutboxRepository
+	txMgr              TransactionRunner
+	eventPub           EventPublisher
+	notificationService *NotificationService
 }
 
 func NewContactService(
 	repo persistence.ContactRepository,
 	outbox persistence.OutboxRepository,
+	txMgr TransactionRunner,
 	eventPub EventPublisher,
+	notificationService *NotificationService,
 ) *ContactService {
 	return &ContactService{
-		repo:     repo,
-		outbox:   outbox,
-		eventPub: eventPub,
+		repo:               repo,
+		outbox:             outbox,
+		txMgr:              txMgr,
+		eventPub:           eventPub,
+		notificationService: notificationService,
 	}
 }
 
@@ -39,12 +45,14 @@ func (s *ContactService) ListContacts(ctx context.Context, limit, offset int32) 
 		return nil, fmt.Errorf("list contacts: %w", err)
 	}
 
+	subs, err := loadContactSubs(ctx, s.repo, contacts)
+	if err != nil {
+		return nil, err
+	}
+
 	summaries := make([]model.ContactSummary, len(contacts))
 	for i, c := range contacts {
-		emails, _ := s.repo.ListContactEmails(ctx, c.ID)
-		phones, _ := s.repo.ListContactPhones(ctx, c.ID)
-		socials, _ := s.repo.ListContactSocials(ctx, c.ID)
-		summaries[i] = pltContactToSummary(c, emails, phones, socials)
+		summaries[i] = pltContactToSummary(c, subs.Emails[c.ID], subs.Phones[c.ID], subs.Socials[c.ID])
 	}
 	return summaries, nil
 }
@@ -53,19 +61,30 @@ func (s *ContactService) CountContacts(ctx context.Context) (int64, error) {
 	return s.repo.CountContacts(ctx)
 }
 
-func (s *ContactService) ListDeletedContacts(ctx context.Context, limit, offset int32) ([]model.ContactSummary, error) {
-	contacts, err := s.repo.ListDeletedContacts(ctx, limit, offset)
+// SearchContacts returns one page of non-deleted contacts whose name or company
+// match the query (case-insensitive ILIKE), plus the total match count. Mirrors
+// MessageService.SearchMessages.
+func (s *ContactService) SearchContacts(ctx context.Context, query string, limit, offset int32) ([]model.ContactSummary, int64, error) {
+	total, err := s.repo.CountSearchContacts(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("list deleted contacts: %w", err)
+		return nil, 0, fmt.Errorf("count search contacts: %w", err)
 	}
+
+	contacts, err := s.repo.SearchContacts(ctx, query, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("search contacts: %w", err)
+	}
+
+	subs, err := loadContactSubs(ctx, s.repo, contacts)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	summaries := make([]model.ContactSummary, len(contacts))
-	for i, contact := range contacts {
-		emails, _ := s.repo.ListContactEmails(ctx, contact.ID)
-		phones, _ := s.repo.ListContactPhones(ctx, contact.ID)
-		socials, _ := s.repo.ListContactSocials(ctx, contact.ID)
-		summaries[i] = pltContactToSummary(contact, emails, phones, socials)
+	for i, c := range contacts {
+		summaries[i] = pltContactToSummary(c, subs.Emails[c.ID], subs.Phones[c.ID], subs.Socials[c.ID])
 	}
-	return summaries, nil
+	return summaries, total, nil
 }
 
 func (s *ContactService) GetContactBySyncID(ctx context.Context, syncID string) (*model.StoredContact, error) {
@@ -101,15 +120,26 @@ func (s *ContactService) CreateContact(ctx context.Context, name string, emails,
 		UpdatedAtEpochMs: now,
 	}
 
-	c, err := s.repo.CreateServerContact(ctx, contact)
+	var stored *model.StoredContact
+	err := s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
+		txRepo := s.repo.WithTx(tx)
+		created, err := txRepo.CreateServerContact(ctx, contact)
+		if err != nil {
+			return fmt.Errorf("create contact: %w", err)
+		}
+		if err := s.saveContactOutboxEntryTx(ctx, tx, txRepo, created); err != nil {
+			return err
+		}
+		stored = pltContactToStored(created, emails, phones, socials)
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("create contact: %w", err)
+		return nil, err
 	}
 
-	stored := pltContactToStored(c, emails, phones, socials)
+	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "contacts")
 
-	s.saveContactOutboxEntry(ctx, c)
-	s.eventPub.PublishRefresh("contacts")
+	s.notifyActor(ctx, "New Contact", name, "contact")
 
 	return stored, nil
 }
@@ -120,33 +150,45 @@ func (s *ContactService) UpdateContact(ctx context.Context, contact *model.Store
 		return nil, &model.ContactNotFoundError{SyncID: contact.SyncID}
 	}
 
-	c, err := s.repo.UpdateContact(ctx, contact.SyncID, contact, existing.Version)
+	var stored *model.StoredContact
+	err = s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
+		txRepo := s.repo.WithTx(tx)
+		c, err := txRepo.UpdateContact(ctx, contact.SyncID, contact, existing.Version)
+		if err != nil {
+			return fmt.Errorf("update contact: %w", err)
+		}
+		if err := s.saveContactOutboxEntryTx(ctx, tx, txRepo, c); err != nil {
+			return err
+		}
+		stored = pltContactToStored(c, contact.Emails, contact.Phones, contact.SocialMedia)
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("update contact: %w", err)
+		return nil, err
 	}
 
-	stored := pltContactToStored(c, contact.Emails, contact.Phones, contact.SocialMedia)
-
-	s.saveContactOutboxEntry(ctx, c)
-	s.eventPub.PublishRefresh("contacts")
+	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "contacts")
 
 	return stored, nil
 }
 
 func (s *ContactService) DeleteContact(ctx context.Context, syncID string) error {
-	_, err := s.repo.SoftDeleteContact(ctx, syncID)
+	err := s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
+		txRepo := s.repo.WithTx(tx)
+		contact, err := txRepo.FindBySyncID(ctx, syncID)
+		if err != nil {
+			return fmt.Errorf("find contact for delete: %w", err)
+		}
+		if _, err := txRepo.SoftDeleteContact(ctx, syncID); err != nil {
+			return fmt.Errorf("delete contact: %w", err)
+		}
+		return s.saveContactOutboxEntryTx(ctx, tx, txRepo, contact)
+	})
 	if err != nil {
-		return fmt.Errorf("delete contact: %w", err)
+		return err
 	}
-	s.eventPub.PublishRefresh("contacts")
-	return nil
-}
 
-func (s *ContactService) RestoreContact(ctx context.Context, syncID string) error {
-	if _, err := s.repo.RestoreContact(ctx, syncID); err != nil {
-		return fmt.Errorf("restore contact: %w", err)
-	}
-	s.eventPub.PublishRefresh("contacts")
+	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "contacts")
 	return nil
 }
 
@@ -156,12 +198,14 @@ func (s *ContactService) GetChangesSince(ctx context.Context, since int64) (*mod
 		return nil, fmt.Errorf("find contact changes since: %w", err)
 	}
 
+	subs, err := loadContactSubs(ctx, s.repo, contacts)
+	if err != nil {
+		return nil, err
+	}
+
 	syncContacts := make([]model.SyncContact, len(contacts))
 	for i, c := range contacts {
-		emails, _ := s.repo.ListContactEmails(ctx, c.ID)
-		phones, _ := s.repo.ListContactPhones(ctx, c.ID)
-		socials, _ := s.repo.ListContactSocials(ctx, c.ID)
-		syncContacts[i] = pltContactToSyncContact(c, emails, phones, socials)
+		syncContacts[i] = pltContactToSyncContact(c, subs.Emails[c.ID], subs.Phones[c.ID], subs.Socials[c.ID])
 	}
 
 	return &model.SyncPullContactResponse{
@@ -219,7 +263,7 @@ func (s *ContactService) ProcessPushRequest(ctx context.Context, req *model.Sync
 		conflicts = []model.SyncContactConflict{}
 	}
 
-	s.eventPub.PublishRefresh("contacts")
+	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "contacts")
 
 	return &model.SyncPushContactResponse{
 		AppliedCount: appliedCount,
@@ -227,20 +271,20 @@ func (s *ContactService) ProcessPushRequest(ctx context.Context, req *model.Sync
 	}, nil
 }
 
-func (s *ContactService) saveContactOutboxEntry(ctx context.Context, c db.PltContact) {
-	emails, _ := s.repo.ListContactEmails(ctx, c.ID)
-	phones, _ := s.repo.ListContactPhones(ctx, c.ID)
-	socials, _ := s.repo.ListContactSocials(ctx, c.ID)
+// saveContactOutboxEntryTx serializes and inserts a contact outbox entry within
+// a caller-supplied transaction. The tx-bound repo is used for the sub-table
+// reads so the reads also participate in the transaction. It is the
+// transactional counterpart of saveContactOutboxEntry.
+func (s *ContactService) saveContactOutboxEntryTx(ctx context.Context, tx pgx.Tx, repo persistence.ContactRepository, c db.PltContact) error {
+	emails, _ := repo.ListContactEmails(ctx, c.ID)
+	phones, _ := repo.ListContactPhones(ctx, c.ID)
+	socials, _ := repo.ListContactSocials(ctx, c.ID)
 	syncContact := pltContactToSyncContact(c, emails, phones, socials)
 	payload, err := model.SyncContactToJSON(syncContact)
 	if err != nil {
-		slog.Error("Failed to serialize contact outbox payload", "syncID", c.SyncID, "error", err)
-		return
+		return fmt.Errorf("serialize contact outbox payload: %w", err)
 	}
-
-	if err := s.outbox.SaveOutbox(ctx, uuid.New(), "CONTACT_SYNC", payload, "PENDING"); err != nil {
-		slog.Error("Failed to save contact outbox entry", "syncID", c.SyncID, "error", err)
-	}
+	return s.outbox.SaveOutboxTx(ctx, tx, uuid.New(), "CONTACT_SYNC", payload, "PENDING")
 }
 
 func ptrToString(p *string) string {
@@ -248,6 +292,23 @@ func ptrToString(p *string) string {
 		return ""
 	}
 	return *p
+}
+
+// loadContactSubs collects the contact IDs from a page of contacts and fetches
+// their emails/phones/socials in a single batched call per sub-table, rather
+// than looping ListContactEmails/Phones/Socials per row (an N+1). Missing IDs
+// resolve to nil slices, which the plt*To* converters treat as empty — matching
+// the prior per-row behavior.
+func loadContactSubs(ctx context.Context, repo persistence.ContactRepository, contacts []db.PltContact) (persistence.ContactSubTables, error) {
+	ids := make([]int64, len(contacts))
+	for i, c := range contacts {
+		ids[i] = c.ID
+	}
+	subs, err := repo.LoadSubTablesBatch(ctx, ids)
+	if err != nil {
+		return persistence.ContactSubTables{}, fmt.Errorf("load contact sub-tables: %w", err)
+	}
+	return subs, nil
 }
 
 func pltContactToStored(c db.PltContact, emails, phones, socials []string) *model.StoredContact {
@@ -300,5 +361,19 @@ func pltContactToSyncContact(c db.PltContact, emails, phones, socials []string) 
 	}
 }
 
-// Keep json import used - needed for conflict resolution in future
-var _ = json.Marshal
+// notifyActor records a best-effort notification for the user acting on the
+// current request. It is nil-safe: if no NotificationService is wired or no
+// authenticated user is present in the context, it does nothing. Notification
+// failures are logged but never propagated.
+func (s *ContactService) notifyActor(ctx context.Context, title, body, nType string) {
+	if s.notificationService == nil {
+		return
+	}
+	user := UserFromContext(ctx)
+	if user == nil {
+		return
+	}
+	if err := s.notificationService.Create(ctx, user.ID, title, body, nType); err != nil {
+		slog.Warn("Failed to create notification", "title", title, "error", err)
+	}
+}

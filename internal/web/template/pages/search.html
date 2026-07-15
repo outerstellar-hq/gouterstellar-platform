@@ -1,0 +1,21 @@
+{{ define "content" }}
+<div class="page-header">
+    <h1>Search</h1>
+</div>
+<form method="GET" action="/search" class="search-form">
+    <input type="text" name="q" value="{{ .BodyData.Query }}" placeholder="Search messages..." autofocus>
+    <button type="submit" class="btn btn-primary">Search</button>
+</form>
+<div id="search-results">
+{{ if .BodyData.Messages }}
+<div class="message-list">
+    {{ range .BodyData.Messages }}
+    {{ template "message_row" . }}
+    {{ end }}
+</div>
+{{ template "pagination" .BodyData.Pagination }}
+{{ else if .BodyData.Query }}
+<p class="empty-state">No results found for "{{ .BodyData.Query }}".</p>
+{{ end }}
+</div>
+{{ end }}

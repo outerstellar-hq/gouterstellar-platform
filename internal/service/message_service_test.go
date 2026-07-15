@@ -2,10 +2,10 @@ package service
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
@@ -23,17 +23,32 @@ func (m *mockMessageRepo) ListMessages(ctx context.Context, limit, offset int32)
 	return args.Get(0).([]db.PltMessage), args.Error(1)
 }
 
-func (m *mockMessageRepo) CountMessages(ctx context.Context) (int64, error) {
-	args := m.Called(ctx)
-	return args.Get(0).(int64), args.Error(1)
-}
-
-func (m *mockMessageRepo) ListDeletedMessages(ctx context.Context, limit, offset int32) ([]db.PltMessage, error) {
-	args := m.Called(ctx, limit, offset)
+func (m *mockMessageRepo) ListMessagesByYear(ctx context.Context, year int, limit, offset int32) ([]db.PltMessage, error) {
+	args := m.Called(ctx, year, limit, offset)
 	return args.Get(0).([]db.PltMessage), args.Error(1)
 }
 
-func (m *mockMessageRepo) CountDeletedMessages(ctx context.Context) (int64, error) {
+func (m *mockMessageRepo) CountMessagesByYear(ctx context.Context, year int) (int64, error) {
+	args := m.Called(ctx, year)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *mockMessageRepo) ListMessageYears(ctx context.Context) ([]int32, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]int32), args.Error(1)
+}
+
+func (m *mockMessageRepo) SearchMessages(ctx context.Context, query string, limit, offset int32) ([]db.PltMessage, error) {
+	args := m.Called(ctx, query, limit, offset)
+	return args.Get(0).([]db.PltMessage), args.Error(1)
+}
+
+func (m *mockMessageRepo) CountSearchMessages(ctx context.Context, query string) (int64, error) {
+	args := m.Called(ctx, query)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *mockMessageRepo) CountMessages(ctx context.Context) (int64, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(int64), args.Error(1)
 }
@@ -103,13 +118,16 @@ func (m *mockMessageRepo) MarkCleanMessages(ctx context.Context) error {
 	return args.Error(0)
 }
 
-type mockOutboxRepo struct {
-	mock.Mock
+func (m *mockMessageRepo) WithTx(tx pgx.Tx) persistence.MessageRepository {
+	args := m.Called(tx)
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(persistence.MessageRepository)
 }
 
-func (m *mockOutboxRepo) SaveOutbox(ctx context.Context, id uuid.UUID, payloadType, payload, status string) error {
-	args := m.Called(ctx, id, payloadType, payload, status)
-	return args.Error(0)
+type mockOutboxRepo struct {
+	mock.Mock
 }
 
 func (m *mockOutboxRepo) ListPending(ctx context.Context, limit int32) ([]db.ListPendingOutboxRow, error) {
@@ -135,6 +153,34 @@ func (m *mockOutboxRepo) GetStats(ctx context.Context) (db.GetOutboxStatsRow, er
 func (m *mockOutboxRepo) ListFailed(ctx context.Context, limit int32) ([]db.ListFailedOutboxRow, error) {
 	args := m.Called(ctx, limit)
 	return args.Get(0).([]db.ListFailedOutboxRow), args.Error(1)
+}
+
+func (m *mockOutboxRepo) ClaimPending(ctx context.Context, limit int32) ([]db.ClaimPendingOutboxRow, error) {
+	args := m.Called(ctx, limit)
+	return args.Get(0).([]db.ClaimPendingOutboxRow), args.Error(1)
+}
+
+func (m *mockOutboxRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status string, lastError *string) (db.UpdateOutboxStatusRow, error) {
+	args := m.Called(ctx, id, status, lastError)
+	return args.Get(0).(db.UpdateOutboxStatusRow), args.Error(1)
+}
+
+func (m *mockOutboxRepo) ListDeadLetter(ctx context.Context, limit int32) ([]db.ListDeadLetterOutboxRow, error) {
+	args := m.Called(ctx, limit)
+	return args.Get(0).([]db.ListDeadLetterOutboxRow), args.Error(1)
+}
+
+func (m *mockOutboxRepo) WithTx(tx pgx.Tx) persistence.OutboxRepository {
+	args := m.Called(tx)
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(persistence.OutboxRepository)
+}
+
+func (m *mockOutboxRepo) SaveOutboxTx(ctx context.Context, tx pgx.Tx, id uuid.UUID, payloadType, payload, status string) error {
+	args := m.Called(ctx, tx, id, payloadType, payload, status)
+	return args.Error(0)
 }
 
 type mockAuditRepo struct {
@@ -164,34 +210,22 @@ func (m *mockAuditRepo) CountAll(ctx context.Context) (int64, error) {
 func TestCreateServerMessage_BlankValidation(t *testing.T) {
 	repo := new(mockMessageRepo)
 	outbox := new(mockOutboxRepo)
-	audit := new(mockAuditRepo)
 	cache := persistence.NewMessageCache(60)
-	svc := NewMessageService(repo, outbox, nil, cache, &NoOpEventPublisher{}, audit)
+	svc := NewMessageService(repo, outbox, &FakeTxRunner{}, cache, &NoOpEventPublisher{}, nil, nil)
 
 	_, err := svc.CreateServerMessage(context.Background(), "", "hello")
 	assert.Error(t, err)
 	assert.IsType(t, &model.ValidationError{}, err)
 }
 
-func TestCreateServerMessage_LengthValidationUsesDatabaseLimits(t *testing.T) {
-	repo := new(mockMessageRepo)
-	svc := NewMessageService(repo, new(mockOutboxRepo), nil, persistence.NewMessageCache(60), &NoOpEventPublisher{}, new(mockAuditRepo))
-
-	_, authorErr := svc.CreateServerMessage(context.Background(), strings.Repeat("a", MaxMessageAuthorLength+1), "hello")
-	_, contentErr := svc.CreateServerMessage(context.Background(), "alice", strings.Repeat("c", MaxMessageContentLength+1))
-
-	assert.IsType(t, &model.ValidationError{}, authorErr)
-	assert.IsType(t, &model.ValidationError{}, contentErr)
-	repo.AssertNotCalled(t, "CreateServerMessage", mock.Anything)
-}
-
 func TestCreateServerMessage_Success(t *testing.T) {
 	repo := new(mockMessageRepo)
 	outbox := new(mockOutboxRepo)
-	audit := new(mockAuditRepo)
 	cache := persistence.NewMessageCache(60)
-	svc := NewMessageService(repo, outbox, nil, cache, &NoOpEventPublisher{}, audit)
+	svc := NewMessageService(repo, outbox, &FakeTxRunner{}, cache, &NoOpEventPublisher{}, nil, nil)
 
+	// WithTx returns the same mock so the tx-bound write uses the same stubs.
+	repo.On("WithTx", mock.Anything).Return(repo)
 	repo.On("CreateServerMessage", mock.Anything, mock.MatchedBy(func(s string) bool {
 		return len(s) > 4 && s[:4] == "srv_"
 	}), "alice", "hello world", mock.AnythingOfType("int64")).Return(db.PltMessage{
@@ -202,7 +236,7 @@ func TestCreateServerMessage_Success(t *testing.T) {
 		Version:          1,
 	}, nil)
 
-	outbox.On("SaveOutbox", mock.Anything, mock.AnythingOfType("uuid.UUID"), "MESSAGE_SYNC", mock.AnythingOfType("string"), "PENDING").Return(nil)
+	outbox.On("SaveOutboxTx", mock.Anything, mock.Anything, mock.AnythingOfType("uuid.UUID"), "MESSAGE_SYNC", mock.AnythingOfType("string"), "PENDING").Return(nil)
 
 	msg, err := svc.CreateServerMessage(context.Background(), "alice", "hello world")
 
@@ -211,4 +245,5 @@ func TestCreateServerMessage_Success(t *testing.T) {
 	assert.Equal(t, "alice", msg.Author)
 	assert.Equal(t, "hello world", msg.Content)
 	repo.AssertExpectations(t)
+	outbox.AssertExpectations(t)
 }

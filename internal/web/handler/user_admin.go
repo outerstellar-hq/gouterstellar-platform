@@ -3,10 +3,11 @@ package handler
 import (
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
 
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/service"
@@ -26,14 +27,15 @@ func NewUserAdminHandler(secSvc *service.SecurityService, renderer *web.Renderer
 	}
 }
 
-func (h *UserAdminHandler) RegisterRoutes(r chi.Router) {
-	r.Get("/users", h.ListUsers)
-	r.Post("/users/{id}/enabled", h.SetEnabled)
-	r.Post("/users/{id}/role", h.SetRole)
-	r.Post("/users/{id}/unlock", h.Unlock)
-	r.Get("/users/export", h.ExportUsers)
-	r.Get("/audit", h.ShowAudit)
-	r.Get("/audit/export", h.ExportAudit)
+// ContributeRoutes registers the admin UI routes.
+func (h *UserAdminHandler) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.Admin(http.MethodGet, "/admin/users", "User management", http.HandlerFunc(h.ListUsers))
+	ctx.Routes.Admin(http.MethodPost, "/admin/users/{id}/enabled", "Set user enabled", http.HandlerFunc(h.SetEnabled))
+	ctx.Routes.Admin(http.MethodPost, "/admin/users/{id}/role", "Set user role", http.HandlerFunc(h.SetRole))
+	ctx.Routes.Admin(http.MethodGet, "/admin/users/export", "Export users", http.HandlerFunc(h.ExportUsers))
+	ctx.Routes.Admin(http.MethodGet, "/admin/audit", "Audit log", http.HandlerFunc(h.ShowAudit))
+	ctx.Routes.Admin(http.MethodGet, "/admin/audit/export", "Export audit", http.HandlerFunc(h.ExportAudit))
+	return nil
 }
 
 func (h *UserAdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
@@ -56,13 +58,11 @@ func (h *UserAdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	userItems := make([]viewmodel.UserItem, len(users))
 	for i, u := range users {
 		userItems[i] = viewmodel.UserItem{
-			ID:                  u.ID,
-			Username:            u.Username,
-			Email:               u.Email,
-			Role:                u.Role,
-			Enabled:             u.Enabled,
-			FailedLoginAttempts: u.FailedLoginAttempts,
-			IsLocked:            u.LockedUntil != nil && u.LockedUntil.After(time.Now()),
+			ID:       u.ID,
+			Username: u.Username,
+			Email:    u.Email,
+			Role:     u.Role,
+			Enabled:  u.Enabled,
 		}
 	}
 
@@ -75,7 +75,7 @@ func (h *UserAdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		PageSize:    pageSize,
 	}
 
-	if err := h.renderer.Render(w, r, "admin_users.html", viewmodel.AdminUsersPage{
+	if err := h.renderer.RenderPage(w, r, "admin_users", viewmodel.AdminUsersPage{
 		Users:      userItems,
 		Pagination: pagination,
 	}); err != nil {
@@ -83,21 +83,12 @@ func (h *UserAdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *UserAdminHandler) Unlock(w http.ResponseWriter, r *http.Request) {
-	targetID, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid user ID")
-		return
-	}
-	if err := h.securityService.UnlockAccount(r.Context(), web.UserFromRequest(r).ID, targetID); err != nil {
-		handleServiceError(w, err)
-		return
-	}
-	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
-}
-
 func (h *UserAdminHandler) SetEnabled(w http.ResponseWriter, r *http.Request) {
 	currentUser := web.UserFromRequest(r)
+	if currentUser == nil || currentUser.Role != model.RoleAdmin {
+		writeError(w, http.StatusForbidden, "Admin access required")
+		return
+	}
 
 	idStr := chi.URLParam(r, "id")
 	targetID, err := uuid.Parse(idStr)
@@ -124,6 +115,10 @@ func (h *UserAdminHandler) SetEnabled(w http.ResponseWriter, r *http.Request) {
 
 func (h *UserAdminHandler) SetRole(w http.ResponseWriter, r *http.Request) {
 	currentUser := web.UserFromRequest(r)
+	if currentUser == nil || currentUser.Role != model.RoleAdmin {
+		writeError(w, http.StatusForbidden, "Admin access required")
+		return
+	}
 
 	idStr := chi.URLParam(r, "id")
 	targetID, err := uuid.Parse(idStr)
@@ -199,7 +194,7 @@ func (h *UserAdminHandler) ShowAudit(w http.ResponseWriter, r *http.Request) {
 		PageSize:    pageSize,
 	}
 
-	if err := h.renderer.Render(w, r, "admin_audit.html", viewmodel.AdminAuditPage{
+	if err := h.renderer.RenderPage(w, r, "admin_audit", viewmodel.AdminAuditPage{
 		Entries:    auditItems,
 		Pagination: pagination,
 	}); err != nil {
@@ -252,7 +247,7 @@ func (h *UserAdminHandler) ExportAudit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UserAdminHandler) renderError(w http.ResponseWriter, r *http.Request, message string, status int) {
-	_ = h.renderer.RenderWithStatus(w, r, "error.html", viewmodel.ErrorPage{
+	_ = h.renderer.RenderWithStatus(w, r, "error", viewmodel.ErrorPage{
 		StatusCode: status,
 		Title:      "Error",
 		Message:    message,

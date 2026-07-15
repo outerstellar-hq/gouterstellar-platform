@@ -26,22 +26,30 @@ type ContactsPage struct {
 	Query      string
 }
 
+// ContactDetailPage is the view model for the contact detail HTML page.
+type ContactDetailPage struct {
+	Contact ContactItem
+}
+
 type ContactItem struct {
-	SyncID    string
-	Name      string
-	Emails    []string
-	Phones    []string
-	Social    []string
-	Company   string
-	UpdatedAt string
-	Dirty     bool
-	Deleted   bool
+	SyncID         string
+	Name           string
+	Emails         []string
+	Phones         []string
+	Social         []string
+	Company        string
+	CompanyAddress string
+	Department     string
+	UpdatedAt      string
+	Dirty          bool
+	Deleted        bool
 }
 
 type AuthPage struct {
-	ReturnTo  string
-	Error     string
-	CSRFToken string
+	ReturnTo           string
+	Error              string
+	CSRFToken          string
+	GoogleLoginEnabled bool
 }
 
 type AdminUsersPage struct {
@@ -50,13 +58,11 @@ type AdminUsersPage struct {
 }
 
 type UserItem struct {
-	ID                  string
-	Username            string
-	Email               string
-	Role                string
-	Enabled             bool
-	FailedLoginAttempts int32
-	IsLocked            bool
+	ID       string
+	Username string
+	Email    string
+	Role     string
+	Enabled  bool
 }
 
 type AdminAuditPage struct {
@@ -97,6 +103,21 @@ type SettingsPage struct {
 	NewApiKey string
 }
 
+// SettingsSessionsPage is the view model for the active-sessions management page.
+type SettingsSessionsPage struct {
+	Sessions []SessionItem
+}
+
+// SessionItem is a UI-facing summary of a single active session. MaskedTokenHash
+// is a short prefix of the stored token hash, safe to render; TokenHash carries
+// the full hash so the revoke form can address the session.
+type SessionItem struct {
+	TokenHash        string
+	MaskedTokenHash  string
+	CreatedAt        string
+	ExpiresAt        string
+}
+
 type ProfileData struct {
 	Username                  string
 	Email                     string
@@ -133,9 +154,4 @@ type HomePage struct {
 	MessageCount int64
 	ContactCount int64
 	UserCount    int64
-}
-
-type TrashPage struct {
-	Messages []MessageItem
-	Contacts []ContactItem
 }

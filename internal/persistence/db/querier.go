@@ -11,14 +11,15 @@ import (
 )
 
 type Querier interface {
-	ConsumePasswordReset(ctx context.Context, arg ConsumePasswordResetParams) (PltUser, error)
+	ClaimPendingOutbox(ctx context.Context, limit int32) ([]ClaimPendingOutboxRow, error)
 	CountAllAudit(ctx context.Context) (int64, error)
 	CountAllUsers(ctx context.Context) (int64, error)
 	CountContacts(ctx context.Context) (int64, error)
-	CountDeletedContacts(ctx context.Context) (int64, error)
-	CountDeletedMessages(ctx context.Context) (int64, error)
 	CountDirtyMessages(ctx context.Context) (int64, error)
 	CountMessages(ctx context.Context) (int64, error)
+	CountMessagesByYear(ctx context.Context, updatedAtEpochMs int64) (int64, error)
+	CountSearchContacts(ctx context.Context, dollar_1 string) (int64, error)
+	CountSearchMessages(ctx context.Context, dollar_1 string) (int64, error)
 	CountUnreadNotifications(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountUsersByRole(ctx context.Context, role string) (int64, error)
 	CreateApiKey(ctx context.Context, arg CreateApiKeyParams) (PltApiKey, error)
@@ -31,7 +32,6 @@ type Querier interface {
 	DeleteAllDeviceTokensForUser(ctx context.Context, userID uuid.UUID) (int64, error)
 	DeleteApiKey(ctx context.Context, arg DeleteApiKeyParams) (int64, error)
 	DeleteDeviceToken(ctx context.Context, arg DeleteDeviceTokenParams) (int64, error)
-	DeleteDeviceTokenByValue(ctx context.Context, arg DeleteDeviceTokenByValueParams) (int64, error)
 	DeleteExpiredSessions(ctx context.Context) (int64, error)
 	DeleteNotification(ctx context.Context, arg DeleteNotificationParams) (int64, error)
 	DeleteOAuthConnection(ctx context.Context, arg DeleteOAuthConnectionParams) (int64, error)
@@ -50,6 +50,7 @@ type Querier interface {
 	FindNotificationsByUserID(ctx context.Context, arg FindNotificationsByUserIDParams) ([]PltNotification, error)
 	FindOAuthByProviderSubject(ctx context.Context, arg FindOAuthByProviderSubjectParams) (PltOauthConnection, error)
 	FindOAuthByUserID(ctx context.Context, userID uuid.UUID) ([]PltOauthConnection, error)
+	FindPasswordResetByToken(ctx context.Context, token string) (PltPasswordResetToken, error)
 	FindRecentAudit(ctx context.Context, limit int32) ([]PltAuditLog, error)
 	FindSessionByTokenHash(ctx context.Context, tokenHash string) (PltSession, error)
 	FindSessionByTokenHashIncludingExpired(ctx context.Context, tokenHash string) (PltSession, error)
@@ -59,22 +60,31 @@ type Querier interface {
 	FindUserPage(ctx context.Context, arg FindUserPageParams) ([]PltUser, error)
 	GetOutboxStats(ctx context.Context) (GetOutboxStatsRow, error)
 	GetSyncState(ctx context.Context, stateKey string) (PltSyncState, error)
-	IncrementFailedLoginAttempts(ctx context.Context, id uuid.UUID) (int32, error)
 	InsertContactEmail(ctx context.Context, arg InsertContactEmailParams) error
 	InsertContactPhone(ctx context.Context, arg InsertContactPhoneParams) error
 	InsertContactSocial(ctx context.Context, arg InsertContactSocialParams) error
 	ListContactEmails(ctx context.Context, contactID int64) ([]string, error)
+	ListContactEmailsBatch(ctx context.Context, dollar_1 []int64) ([]PltContactEmail, error)
 	ListContactPhones(ctx context.Context, contactID int64) ([]string, error)
+	ListContactPhonesBatch(ctx context.Context, dollar_1 []int64) ([]PltContactPhone, error)
 	ListContactSocials(ctx context.Context, contactID int64) ([]string, error)
+	ListContactSocialsBatch(ctx context.Context, dollar_1 []int64) ([]PltContactSocial, error)
 	ListContacts(ctx context.Context, arg ListContactsParams) ([]PltContact, error)
-	ListDeletedContacts(ctx context.Context, arg ListDeletedContactsParams) ([]PltContact, error)
-	ListDeletedMessages(ctx context.Context, arg ListDeletedMessagesParams) ([]PltMessage, error)
+	ListDeadLetterOutbox(ctx context.Context, limit int32) ([]ListDeadLetterOutboxRow, error)
 	ListDirtyContacts(ctx context.Context) ([]PltContact, error)
 	ListDirtyMessages(ctx context.Context) ([]PltMessage, error)
 	ListFailedOutbox(ctx context.Context, limit int32) ([]ListFailedOutboxRow, error)
+	// Distinct calendar years (descending) for which non-deleted messages exist.
+	// Used to populate the year filter on the messages page.
+	ListMessageYears(ctx context.Context) ([]int32, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]PltMessage, error)
+	// Returns one page of non-deleted messages whose updated_at falls in the given
+	// calendar year (interpreted in the database session time zone). updated_at is
+	// stored as epoch milliseconds, so it is converted to a timestamp with
+	// TO_TIMESTAMP(epoch / 1000.0) before EXTRACT.
+	ListMessagesByYear(ctx context.Context, arg ListMessagesByYearParams) ([]PltMessage, error)
 	ListPendingOutbox(ctx context.Context, limit int32) ([]ListPendingOutboxRow, error)
-	LockUserUntil(ctx context.Context, arg LockUserUntilParams) error
+	ListSessionsForUser(ctx context.Context, userID uuid.UUID) ([]ListSessionsForUserRow, error)
 	LogAudit(ctx context.Context, arg LogAuditParams) (PltAuditLog, error)
 	MarkAllNotificationsRead(ctx context.Context, userID uuid.UUID) (int64, error)
 	MarkCleanContacts(ctx context.Context) error
@@ -84,7 +94,7 @@ type Querier interface {
 	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) (PltNotification, error)
 	MarkOutboxFailed(ctx context.Context, arg MarkOutboxFailedParams) (MarkOutboxFailedRow, error)
 	MarkOutboxProcessed(ctx context.Context, id uuid.UUID) (MarkOutboxProcessedRow, error)
-	ResetLoginFailures(ctx context.Context, id uuid.UUID) error
+	MarkPasswordResetUsed(ctx context.Context, token string) (PltPasswordResetToken, error)
 	ResolveConflictContact(ctx context.Context, syncID string) (PltContact, error)
 	ResolveConflictMessage(ctx context.Context, syncID string) (PltMessage, error)
 	RestoreContact(ctx context.Context, syncID string) (PltContact, error)
@@ -93,6 +103,11 @@ type Querier interface {
 	SaveOAuthConnection(ctx context.Context, arg SaveOAuthConnectionParams) (PltOauthConnection, error)
 	SaveOutbox(ctx context.Context, arg SaveOutboxParams) error
 	SavePasswordResetToken(ctx context.Context, arg SavePasswordResetTokenParams) (PltPasswordResetToken, error)
+	// Returns one page of non-deleted contacts whose name or company match the
+	// query (case-insensitive ILIKE). Mirrors SearchMessages. company is nullable,
+	// so COALESCE protects the ILIKE from NULL operands.
+	SearchContacts(ctx context.Context, arg SearchContactsParams) ([]PltContact, error)
+	SearchMessages(ctx context.Context, arg SearchMessagesParams) ([]PltMessage, error)
 	SeedAdminUser(ctx context.Context, arg SeedAdminUserParams) (PltUser, error)
 	SetContactEmails(ctx context.Context, contactID int64) error
 	SetContactPhones(ctx context.Context, contactID int64) error
@@ -106,6 +121,8 @@ type Querier interface {
 	UpdateLastActivity(ctx context.Context, id uuid.UUID) error
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) (PltMessage, error)
 	UpdateNotificationPreferences(ctx context.Context, arg UpdateNotificationPreferencesParams) (PltUser, error)
+	UpdateOutboxStatus(ctx context.Context, arg UpdateOutboxStatusParams) (UpdateOutboxStatusRow, error)
+	UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error
 	UpdatePreferences(ctx context.Context, arg UpdatePreferencesParams) (PltUser, error)
 	UpdateSessionExpiresAt(ctx context.Context, arg UpdateSessionExpiresAtParams) (PltSession, error)
 	UpdateUserEnabled(ctx context.Context, arg UpdateUserEnabledParams) (PltUser, error)

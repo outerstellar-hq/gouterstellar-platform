@@ -40,23 +40,6 @@ func (q *Queries) DeleteDeviceToken(ctx context.Context, arg DeleteDeviceTokenPa
 	return result.RowsAffected(), nil
 }
 
-const deleteDeviceTokenByValue = `-- name: DeleteDeviceTokenByValue :execrows
-DELETE FROM plt_device_tokens WHERE token = $1 AND user_id = $2
-`
-
-type DeleteDeviceTokenByValueParams struct {
-	Token  string    `json:"token"`
-	UserID uuid.UUID `json:"user_id"`
-}
-
-func (q *Queries) DeleteDeviceTokenByValue(ctx context.Context, arg DeleteDeviceTokenByValueParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteDeviceTokenByValue, arg.Token, arg.UserID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const findDeviceTokensByUserID = `-- name: FindDeviceTokensByUserID :many
 SELECT id, user_id, platform, token, app_bundle, created_at, last_seen
 FROM plt_device_tokens

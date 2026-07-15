@@ -2,7 +2,9 @@ package persistence
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/rygel/gouterstellar-platform/internal/model"
@@ -18,6 +20,13 @@ func NewContactRepository(pool *pgxpool.Pool) ContactRepository {
 	return &contactRepo{q: db.New(pool), pool: pool}
 }
 
+// WithTx returns a copy of this repository whose underlying sqlc Queries is
+// bound to the given transaction. Operations on the returned repository
+// participate in the transaction and only persist when the transaction commits.
+func (r *contactRepo) WithTx(tx pgx.Tx) ContactRepository {
+	return &contactRepo{q: r.q.WithTx(tx), pool: nil}
+}
+
 func (r *contactRepo) ListContacts(ctx context.Context, limit, offset int32) ([]db.PltContact, error) {
 	return r.q.ListContacts(ctx, db.ListContactsParams{
 		Limit:  limit,
@@ -25,16 +34,20 @@ func (r *contactRepo) ListContacts(ctx context.Context, limit, offset int32) ([]
 	})
 }
 
+func (r *contactRepo) SearchContacts(ctx context.Context, query string, limit, offset int32) ([]db.PltContact, error) {
+	return r.q.SearchContacts(ctx, db.SearchContactsParams{
+		Column1: query,
+		Limit:   limit,
+		Offset:  offset,
+	})
+}
+
+func (r *contactRepo) CountSearchContacts(ctx context.Context, query string) (int64, error) {
+	return r.q.CountSearchContacts(ctx, query)
+}
+
 func (r *contactRepo) CountContacts(ctx context.Context) (int64, error) {
 	return r.q.CountContacts(ctx)
-}
-
-func (r *contactRepo) ListDeletedContacts(ctx context.Context, limit, offset int32) ([]db.PltContact, error) {
-	return r.q.ListDeletedContacts(ctx, db.ListDeletedContactsParams{Limit: limit, Offset: offset})
-}
-
-func (r *contactRepo) CountDeletedContacts(ctx context.Context) (int64, error) {
-	return r.q.CountDeletedContacts(ctx)
 }
 
 func (r *contactRepo) ListDirtyContacts(ctx context.Context) ([]db.PltContact, error) {
@@ -165,6 +178,48 @@ func (r *contactRepo) SetContactPhones(ctx context.Context, contactID int64, pho
 
 func (r *contactRepo) ListContactSocials(ctx context.Context, contactID int64) ([]string, error) {
 	return r.q.ListContactSocials(ctx, contactID)
+}
+
+// LoadSubTablesBatch fetches the email/phone/social rows for every contact ID
+// in three queries total (one per sub-table) and groups them into maps keyed
+// by contact ID. Missing IDs simply have no entry (looked up via ok-check),
+// which matches the per-row List* behavior where an absent row yields an empty
+// slice. An empty/nil input yields empty maps without hitting the database.
+func (r *contactRepo) LoadSubTablesBatch(ctx context.Context, contactIDs []int64) (ContactSubTables, error) {
+	out := ContactSubTables{
+		Emails:  make(map[int64][]string),
+		Phones:  make(map[int64][]string),
+		Socials: make(map[int64][]string),
+	}
+	if len(contactIDs) == 0 {
+		return out, nil
+	}
+
+	emails, err := r.q.ListContactEmailsBatch(ctx, contactIDs)
+	if err != nil {
+		return out, fmt.Errorf("batch list contact emails: %w", err)
+	}
+	for _, e := range emails {
+		out.Emails[e.ContactID] = append(out.Emails[e.ContactID], e.Email)
+	}
+
+	phones, err := r.q.ListContactPhonesBatch(ctx, contactIDs)
+	if err != nil {
+		return out, fmt.Errorf("batch list contact phones: %w", err)
+	}
+	for _, p := range phones {
+		out.Phones[p.ContactID] = append(out.Phones[p.ContactID], p.Phone)
+	}
+
+	socials, err := r.q.ListContactSocialsBatch(ctx, contactIDs)
+	if err != nil {
+		return out, fmt.Errorf("batch list contact socials: %w", err)
+	}
+	for _, s := range socials {
+		out.Socials[s.ContactID] = append(out.Socials[s.ContactID], s.SocialMedia)
+	}
+
+	return out, nil
 }
 
 func (r *contactRepo) SetContactSocials(ctx context.Context, contactID int64, socials []string) error {

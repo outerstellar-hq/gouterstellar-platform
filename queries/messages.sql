@@ -5,18 +5,46 @@ WHERE deleted = false
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2;
 
--- name: CountMessages :one
-SELECT COUNT(*) FROM plt_messages WHERE deleted = false;
-
--- name: ListDeletedMessages :many
+-- name: ListMessagesByYear :many
+-- Returns one page of non-deleted messages whose updated_at falls in the given
+-- calendar year (interpreted in the database session time zone). updated_at is
+-- stored as epoch milliseconds, so it is converted to a timestamp with
+-- TO_TIMESTAMP(epoch / 1000.0) before EXTRACT.
 SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
 FROM plt_messages
-WHERE deleted = true
-ORDER BY deleted_at DESC
-LIMIT $1 OFFSET $2;
+WHERE deleted = false
+AND EXTRACT(YEAR FROM TO_TIMESTAMP(updated_at_epoch_ms / 1000.0)) = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
 
--- name: CountDeletedMessages :one
-SELECT COUNT(*) FROM plt_messages WHERE deleted = true;
+-- name: CountMessagesByYear :one
+SELECT COUNT(*) FROM plt_messages
+WHERE deleted = false
+AND EXTRACT(YEAR FROM TO_TIMESTAMP(updated_at_epoch_ms / 1000.0)) = $1;
+
+-- name: ListMessageYears :many
+-- Distinct calendar years (descending) for which non-deleted messages exist.
+-- Used to populate the year filter on the messages page.
+SELECT DISTINCT EXTRACT(YEAR FROM TO_TIMESTAMP(updated_at_epoch_ms / 1000.0))::int AS year
+FROM plt_messages
+WHERE deleted = false
+ORDER BY year DESC;
+
+-- name: SearchMessages :many
+SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
+FROM plt_messages
+WHERE deleted = false
+AND (content ILIKE '%' || $1::text || '%' OR author ILIKE '%' || $1::text || '%')
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: CountSearchMessages :one
+SELECT COUNT(*) FROM plt_messages
+WHERE deleted = false
+AND (content ILIKE '%' || $1::text || '%' OR author ILIKE '%' || $1::text || '%');
+
+-- name: CountMessages :one
+SELECT COUNT(*) FROM plt_messages WHERE deleted = false;
 
 -- name: FindBySyncID :one
 SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
@@ -63,17 +91,13 @@ SELECT COUNT(*) FROM plt_messages WHERE dirty = true AND deleted = false;
 
 -- name: SoftDeleteMessage :one
 UPDATE plt_messages
-SET deleted = true, deleted_at = CURRENT_TIMESTAMP, dirty = true,
-    updated_at_epoch_ms = (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT,
-    version = version + 1
+SET deleted = true, deleted_at = CURRENT_TIMESTAMP, dirty = true, version = version + 1
 WHERE sync_id = $1
 RETURNING id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict;
 
 -- name: RestoreMessage :one
 UPDATE plt_messages
-SET deleted = false, deleted_at = NULL, dirty = true,
-    updated_at_epoch_ms = (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT,
-    version = version + 1
+SET deleted = false, deleted_at = NULL, dirty = true, version = version + 1
 WHERE sync_id = $1
 RETURNING id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict;
 

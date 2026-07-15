@@ -35,3 +35,28 @@ FROM plt_outbox
 WHERE status = 'FAILED'
 ORDER BY created_at ASC
 LIMIT $1;
+
+-- name: ListDeadLetterOutbox :many
+SELECT id, payload_type, payload, status, created_at, processed_at, retry_count, last_error
+FROM plt_outbox
+WHERE status = 'DEAD_LETTER'
+ORDER BY created_at ASC
+LIMIT $1;
+
+-- name: ClaimPendingOutbox :many
+UPDATE plt_outbox
+SET status = 'PROCESSING', retry_count = retry_count + 1
+WHERE id IN (
+    SELECT id FROM plt_outbox
+    WHERE status = 'PENDING' OR (status = 'PROCESSING' AND retry_count < 5)
+    ORDER BY created_at ASC
+    LIMIT $1
+    FOR UPDATE SKIP LOCKED
+)
+RETURNING id, payload_type, payload, status, created_at, processed_at, retry_count, last_error;
+
+-- name: UpdateOutboxStatus :one
+UPDATE plt_outbox
+SET status = $2, last_error = $3
+WHERE id = $1
+RETURNING id, payload_type, payload, status, created_at, processed_at, retry_count, last_error;

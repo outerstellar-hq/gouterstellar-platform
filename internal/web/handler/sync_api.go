@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
 
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/service"
-	"github.com/rygel/gouterstellar-platform/internal/web/filter"
 )
 
 type SyncAPI struct {
@@ -25,11 +24,13 @@ func NewSyncAPI(msgSvc *service.MessageService, contactSvc *service.ContactServi
 	}
 }
 
-func (h *SyncAPI) RegisterRoutes(r chi.Router) {
-	r.With(filter.RequireAuthenticated).Get("/api/v1/sync", h.PullMessages)
-	r.With(filter.RequireAuthenticated).Post("/api/v1/sync", h.PushMessages)
-	r.With(filter.RequireAuthenticated).Get("/api/v1/sync/contacts", h.PullContacts)
-	r.With(filter.RequireAuthenticated).Post("/api/v1/sync/contacts", h.PushContacts)
+// ContributeRoutes registers the sync API routes (bearer auth applied by builder).
+func (h *SyncAPI) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.API(http.MethodGet, "/api/v1/sync", "Pull message changes", http.HandlerFunc(h.PullMessages))
+	ctx.Routes.API(http.MethodPost, "/api/v1/sync", "Push message changes", http.HandlerFunc(h.PushMessages))
+	ctx.Routes.API(http.MethodGet, "/api/v1/sync/contacts", "Pull contact changes", http.HandlerFunc(h.PullContacts))
+	ctx.Routes.API(http.MethodPost, "/api/v1/sync/contacts", "Push contact changes", http.HandlerFunc(h.PushContacts))
+	return nil
 }
 
 func (h *SyncAPI) PullMessages(w http.ResponseWriter, r *http.Request) {

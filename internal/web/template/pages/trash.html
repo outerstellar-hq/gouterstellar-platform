@@ -1,9 +1,0 @@
-{{ define "content" }}
-<div class="page-header"><h1>Trash</h1><a href="/">Back to messages</a></div>
-<section><h2>Messages</h2>
-{{ range .Messages }}<article class="card"><strong>{{ .Author }}</strong><p>{{ .Content }}</p><form method="POST" action="/messages/restore/{{ .SyncID }}"><button class="btn btn-primary" type="submit">Restore</button></form></article>{{ else }}<p class="empty-state">No deleted messages.</p>{{ end }}
-</section>
-<section><h2>Contacts</h2>
-{{ range .Contacts }}<article class="card"><strong>{{ .Name }}</strong><p>{{ .Company }}</p><form method="POST" action="/contacts/{{ .SyncID }}/restore"><button class="btn btn-primary" type="submit">Restore</button></form></article>{{ else }}<p class="empty-state">No deleted contacts.</p>{{ end }}
-</section>
-{{ end }}

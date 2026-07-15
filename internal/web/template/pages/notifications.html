@@ -2,13 +2,17 @@
 <div class="notifications-page">
     <div class="page-header">
         <h1>Notifications</h1>
-        {{ if .UnreadCount }}
-        <span class="badge badge-unread">{{ .UnreadCount }} unread</span>
+        {{ if .BodyData.UnreadCount }}
+        <span class="badge badge-unread">{{ .BodyData.UnreadCount }} unread</span>
+        <form method="POST" action="/notifications/read-all" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+            <button type="submit" class="btn btn-sm">Mark All Read</button>
+        </form>
         {{ end }}
     </div>
 
     <div class="notification-list">
-        {{ range .Notifications }}
+        {{ range .BodyData.Notifications }}
         <div class="notification-item{{ if not .Read }} unread{{ end }}">
             <div class="notification-header">
                 <span class="notification-type badge badge-{{ .Type }}">{{ .Type }}</span>
@@ -17,10 +21,15 @@
             <h3>{{ .Title }}</h3>
             <p>{{ .Body }}</p>
             {{ if not .Read }}
-            <form method="POST" action="/notifications/{{ .ID }}/read">
+            <form method="POST" action="/notifications/{{ .ID }}/read" class="inline-form">
+                <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
                 <button type="submit" class="btn btn-sm">Mark as read</button>
             </form>
             {{ end }}
+            <form method="POST" action="/notifications/{{ .ID }}/delete" class="inline-form">
+                <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                <button type="submit" class="btn btn-sm btn-danger" data-confirm="Delete this notification?">Delete</button>
+            </form>
         </div>
         {{ else }}
         <p class="empty-state">No notifications.</p>

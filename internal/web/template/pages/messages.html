@@ -3,44 +3,80 @@
     <div class="page-header">
         <h1>Messages</h1>
         <form method="GET" action="/messages" class="search-form">
-            <input type="text" name="q" value="{{ .Query }}" placeholder="Search messages...">
+            <input type="text" name="q" value="{{ .BodyData.Query }}" placeholder="Search messages...">
             <button type="submit">Search</button>
         </form>
     </div>
 
-    <section class="card" aria-labelledby="new-message-title">
-        <h2 id="new-message-title">New message</h2>
-        <form method="POST" action="/messages">
+    <details class="message-create">
+        <summary>Add new message</summary>
+        <form method="POST" action="/messages/create" class="message-form">
+            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
             <div class="form-group">
                 <label for="message-author">Author</label>
-                <input id="message-author" name="author" required maxlength="100">
+                <input type="text" id="message-author" name="author" required>
             </div>
             <div class="form-group">
-                <label for="message-content">Message</label>
-                <textarea id="message-content" name="content" required maxlength="500"></textarea>
+                <label for="message-content">Content</label>
+                <input type="text" id="message-content" name="content" required>
             </div>
-            <button class="btn btn-primary" type="submit">Add message</button>
+            <button type="submit" class="btn btn-primary">Create</button>
         </form>
-    </section>
+    </details>
 
-    {{ if .Years }}
+    {{ if .BodyData.Years }}
     <div class="year-filter">
         <span>Filter by year:</span>
-        {{ range .Years }}
-        <a href="/messages?year={{ . }}{{ if $.Query }}&q={{ $.Query }}{{ end }}"
-           class="year-link{{ if eq . $.Year }} active{{ end }}">{{ . }}</a>
+        {{ range .BodyData.Years }}
+        <a href="/messages?year={{ . }}{{ if $.BodyData.Query }}&q={{ $.BodyData.Query }}{{ end }}"
+           class="year-link{{ if eq . $.BodyData.Year }} active{{ end }}">{{ . }}</a>
         {{ end }}
     </div>
     {{ end }}
 
     <div class="message-list">
-        {{ range .Messages }}
-        {{ template "message_row" . }}
+        {{ range .BodyData.Messages }}
+        <div class="message-row{{ if .Deleted }} deleted{{ end }}{{ if .HasConflict }} conflict{{ end }}{{ if .Dirty }} dirty{{ end }}">
+            <div class="message-author">{{ .Author }}</div>
+            <div class="message-content">{{ .Content }}</div>
+            <div class="message-meta">
+                <span class="message-time" title="{{ .UpdatedAt }}">{{ .UpdatedLabel }}</span>
+                {{ if .Dirty }}<span class="badge badge-warning">Unsynced</span>{{ end }}
+                {{ if .HasConflict }}<span class="badge badge-error">Conflict</span>{{ end }}
+                {{ if .Deleted }}<span class="badge badge-error">Deleted</span>{{ end }}
+                <span class="badge">v{{ .Version }}</span>
+            </div>
+            <div class="message-actions">
+                {{ if .HasConflict }}
+                <form method="POST" action="/messages/{{ .SyncID }}/resolve" class="inline-form">
+                    <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                    <input type="hidden" name="strategy" value="mine">
+                    <button type="submit" class="btn btn-sm">Keep mine</button>
+                </form>
+                <form method="POST" action="/messages/{{ .SyncID }}/resolve" class="inline-form">
+                    <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                    <input type="hidden" name="strategy" value="server">
+                    <button type="submit" class="btn btn-sm">Keep server</button>
+                </form>
+                {{ end }}
+                {{ if .Deleted }}
+                <form method="POST" action="/messages/{{ .SyncID }}/restore" class="inline-form">
+                    <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                    <button type="submit" class="btn btn-sm">Restore</button>
+                </form>
+                {{ else }}
+                <form method="POST" action="/messages/{{ .SyncID }}/delete" class="inline-form">
+                    <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                    <button type="submit" class="btn btn-sm btn-danger" data-confirm="Delete this message?">Delete</button>
+                </form>
+                {{ end }}
+            </div>
+        </div>
         {{ else }}
         <p class="empty-state">No messages found.</p>
         {{ end }}
     </div>
 
-    {{ template "pagination" .Pagination }}
+    {{ template "pagination" .BodyData.Pagination }}
 </div>
 {{ end }}

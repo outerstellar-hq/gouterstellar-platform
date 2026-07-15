@@ -2,10 +2,14 @@ package handler
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
 
 	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/security"
@@ -40,21 +44,23 @@ func NewAuthAPI(
 	}
 }
 
-func (h *AuthAPI) RegisterRoutes(r chi.Router) {
-	r.Post("/api/v1/auth/login", h.Login)
-	r.Post("/api/v1/auth/token", h.IssueToken)
-	r.Post("/api/v1/auth/register", h.Register)
-	r.Put("/api/v1/auth/password", h.ChangePassword)
-	r.Post("/api/v1/auth/reset-request", h.RequestPasswordReset)
-	r.Post("/api/v1/auth/reset-confirm", h.ConfirmPasswordReset)
-	r.Post("/api/v1/auth/logout", h.Logout)
-	r.Get("/api/v1/auth/profile", h.GetProfile)
-	r.Put("/api/v1/auth/profile", h.UpdateProfile)
-	r.Put("/api/v1/auth/notification-preferences", h.UpdateNotificationPreferences)
-	r.Delete("/api/v1/auth/account", h.DeleteAccount)
-	r.Post("/api/v1/auth/api-keys", h.CreateApiKey)
-	r.Get("/api/v1/auth/api-keys", h.ListApiKeys)
-	r.Delete("/api/v1/auth/api-keys/{id}", h.DeleteApiKey)
+// ContributeRoutes registers the auth API routes (bearer auth applied by builder).
+func (h *AuthAPI) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/login", "API login", http.HandlerFunc(h.Login))
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/token", "Issue token", http.HandlerFunc(h.IssueToken))
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/register", "API register", http.HandlerFunc(h.Register))
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/change-password", "API change password", http.HandlerFunc(h.ChangePassword))
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/reset-password", "Request password reset", http.HandlerFunc(h.RequestPasswordReset))
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/confirm-reset", "Confirm password reset", http.HandlerFunc(h.ConfirmPasswordReset))
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/logout", "API logout", http.HandlerFunc(h.Logout))
+	ctx.Routes.API(http.MethodGet, "/api/v1/auth/profile", "Get profile", http.HandlerFunc(h.GetProfile))
+	ctx.Routes.API(http.MethodPut, "/api/v1/auth/profile", "Update profile", http.HandlerFunc(h.UpdateProfile))
+	ctx.Routes.API(http.MethodPut, "/api/v1/auth/notification-preferences", "Update notif prefs", http.HandlerFunc(h.UpdateNotificationPreferences))
+	ctx.Routes.API(http.MethodDelete, "/api/v1/auth/account", "Delete account", http.HandlerFunc(h.DeleteAccount))
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/api-keys", "Create API key", http.HandlerFunc(h.CreateApiKey))
+	ctx.Routes.API(http.MethodGet, "/api/v1/auth/api-keys", "List API keys", http.HandlerFunc(h.ListApiKeys))
+	ctx.Routes.API(http.MethodDelete, "/api/v1/auth/api-keys/{id}", "Delete API key", http.HandlerFunc(h.DeleteApiKey))
+	return nil
 }
 
 func (h *AuthAPI) Login(w http.ResponseWriter, r *http.Request) {
@@ -146,7 +152,7 @@ func (h *AuthAPI) Register(w http.ResponseWriter, r *http.Request) {
 		"username": user.Username,
 	})
 
-	writeJSON(w, http.StatusOK, model.AuthTokenResponse{
+	writeJSON(w, http.StatusCreated, model.AuthTokenResponse{
 		Token:    token,
 		Username: user.Username,
 		Role:     string(user.Role),
@@ -212,6 +218,19 @@ func (h *AuthAPI) ConfirmPasswordReset(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthAPI) Logout(w http.ResponseWriter, r *http.Request) {
+	if token := web.GetSessionToken(r); token != "" {
+		var uid *uuid.UUID
+		var username *string
+		if user := web.UserFromRequest(r); user != nil {
+			id := user.ID
+			name := user.Username
+			uid = &id
+			username = &name
+		}
+		if err := h.securityService.Logout(r.Context(), token, uid, username); err != nil {
+			slog.Warn("Failed to delete session on logout", "error", err)
+		}
+	}
 	http.SetCookie(w, web.ClearSessionCookie(h.sessionSecure))
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Logged out"})
 }
@@ -293,13 +312,7 @@ func (h *AuthAPI) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req model.DeleteAccountRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.CurrentPassword == "" {
-		writeError(w, http.StatusBadRequest, "Current password is required")
-		return
-	}
-
-	err := h.securityService.DeleteAccount(r.Context(), user.ID, req.CurrentPassword)
+	err := h.securityService.DeleteAccount(r.Context(), user.ID)
 	if err != nil {
 		handleServiceError(w, err)
 		return
@@ -338,7 +351,7 @@ func (h *AuthAPI) CreateApiKey(w http.ResponseWriter, r *http.Request) {
 		"name":   req.Name,
 	})
 
-	writeJSON(w, http.StatusOK, result)
+	writeJSON(w, http.StatusCreated, result)
 }
 
 func (h *AuthAPI) ListApiKeys(w http.ResponseWriter, r *http.Request) {

@@ -8,6 +8,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
+
 	"github.com/rygel/gouterstellar-platform/internal/security"
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
@@ -18,6 +20,7 @@ type OAuthHandler struct {
 	oauthService    *security.OAuthService
 	sessionSecure   bool
 	appleProvider   security.OAuthProvider
+	googleProvider  security.OAuthProvider
 	appBaseURL      string
 }
 
@@ -26,6 +29,7 @@ func NewOAuthHandler(
 	oauthSvc *security.OAuthService,
 	sessionSecure bool,
 	appleProvider security.OAuthProvider,
+	googleProvider security.OAuthProvider,
 	appBaseURL string,
 ) *OAuthHandler {
 	return &OAuthHandler{
@@ -33,14 +37,17 @@ func NewOAuthHandler(
 		oauthService:    oauthSvc,
 		sessionSecure:   sessionSecure,
 		appleProvider:   appleProvider,
+		googleProvider:  googleProvider,
 		appBaseURL:      appBaseURL,
 	}
 }
 
-func (h *OAuthHandler) RegisterRoutes(r chi.Router) {
-	r.Get("/auth/oauth/{provider}", h.Redirect)
-	r.Get("/auth/oauth/{provider}/callback", h.Callback)
-	r.Post("/auth/oauth/{provider}/callback", h.CallbackPost)
+// ContributeRoutes registers the OAuth routes (public).
+func (h *OAuthHandler) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.Public(http.MethodGet, "/auth/oauth/{provider}", "OAuth redirect", http.HandlerFunc(h.Redirect))
+	ctx.Routes.Public(http.MethodGet, "/auth/oauth/{provider}/callback", "OAuth callback", http.HandlerFunc(h.Callback))
+	ctx.Routes.Public(http.MethodPost, "/auth/oauth/{provider}/callback", "OAuth callback POST", http.HandlerFunc(h.CallbackPost))
+	return nil
 }
 
 func (h *OAuthHandler) Redirect(w http.ResponseWriter, r *http.Request) {
@@ -55,6 +62,10 @@ func (h *OAuthHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 	redirectURI := h.appBaseURL + "/auth/oauth/" + providerName + "/callback"
 
 	authURL := provider.AuthorizationURL(state, redirectURI)
+	if authURL == "" {
+		writeError(w, http.StatusNotImplemented, "OAuth provider not configured")
+		return
+	}
 
 	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- attributes set; Secure is parameterized per-environment
 		Name:     "oauth_state",
@@ -148,6 +159,8 @@ func (h *OAuthHandler) resolveProvider(name string) security.OAuthProvider {
 	switch name {
 	case "apple":
 		return h.appleProvider
+	case "google":
+		return h.googleProvider
 	default:
 		return nil
 	}

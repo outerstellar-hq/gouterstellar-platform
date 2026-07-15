@@ -25,3 +25,9 @@ DELETE FROM plt_sessions WHERE user_id = $1;
 
 -- name: DeleteExpiredSessions :execrows
 DELETE FROM plt_sessions WHERE expires_at <= CURRENT_TIMESTAMP;
+
+-- name: ListSessionsForUser :many
+SELECT token_hash, user_id, created_at, expires_at
+FROM plt_sessions
+WHERE user_id = $1 AND expires_at > CURRENT_TIMESTAMP
+ORDER BY created_at DESC;

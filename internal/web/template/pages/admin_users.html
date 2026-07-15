@@ -15,32 +15,33 @@
             </tr>
         </thead>
         <tbody>
-            {{ range .Users }}
+            {{ range .BodyData.Users }}
             <tr>
                 <td>{{ .Username }}</td>
                 <td>{{ .Email }}</td>
                 <td><span class="badge badge-{{ .Role }}">{{ .Role }}</span></td>
                 <td>
-                    {{ if .IsLocked }}
-                    <span class="badge badge-warning">Locked</span>
-                    {{ else if .Enabled }}
+                    {{ if .Enabled }}
                     <span class="badge badge-success">Active</span>
                     {{ else }}
                     <span class="badge badge-error">Disabled</span>
                     {{ end }}
                 </td>
                 <td>
-                    <form method="POST" action="/admin/users/{{ .ID }}/enabled">
+                    <form method="POST" action="/admin/users/{{ .ID }}/role" class="inline-form">
+                        <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                        <select name="role" onchange="this.form.submit()">
+                            <option value="USER" {{ if eq .Role "USER" }}selected{{ end }}>USER</option>
+                            <option value="ADMIN" {{ if eq .Role "ADMIN" }}selected{{ end }}>ADMIN</option>
+                        </select>
+                    </form>
+                    <form method="POST" action="/admin/users/{{ .ID }}/enabled" class="inline-form">
+                        <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
                         <input type="hidden" name="enabled" value="{{ if .Enabled }}false{{ else }}true{{ end }}">
                         <button type="submit" class="btn btn-sm">
                             {{ if .Enabled }}Disable{{ else }}Enable{{ end }}
                         </button>
                     </form>
-                    {{ if .IsLocked }}
-                    <form method="POST" action="/admin/users/{{ .ID }}/unlock">
-                        <button type="submit" class="btn btn-sm btn-secondary">Unlock ({{ .FailedLoginAttempts }})</button>
-                    </form>
-                    {{ end }}
                 </td>
             </tr>
             {{ else }}
@@ -49,6 +50,6 @@
         </tbody>
     </table>
 
-    {{ template "pagination" .Pagination }}
+    {{ template "pagination" .BodyData.Pagination }}
 </div>
 {{ end }}

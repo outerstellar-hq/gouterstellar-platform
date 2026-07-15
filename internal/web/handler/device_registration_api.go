@@ -3,8 +3,11 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
+
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
 
 	"github.com/rygel/gouterstellar-platform/internal/persistence"
 	"github.com/rygel/gouterstellar-platform/internal/web"
@@ -18,19 +21,17 @@ func NewDeviceRegistrationAPI(repo persistence.DeviceTokenRepository) *DeviceReg
 	return &DeviceRegistrationAPI{deviceTokenRepo: repo}
 }
 
-func (h *DeviceRegistrationAPI) RegisterRoutes(r chi.Router) {
-	r.Post("/api/v1/devices/register", h.Register)
-	r.Delete("/api/v1/devices/register", h.Unregister)
+// ContributeRoutes registers the device registration API routes (bearer auth applied by builder).
+func (h *DeviceRegistrationAPI) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.API(http.MethodPost, "/api/v1/devices/register", "Register device", http.HandlerFunc(h.Register))
+	ctx.Routes.API(http.MethodDelete, "/api/v1/devices/{id}", "Unregister device", http.HandlerFunc(h.Unregister))
+	return nil
 }
 
 type registerDeviceRequest struct {
 	Platform  string  `json:"platform"`
 	Token     string  `json:"token"`
 	AppBundle *string `json:"appBundle"`
-}
-
-type unregisterDeviceRequest struct {
-	Token string `json:"token"`
 }
 
 func (h *DeviceRegistrationAPI) Register(w http.ResponseWriter, r *http.Request) {
@@ -46,12 +47,8 @@ func (h *DeviceRegistrationAPI) Register(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if req.Platform != "android" && req.Platform != "ios" {
-		writeError(w, http.StatusBadRequest, "platform must be one of: android, ios")
-		return
-	}
-	if req.Token == "" {
-		writeError(w, http.StatusBadRequest, "token is required")
+	if req.Platform == "" || req.Token == "" {
+		writeError(w, http.StatusBadRequest, "Platform and token are required")
 		return
 	}
 
@@ -61,7 +58,7 @@ func (h *DeviceRegistrationAPI) Register(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Device registered"})
 }
 
 func (h *DeviceRegistrationAPI) Unregister(w http.ResponseWriter, r *http.Request) {
@@ -71,22 +68,23 @@ func (h *DeviceRegistrationAPI) Unregister(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var req unregisterDeviceRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Token == "" {
-		writeError(w, http.StatusBadRequest, "token is required")
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid device ID")
 		return
 	}
 
-	deleted, err := h.deviceTokenRepo.DeleteDeviceTokenByValue(r.Context(), req.Token, user.ID)
+	deleted, err := h.deviceTokenRepo.DeleteDeviceToken(r.Context(), id, user.ID)
 	if err != nil {
 		handleServiceError(w, err)
 		return
 	}
 
 	if deleted == 0 {
-		writeError(w, http.StatusForbidden, "Token not found or not owned by this user")
+		writeError(w, http.StatusNotFound, "Device not found")
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Device unregistered"})
 }
