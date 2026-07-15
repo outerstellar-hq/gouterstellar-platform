@@ -2,7 +2,9 @@ package filter
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -10,21 +12,22 @@ import (
 	"github.com/rygel/gouterstellar-platform/internal/web"
 )
 
-func generateCSRFToken() string {
+const csrfCookieName = "oss_csrf"
+
+func generateCSRFToken() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		slog.Error("Failed to generate CSRF token", "error", err)
-		return ""
+		return "", fmt.Errorf("generate CSRF token: %w", err)
 	}
-	return hex.EncodeToString(b)
+	return hex.EncodeToString(b), nil
 }
 
-func CSRF(enabled bool) func(http.Handler) http.Handler {
+// CSRF applies a cookie-backed double-submit token to browser requests. The
+// HttpOnly cookie keeps the stable token server-readable while templates and
+// the request context expose only the value needed by the current page.
+func CSRF(enabled, secure bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			token := generateCSRFToken()
-			r = web.WithCSRFToken(r, token)
-
 			// API clients authenticate with a Bearer token (Authorization:
 			// Bearer ...) rather than the session cookie + CSRF token that
 			// browser forms use. A request carrying a Bearer header is therefore
@@ -38,12 +41,32 @@ func CSRF(enabled bool) func(http.Handler) http.Handler {
 				return
 			}
 
+			token, hasToken := csrfTokenFromCookie(r)
+			if !hasToken {
+				var err error
+				token, err = generateCSRFToken()
+				if err != nil {
+					slog.Error("Failed to initialize CSRF protection", "error", err)
+					http.Error(w, "Unable to initialize request protection", http.StatusInternalServerError)
+					return
+				}
+				http.SetCookie(w, &http.Cookie{ // #nosec G124 -- all security attributes are explicitly configured
+					Name:     csrfCookieName,
+					Value:    token,
+					Path:     "/",
+					HttpOnly: true,
+					Secure:   secure,
+					SameSite: http.SameSiteStrictMode,
+				})
+			}
+			r = web.WithCSRFToken(r, token)
+
 			if enabled && isUnsafeMethod(r.Method) {
 				submitted := r.Header.Get("X-CSRF-Token")
 				if submitted == "" {
 					submitted = r.FormValue("csrf_token")
 				}
-				if submitted != token {
+				if !hasToken || subtle.ConstantTimeCompare([]byte(submitted), []byte(token)) != 1 {
 					http.Error(w, "Invalid CSRF token", http.StatusForbidden)
 					return
 				}
@@ -52,6 +75,17 @@ func CSRF(enabled bool) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func csrfTokenFromCookie(r *http.Request) (string, bool) {
+	cookie, err := r.Cookie(csrfCookieName)
+	if err != nil || len(cookie.Value) != 64 {
+		return "", false
+	}
+	if _, err := hex.DecodeString(cookie.Value); err != nil {
+		return "", false
+	}
+	return cookie.Value, true
 }
 
 // hasBearerAuth reports whether the request carries an Authorization header
