@@ -4,7 +4,7 @@ Work GitHub issues in dependency order before continuing discretionary parity im
 
 ## GitHub issues
 
-- [x] [#8 Migrate the Go module to the canonical repository path](https://github.com/outerstellar-hq/gouterstellar-platform/issues/8) — implemented and locally verified; remote `go get` verification requires publishing the canonical module declaration.
+- [x] [#8 Migrate the Go module to the canonical repository path](https://github.com/outerstellar-hq/gouterstellar-platform/issues/8) — implemented and verified from a disposable consumer against the published upstream commit.
 - [x] [#4 Expose shared page rendering and extension-owned templates](https://github.com/outerstellar-hq/gouterstellar-platform/issues/4) — implemented and verified through the reports extension.
 - [x] [#5 Expose authenticated identity and CSRF context to extensions](https://github.com/outerstellar-hq/gouterstellar-platform/issues/5) — implemented with structural admin enforcement and credential-free request projection.
 - [x] [#6 Add date and monotonic build identity](https://github.com/outerstellar-hq/gouterstellar-platform/issues/6) — implemented across the shell, health/diagnostics, backup provenance, containers, CI, and releases.
@@ -21,9 +21,10 @@ Work GitHub issues in dependency order before continuing discretionary parity im
 
 ## Publication follow-up
 
-- [ ] Review and commit the complete issue/parity change set on `codex/web-replacement`.
-- [ ] Push the commit, then verify the canonical module path with a remote `go get`.
-- [ ] Link the published fix to issues #4–#9 and close each ticket after its acceptance criteria are confirmed upstream.
+- [x] Review and commit the complete issue/parity change set on `codex/web-replacement`.
+- [x] Push the commit, then verify the canonical module path with a remote `go get`.
+- [x] Link [draft PR #10](https://github.com/outerstellar-hq/gouterstellar-platform/pull/10) to issues #4–#9 with automatic closing references.
+- [ ] Merge PR #10 after CI and review; issues #4–#9 will close automatically on merge.
 
 ## Completed in the current parity slice
 
