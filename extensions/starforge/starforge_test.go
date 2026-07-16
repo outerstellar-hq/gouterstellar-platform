@@ -1,13 +1,17 @@
 package starforge
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"html/template"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -46,6 +50,7 @@ func (fakeRenderer) RenderPage(w http.ResponseWriter, _ *http.Request, page stri
 	for _, worker := range view.Workers {
 		_, _ = w.Write([]byte(" " + worker.DisplayName + " " + worker.OperatorLabel))
 	}
+	_, _ = w.Write([]byte(fmt.Sprintf(" total=%d online=%d sessions=%d", view.Summary.Total, view.Summary.Online, view.Summary.ActiveSessions)))
 	return nil
 }
 
@@ -74,6 +79,7 @@ func TestPageRendersWorkersAndExplicitUnavailableState(t *testing.T) {
 	app.Handler.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusOK, response.Code)
 	assert.Contains(t, response.Body.String(), "Agent Mac Nova")
+	assert.Contains(t, response.Body.String(), "total=1 online=1 sessions=0")
 
 	unavailableClient := &fakeClient{listErr: ErrUnavailable}
 	app = newStarforgeTestApp(t, unavailableClient)
@@ -81,6 +87,53 @@ func TestPageRendersWorkersAndExplicitUnavailableState(t *testing.T) {
 	app.Handler.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/starforge", nil))
 	assert.Equal(t, http.StatusOK, response.Code)
 	assert.Contains(t, response.Body.String(), "temporarily unavailable")
+}
+
+func TestBuildFleetViewUsesTruthfulStatesAndMissingTimestamps(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.July, 16, 12, 30, 0, 0, time.UTC)
+	workers := []Worker{
+		{UUID: uuid.NewString(), DisplayName: "Mac mini", OperatorLabel: "Nova", State: "online", LastSeenAt: &now, Heartbeat: Heartbeat{SessionID: "session-1", LastHeartbeatAt: &now}},
+		{UUID: uuid.NewString(), DisplayName: "Linux server", State: "offline"},
+		{UUID: uuid.NewString(), State: "pending"},
+	}
+
+	views, summary := buildFleetView(workers)
+	assert.Equal(t, fleetSummary{Total: 3, Online: 1, ActiveSessions: 1, NotOnline: 2}, summary)
+	assert.Equal(t, "Nova", views[0].Name)
+	assert.Equal(t, "status-online", views[0].StatusClass)
+	assert.Equal(t, "2026-07-16 12:30:00 UTC", views[0].LastSeenLabel)
+	assert.Equal(t, "Not reported", views[1].LastHeartbeatLabel)
+	assert.Equal(t, "Unnamed worker", views[2].Name)
+	assert.Equal(t, "status-pending", views[2].StatusClass)
+}
+
+func TestStarforgeTemplateRendersFleetSummaryAndHonestMissingData(t *testing.T) {
+	t.Parallel()
+
+	workers, summary := buildFleetView([]Worker{{
+		UUID:        uuid.NewString(),
+		DisplayName: "Linux render node",
+		State:       "offline",
+	}})
+	page := struct{ BodyData workerPage }{BodyData: workerPage{
+		Workers: workers,
+		Summary: summary,
+		Request: extplatform.RequestContext{CSRFToken: "test-csrf"},
+	}}
+	parsed, err := template.ParseFS(templatesFS, "templates/pages/starforge.html")
+	require.NoError(t, err)
+	var output bytes.Buffer
+	require.NoError(t, parsed.ExecuteTemplate(&output, "content", page))
+
+	html := output.String()
+	assert.Contains(t, html, "Starforge fleet")
+	assert.Contains(t, html, "Linux render node")
+	assert.Contains(t, html, "Not reported")
+	assert.Contains(t, html, "No active session")
+	assert.Contains(t, html, `value="test-csrf"`)
+	assert.NotContains(t, html, "0001-01-01")
 }
 
 func TestProtectedPageAndBFFRejectAnonymousRequests(t *testing.T) {
@@ -96,6 +149,24 @@ func TestProtectedPageAndBFFRejectAnonymousRequests(t *testing.T) {
 	request.Header.Set("Accept", "application/json")
 	app.Handler.ServeHTTP(api, request)
 	assert.Equal(t, http.StatusUnauthorized, api.Code)
+}
+
+func TestWorkerBFFUsesStableCamelCaseContractAndNullMissingTimes(t *testing.T) {
+	t.Parallel()
+
+	workerID := uuid.NewString()
+	app := newStarforgeTestApp(t, &fakeClient{workers: []Worker{{
+		UUID:        workerID,
+		DisplayName: "Linux render node",
+		State:       "offline",
+	}}})
+	response := httptest.NewRecorder()
+	request := authenticatedRequest(http.MethodGet, "/api/starforge/workers", nil)
+	request.Header.Set("Accept", "application/json")
+	app.Handler.ServeHTTP(response, request)
+
+	assert.Equal(t, http.StatusOK, response.Code)
+	assert.JSONEq(t, `{"workers":[{"uuid":"`+workerID+`","displayName":"Linux render node","operatorLabel":"","state":"offline","os":"","architecture":"","agentVersion":"","lastSeenAt":null,"heartbeat":{"serverId":"","sessionId":"","connectedAt":null,"lastHeartbeatAt":null}}]}`, response.Body.String())
 }
 
 func TestWorkerLabelValidationAndErrorPropagation(t *testing.T) {

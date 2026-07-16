@@ -26,22 +26,41 @@ var (
 const maxUpstreamResponseBytes = 1 << 20
 
 type Heartbeat struct {
-	ServerID        string    `json:"serverId"`
-	SessionID       string    `json:"sessionId"`
-	ConnectedAt     time.Time `json:"connectedAt"`
-	LastHeartbeatAt time.Time `json:"lastHeartbeatAt"`
+	ServerID        string     `json:"serverId"`
+	SessionID       string     `json:"sessionId"`
+	ConnectedAt     *time.Time `json:"connectedAt"`
+	LastHeartbeatAt *time.Time `json:"lastHeartbeatAt"`
 }
 
 type Worker struct {
-	UUID          string    `json:"uuid"`
-	DisplayName   string    `json:"displayName"`
-	OperatorLabel string    `json:"operatorLabel"`
-	State         string    `json:"state"`
-	OS            string    `json:"os"`
-	Architecture  string    `json:"architecture"`
-	AgentVersion  string    `json:"agentVersion"`
-	LastSeenAt    time.Time `json:"lastSeenAt"`
-	Heartbeat     Heartbeat `json:"heartbeat"`
+	UUID          string     `json:"uuid"`
+	DisplayName   string     `json:"displayName"`
+	OperatorLabel string     `json:"operatorLabel"`
+	State         string     `json:"state"`
+	OS            string     `json:"os"`
+	Architecture  string     `json:"architecture"`
+	AgentVersion  string     `json:"agentVersion"`
+	LastSeenAt    *time.Time `json:"lastSeenAt"`
+	Heartbeat     Heartbeat  `json:"heartbeat"`
+}
+
+// upstreamWorker is the wire contract exposed by StarlineZero's control plane.
+// Keep this separate from Worker: the latter is the stable view model returned
+// by this extension's BFF, while the control-plane API uses snake_case fields
+// and reports session data as flat nullable columns.
+type upstreamWorker struct {
+	ID               string     `json:"id"`
+	DisplayName      string     `json:"display_name"`
+	OperatorLabel    string     `json:"operator_label"`
+	State            string     `json:"state"`
+	OS               string     `json:"os"`
+	Architecture     string     `json:"architecture"`
+	AgentVersion     string     `json:"agent_version"`
+	LastSeenAt       *time.Time `json:"last_seen_at"`
+	ConnectionID     string     `json:"connection_id"`
+	ServerInstanceID string     `json:"server_instance_id"`
+	ConnectedAt      *time.Time `json:"connected_at"`
+	LastHeartbeatAt  *time.Time `json:"last_heartbeat_at"`
 }
 
 type Client interface {
@@ -95,7 +114,7 @@ func (c *HTTPClient) ListWorkers(ctx context.Context) ([]Worker, error) {
 	}
 
 	var payload struct {
-		Workers []Worker `json:"workers"`
+		Workers []upstreamWorker `json:"workers"`
 	}
 	decoder := json.NewDecoder(io.LimitReader(response.Body, maxUpstreamResponseBytes+1))
 	if err := decoder.Decode(&payload); err != nil {
@@ -104,12 +123,29 @@ func (c *HTTPClient) ListWorkers(ctx context.Context) ([]Worker, error) {
 	if err := ensureJSONEOF(decoder); err != nil || payload.Workers == nil {
 		return nil, ErrMalformedResponse
 	}
+	workers := make([]Worker, 0, len(payload.Workers))
 	for _, worker := range payload.Workers {
-		if _, err := uuid.Parse(worker.UUID); err != nil || strings.TrimSpace(worker.State) == "" {
+		if _, err := uuid.Parse(worker.ID); err != nil || strings.TrimSpace(worker.State) == "" {
 			return nil, ErrMalformedResponse
 		}
+		workers = append(workers, Worker{
+			UUID:          worker.ID,
+			DisplayName:   worker.DisplayName,
+			OperatorLabel: worker.OperatorLabel,
+			State:         worker.State,
+			OS:            worker.OS,
+			Architecture:  worker.Architecture,
+			AgentVersion:  worker.AgentVersion,
+			LastSeenAt:    worker.LastSeenAt,
+			Heartbeat: Heartbeat{
+				ServerID:        worker.ServerInstanceID,
+				SessionID:       worker.ConnectionID,
+				ConnectedAt:     worker.ConnectedAt,
+				LastHeartbeatAt: worker.LastHeartbeatAt,
+			},
+		})
 	}
-	return payload.Workers, nil
+	return workers, nil
 }
 
 func (c *HTTPClient) UpdateWorkerLabel(ctx context.Context, workerID, label string) error {

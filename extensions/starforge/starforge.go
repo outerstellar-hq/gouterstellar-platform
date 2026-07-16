@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -53,9 +54,27 @@ func (e *Extension) Contribute(ctx *extplatform.ContributionContext) error {
 }
 
 type workerPage struct {
-	Workers     []Worker
+	Workers     []workerView
+	Summary     fleetSummary
 	Unavailable bool
 	Request     extplatform.RequestContext
+}
+
+type fleetSummary struct {
+	Total          int
+	Online         int
+	ActiveSessions int
+	NotOnline      int
+}
+
+type workerView struct {
+	Worker
+	Name               string
+	StatusClass        string
+	LastSeenLabel      string
+	ConnectedAtLabel   string
+	LastHeartbeatLabel string
+	HasSession         bool
 }
 
 func (e *Extension) home(w http.ResponseWriter, r *http.Request) {
@@ -64,11 +83,67 @@ func (e *Extension) home(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		page.Unavailable = true
 	} else {
-		page.Workers = workers
+		page.Workers, page.Summary = buildFleetView(workers)
 	}
 	if err := e.pages.Render(w, r, "starforge", page); err != nil {
 		http.Error(w, "Failed to render Starforge", http.StatusInternalServerError)
 	}
+}
+
+func buildFleetView(workers []Worker) ([]workerView, fleetSummary) {
+	views := make([]workerView, 0, len(workers))
+	summary := fleetSummary{Total: len(workers)}
+	for _, worker := range workers {
+		state := strings.ToLower(strings.TrimSpace(worker.State))
+		if state == "online" {
+			summary.Online++
+		} else {
+			summary.NotOnline++
+		}
+		hasSession := strings.TrimSpace(worker.Heartbeat.SessionID) != ""
+		if hasSession {
+			summary.ActiveSessions++
+		}
+		name := strings.TrimSpace(worker.OperatorLabel)
+		if name == "" {
+			name = strings.TrimSpace(worker.DisplayName)
+		}
+		if name == "" {
+			name = "Unnamed worker"
+		}
+		views = append(views, workerView{
+			Worker:             worker,
+			Name:               name,
+			StatusClass:        workerStatusClass(state),
+			LastSeenLabel:      formatWorkerTime(worker.LastSeenAt),
+			ConnectedAtLabel:   formatWorkerTime(worker.Heartbeat.ConnectedAt),
+			LastHeartbeatLabel: formatWorkerTime(worker.Heartbeat.LastHeartbeatAt),
+			HasSession:         hasSession,
+		})
+	}
+	return views, summary
+}
+
+func workerStatusClass(state string) string {
+	switch state {
+	case "online":
+		return "status-online"
+	case "offline":
+		return "status-offline"
+	case "pending", "approved":
+		return "status-pending"
+	case "rejected", "revoked":
+		return "status-blocked"
+	default:
+		return "status-unknown"
+	}
+}
+
+func formatWorkerTime(value *time.Time) string {
+	if value == nil || value.IsZero() {
+		return "Not reported"
+	}
+	return value.UTC().Format("2006-01-02 15:04:05 UTC")
 }
 
 func (e *Extension) listWorkers(w http.ResponseWriter, r *http.Request) {

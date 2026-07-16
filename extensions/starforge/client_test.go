@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -22,7 +23,7 @@ func TestHTTPClientListsWorkersAndKeepsCredentialServerSide(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/api/workers", r.URL.Path)
 		assert.Equal(t, "Bearer "+credential, r.Header.Get("Authorization"))
-		_, _ = w.Write([]byte(`{"workers":[{"uuid":"` + workerID + `","displayName":"Mac mini","operatorLabel":"Nova","state":"online","os":"darwin","architecture":"arm64","agentVersion":"1.2.3","lastSeenAt":"2026-07-16T12:00:00Z","heartbeat":{"serverId":"control-1","sessionId":"session-1","connectedAt":"2026-07-16T11:00:00Z","lastHeartbeatAt":"2026-07-16T12:00:00Z"}}]}`))
+		_, _ = w.Write([]byte(`{"workers":[{"id":"` + workerID + `","display_name":"Mac mini","operator_label":"Nova","state":"online","os":"darwin","architecture":"arm64","agent_version":"1.2.3","last_seen_at":"2026-07-16T12:00:00Z","connection_id":"session-1","server_instance_id":"control-1","connected_at":"2026-07-16T11:00:00Z","last_heartbeat_at":"2026-07-16T12:00:00Z"}]}`))
 	}))
 	defer server.Close()
 	client, err := NewHTTPClient(server.URL, credential, server.Client())
@@ -33,13 +34,16 @@ func TestHTTPClientListsWorkersAndKeepsCredentialServerSide(t *testing.T) {
 	require.Len(t, workers, 1)
 	assert.Equal(t, "Nova", workers[0].OperatorLabel)
 	assert.Equal(t, "session-1", workers[0].Heartbeat.SessionID)
+	assert.Equal(t, "control-1", workers[0].Heartbeat.ServerID)
+	require.NotNil(t, workers[0].LastSeenAt)
+	assert.Equal(t, "2026-07-16T12:00:00Z", workers[0].LastSeenAt.Format(time.RFC3339))
 }
 
 func TestHTTPClientRejectsMalformedWorkerResponse(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"workers":[{"uuid":"not-a-uuid","state":"online"}]}`))
+		_, _ = w.Write([]byte(`{"workers":[{"id":"not-a-uuid","state":"online"}]}`))
 	}))
 	defer server.Close()
 	client, err := NewHTTPClient(server.URL, "credential", server.Client())
