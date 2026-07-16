@@ -1,12 +1,13 @@
 {{ define "sidebar_selector" }}
-<form method="GET" action="/components/navigation/page" class="sidebar-selector"
-      hx-get="/components/navigation/page" hx-trigger="change">
+<form method="POST" action="/components/navigation/preferences" class="sidebar-selector"
+      hx-post="/components/navigation/preferences" hx-trigger="change" hx-swap="none">
     <span class="sidebar-selector-heading">{{ .Heading }}</span>
     <label>{{ .Label }}
         <select name="{{ .Name }}" aria-label="{{ .Label }}">
             {{ range .Options }}<option value="{{ .Value }}"{{ if .Selected }} selected{{ end }}>{{ .Label }}</option>{{ end }}
         </select>
     </label>
+	<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     {{ range $name, $values := .Hidden }}{{ range $values }}<input type="hidden" name="{{ $name }}" value="{{ . }}">{{ end }}{{ end }}
     <noscript><button type="submit">{{ .ApplyLabel }}</button></noscript>
 </form>

@@ -1,4 +1,4 @@
-module github.com/rygel/gouterstellar-platform
+module github.com/outerstellar-hq/gouterstellar-platform
 
 go 1.26.2
 

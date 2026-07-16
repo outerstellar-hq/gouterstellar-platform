@@ -12,5 +12,12 @@
         {{ if .Dirty }}<span class="badge badge-warning">{{ translate .Language "web.messages.local.badge" }}</span>{{ end }}
         {{ if .Deleted }}<span class="badge badge-error">{{ translate .Language "web.common.deleted" }}</span>{{ end }}
     </div>
+    <div class="contact-actions">
+        <a href="/contacts/{{ .SyncID }}/edit" class="btn btn-sm">{{ translate .Language "web.contacts.edit" }}</a>
+        <form method="POST" action="/contacts/{{ .SyncID }}/delete" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+            <button type="submit" class="btn btn-sm btn-danger" data-confirm="{{ translate .Language "web.contacts.delete.confirm" }}">{{ translate .Language "web.contacts.delete" }}</button>
+        </form>
+    </div>
 </div>
 {{ end }}

@@ -34,7 +34,7 @@
 		<section class="danger-zone" aria-labelledby="delete-account-heading">
 			<h3 id="delete-account-heading">{{ translate .Language "web.profile.delete.account" }}</h3>
 			<p>{{ translate .Language "web.profile.delete.account.description" }}</p>
-			<form method="POST" action="/auth/account/delete">
+			<form method="POST" action="/auth/account/delete" hx-boost="false">
 				<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
 				<div class="form-group">
 					<label for="delete-account-password">{{ translate .Language "web.password.current" }}</label>

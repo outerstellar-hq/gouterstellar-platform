@@ -2,7 +2,9 @@ package wire
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -10,17 +12,17 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/rygel/gouterstellar-platform/internal/config"
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/persistence"
-	"github.com/rygel/gouterstellar-platform/internal/platform/core"
-	"github.com/rygel/gouterstellar-platform/internal/security"
-	"github.com/rygel/gouterstellar-platform/internal/service"
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/filter"
-	"github.com/rygel/gouterstellar-platform/internal/web/handler"
-	"github.com/rygel/gouterstellar-platform/pkg/i18n"
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/config"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/platform/core"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/security"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/service"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/filter"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/handler"
+	"github.com/outerstellar-hq/gouterstellar-platform/pkg/i18n"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 )
 
 // repos groups every repository instance assembled from the connection pool.
@@ -344,12 +346,14 @@ func buildApp(cfg *config.Config, r repos, svcs *services, templateFS fs.FS, reg
 	settingsHandler := handler.NewSettingsHandler(svcs.securitySvc, svcs.totpSvc, svcs.apiKeySvc, renderer, cfg.SessionCookieSecure)
 	errorHandler := handler.NewErrorHandler(renderer, cfg.Version)
 	devDashboardHandler := handler.NewDevDashboardHandler(svcs.outboxProcessor, svcs.securitySvc, svcs.messageSvc, renderer, cfg.DevDashboardEnabled)
-	componentsHandler := handler.NewComponentsHandler(svcs.messageSvc, svcs.contactSvc, svcs.voteSvc, svcs.pollSvc, renderer)
+	componentsHandler := handler.NewComponentsHandler(svcs.messageSvc, svcs.contactSvc, svcs.voteSvc, svcs.pollSvc, renderer, svcs.securitySvc)
 	openAPIHandler := handler.NewOpenAPIHandler()
 	syncWebSocket := handler.NewSyncWebSocket(svcs.wsPublisher, r.sessionRepo, r.userRepo, cfg.SessionCookieSecure)
 
 	svcBag := extplatform.ServiceBag{
-		MessageCounter: messageCounterAdapter{svc: svcs.messageSvc},
+		MessageCounter:  messageCounterAdapter{svc: svcs.messageSvc},
+		Pages:           renderer,
+		OperationsAudit: operationsAuditAdapter{repo: r.auditRepo},
 	}
 
 	return &App{
@@ -439,4 +443,26 @@ type messageCounterAdapter struct {
 
 func (a messageCounterAdapter) CountMessages(ctx context.Context) (int64, error) {
 	return a.svc.CountMessages(ctx)
+}
+
+type operationsAuditAdapter struct {
+	repo persistence.AuditRepository
+}
+
+func (a operationsAuditAdapter) RecordOperation(ctx context.Context, event extplatform.OperationAudit) error {
+	var actorID *uuid.UUID
+	if parsed, err := uuid.Parse(event.UserID); err == nil {
+		actorID = &parsed
+	}
+	var actorName *string
+	if event.Username != "" {
+		actorName = &event.Username
+	}
+	targetName := event.Extension
+	action := "EXTENSION_" + strings.ToUpper(strings.ReplaceAll(string(event.Action), ".", "_"))
+	detail := fmt.Sprintf("extension=%s operation=%s outcome=%s", event.Extension, event.Action, event.Outcome)
+	if _, err := a.repo.LogAudit(ctx, actorID, actorName, nil, &targetName, action, detail); err != nil {
+		return fmt.Errorf("record extension operation audit: %w", err)
+	}
+	return nil
 }

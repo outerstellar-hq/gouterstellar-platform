@@ -3,7 +3,7 @@ package service
 import (
 	"unicode"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
 )
 
 const (

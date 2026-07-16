@@ -4,7 +4,7 @@ import (
 	"embed"
 	"net/http"
 
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 )
 
 // Migrations embeds the SQL migration files shipped by the core extension.

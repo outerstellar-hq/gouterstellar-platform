@@ -3,17 +3,21 @@ package reports
 import (
 	"embed"
 
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 )
 
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
+
+//go:embed templates/pages/*.html templates/partials/*.html
+var templatesFS embed.FS
 
 // Extension is the reports extension. It demonstrates the full extension model:
 // manifest, ownership, route contribution, navigation, its own migration, and
 // data access through a capability interface — all WITHOUT importing internal/.
 type Extension struct {
 	messages extplatform.MessageCounter
+	pages    *extplatform.PageRegistry
 }
 
 // New creates the reports extension with the given message counter capability.

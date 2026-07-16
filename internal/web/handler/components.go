@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -12,12 +13,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/service"
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/service"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/pkg/i18n"
 )
 
 type ComponentsHandler struct {
@@ -26,6 +28,11 @@ type ComponentsHandler struct {
 	voteService    messageVoteService
 	pollService    pollService
 	renderer       *web.Renderer
+	preferences    preferenceUpdater
+}
+
+type preferenceUpdater interface {
+	UpdatePreferences(context.Context, uuid.UUID, *string, *string, *string) error
 }
 
 func NewComponentsHandler(
@@ -34,6 +41,7 @@ func NewComponentsHandler(
 	voteSvc messageVoteService,
 	pollSvc pollService,
 	renderer *web.Renderer,
+	preferences preferenceUpdater,
 ) *ComponentsHandler {
 	return &ComponentsHandler{
 		messageService: msgSvc,
@@ -41,6 +49,7 @@ func NewComponentsHandler(
 		voteService:    voteSvc,
 		pollService:    pollSvc,
 		renderer:       renderer,
+		preferences:    preferences,
 	}
 }
 
@@ -50,6 +59,7 @@ func (h *ComponentsHandler) ContributeRoutes(ctx *extplatform.ContributionContex
 	ctx.Routes.Protected(http.MethodGet, "/components/contact-list", "Contact list partial", http.HandlerFunc(h.ContactList))
 	ctx.Routes.Public(http.MethodGet, "/components/footer-status", "Footer status fragment", http.HandlerFunc(h.FooterStatus))
 	ctx.Routes.Public(http.MethodGet, "/components/navigation/page", "Theme, language, and layout refresh", http.HandlerFunc(h.NavigationPage))
+	ctx.Routes.Protected(http.MethodPost, "/components/navigation/preferences", "Persist theme, language, and layout", http.HandlerFunc(h.UpdateNavigationPreferences))
 	ctx.Routes.Public(http.MethodGet, "/components/sidebar/theme-selector", "Theme selector", http.HandlerFunc(h.ThemeSelector))
 	ctx.Routes.Public(http.MethodGet, "/components/sidebar/language-selector", "Language selector", http.HandlerFunc(h.LanguageSelector))
 	ctx.Routes.Public(http.MethodGet, "/components/sidebar/layout-selector", "Layout selector", http.HandlerFunc(h.LayoutSelector))
@@ -82,17 +92,76 @@ func (h *ComponentsHandler) FooterStatus(w http.ResponseWriter, r *http.Request)
 
 func (h *ComponentsHandler) NavigationPage(w http.ResponseWriter, r *http.Request) {
 	values := r.URL.Query()
-	pagePath := values.Get("pagePath")
+	pagePath := safePagePath(values.Get("pagePath"))
 	values.Del("pagePath")
-	if pagePath == "" || !strings.HasPrefix(pagePath, "/") || strings.HasPrefix(pagePath, "//") || strings.HasPrefix(pagePath, `/\`) {
-		pagePath = "/"
-	}
 	redirectURL := pagePath
 	if query := values.Encode(); query != "" {
 		redirectURL += "?" + query
 	}
 	w.Header().Set("HX-Redirect", redirectURL)
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *ComponentsHandler) UpdateNavigationPreferences(w http.ResponseWriter, r *http.Request) {
+	user := web.UserFromRequest(r)
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+	if h.preferences == nil {
+		writeError(w, http.StatusServiceUnavailable, "Preference updates are unavailable")
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid preferences")
+		return
+	}
+
+	var language, theme, layout *string
+	if value := r.FormValue("lang"); value != "" {
+		if !i18n.IsSupported(value) {
+			writeError(w, http.StatusBadRequest, "Unsupported language")
+			return
+		}
+		language = &value
+	}
+	if value := r.FormValue("theme"); value != "" {
+		if !validOption(themeOptions, value) {
+			writeError(w, http.StatusBadRequest, "Unsupported theme")
+			return
+		}
+		theme = &value
+	}
+	if value := r.FormValue("layout"); value != "" {
+		if !validOption(layoutOptions, value) {
+			writeError(w, http.StatusBadRequest, "Unsupported layout")
+			return
+		}
+		layout = &value
+	}
+	if language == nil && theme == nil && layout == nil {
+		writeError(w, http.StatusBadRequest, "No preferences supplied")
+		return
+	}
+	if err := h.preferences.UpdatePreferences(r.Context(), user.ID, language, theme, layout); err != nil {
+		writeError(w, http.StatusInternalServerError, "Preference update failed")
+		return
+	}
+
+	pagePath := safePagePath(r.FormValue("pagePath"))
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Redirect", pagePath)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, pagePath, http.StatusSeeOther) // #nosec G710 -- safePagePath rejects absolute, scheme-relative, and backslash redirects
+}
+
+func safePagePath(pagePath string) string {
+	if pagePath == "" || !strings.HasPrefix(pagePath, "/") || strings.HasPrefix(pagePath, "//") || strings.HasPrefix(pagePath, `/\`) {
+		return "/"
+	}
+	return pagePath
 }
 
 func (h *ComponentsHandler) ThemeSelector(w http.ResponseWriter, r *http.Request) {
@@ -192,6 +261,7 @@ func selectorFor(r *http.Request, headingKey, labelKey, name string, options []v
 		Name:       name,
 		Options:    selected,
 		Hidden:     hidden,
+		CSRFToken:  web.CSRFTokenFromRequest(r),
 	}
 }
 
@@ -240,9 +310,12 @@ func (h *ComponentsHandler) MessageList(w http.ResponseWriter, r *http.Request) 
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	year := getIntParam(r, "year", 0)
 
+	trash := r.URL.Query().Get("trash") == "true"
 	var result *model.PagedResult[model.MessageSummary]
 	var err error
 	switch {
+	case trash:
+		result, err = h.messageService.ListDeletedMessages(r.Context(), safeInt32(pageSize), safeInt32(offset))
 	case query != "":
 		result, err = h.messageService.SearchMessages(r.Context(), query, safeInt32(pageSize), safeInt32(offset))
 	case year > 0:
@@ -260,6 +333,11 @@ func (h *ComponentsHandler) MessageList(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, "Failed to load message votes")
 		return
 	}
+	if trash {
+		for i := range messageItems {
+			messageItems[i].Deleted = true
+		}
+	}
 
 	pagination := viewmodel.PaginationInfo{
 		CurrentPage: result.Metadata.CurrentPage,
@@ -271,10 +349,18 @@ func (h *ComponentsHandler) MessageList(w http.ResponseWriter, r *http.Request) 
 		Language:    web.LanguageFromRequest(r),
 	}
 	if pagination.HasPrevious {
-		pagination.PreviousURL = messageListURL(query, year, pageSize, max(offset-pageSize, 0))
+		path := "/"
+		if trash {
+			path = "/messages/trash"
+		}
+		pagination.PreviousURL = messagePageURL(path, query, year, pageSize, max(offset-pageSize, 0))
 	}
 	if pagination.HasNext {
-		pagination.NextURL = messageListURL(query, year, pageSize, offset+pageSize)
+		path := "/"
+		if trash {
+			path = "/messages/trash"
+		}
+		pagination.NextURL = messagePageURL(path, query, year, pageSize, offset+pageSize)
 	}
 
 	if err := h.renderer.RenderPartial(w, "message_list", viewmodel.MessagesPage{
@@ -282,6 +368,8 @@ func (h *ComponentsHandler) MessageList(w http.ResponseWriter, r *http.Request) 
 		Pagination: pagination,
 		Query:      query,
 		Year:       year,
+		RefreshURL: messageComponentURL(query, year, pageSize, offset, web.LanguageFromRequest(r), trash),
+		Trash:      trash,
 	}); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
@@ -477,17 +565,33 @@ func handlePollComponentError(w http.ResponseWriter, err error) {
 }
 
 func (h *ComponentsHandler) ContactList(w http.ResponseWriter, r *http.Request) {
-	page := getIntParam(r, "page", 1)
-	pageSize := getIntParam(r, "pageSize", 20)
-	offset := (page - 1) * pageSize
+	pageSize := min(max(getIntParam(r, "limit", 12), 1), 50)
+	if !r.URL.Query().Has("limit") && r.URL.Query().Has("pageSize") {
+		pageSize = min(max(getIntParam(r, "pageSize", 12), 1), 50)
+	}
+	offset := max(getIntParam(r, "offset", 0), 0)
+	if !r.URL.Query().Has("offset") && r.URL.Query().Has("page") {
+		offset = (max(getIntParam(r, "page", 1), 1) - 1) * pageSize
+	}
+	page := offset/pageSize + 1
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
 
-	contacts, err := h.contactService.ListContacts(r.Context(), safeInt32(pageSize), safeInt32(offset))
+	var contacts []model.ContactSummary
+	var total int64
+	var err error
+	if query != "" {
+		contacts, total, err = h.contactService.SearchContacts(r.Context(), query, safeInt32(pageSize), safeInt32(offset))
+	} else {
+		contacts, err = h.contactService.ListContacts(r.Context(), safeInt32(pageSize), safeInt32(offset))
+		if err == nil {
+			total, _ = h.contactService.CountContacts(r.Context())
+		}
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to load contacts")
 		return
 	}
 
-	total, _ := h.contactService.CountContacts(r.Context())
 	totalPages := int(total) / pageSize
 	if int(total)%pageSize > 0 {
 		totalPages++
@@ -495,6 +599,7 @@ func (h *ComponentsHandler) ContactList(w http.ResponseWriter, r *http.Request) 
 
 	contactItems := make([]viewmodel.ContactItem, len(contacts))
 	language := web.LanguageFromRequest(r)
+	csrfToken := web.CSRFTokenFromRequest(r)
 	for i, c := range contacts {
 		contactItems[i] = viewmodel.ContactItem{
 			SyncID:    c.SyncID,
@@ -505,6 +610,7 @@ func (h *ComponentsHandler) ContactList(w http.ResponseWriter, r *http.Request) 
 			Company:   c.Company,
 			UpdatedAt: formatEpochMs(c.UpdatedAtEpochMs),
 			Dirty:     c.Dirty,
+			CSRFToken: csrfToken,
 			Language:  language,
 		}
 	}
@@ -518,10 +624,18 @@ func (h *ComponentsHandler) ContactList(w http.ResponseWriter, r *http.Request) 
 		PageSize:    pageSize,
 		Language:    web.LanguageFromRequest(r),
 	}
+	if pagination.HasPrevious {
+		pagination.PreviousURL = contactListURL(query, pageSize, max(offset-pageSize, 0))
+	}
+	if pagination.HasNext {
+		pagination.NextURL = contactListURL(query, pageSize, offset+pageSize)
+	}
 
 	if err := h.renderer.RenderPartial(w, "contact_list", viewmodel.ContactsPage{
 		Contacts:   contactItems,
 		Pagination: pagination,
+		Query:      query,
+		RefreshURL: contactComponentURL(query, pageSize, offset, language),
 	}); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}

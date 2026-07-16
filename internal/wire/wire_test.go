@@ -8,11 +8,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/rygel/gouterstellar-platform/extensions/reports"
-	"github.com/rygel/gouterstellar-platform/internal/config"
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/filter"
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	"github.com/outerstellar-hq/gouterstellar-platform/extensions/reports"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/config"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/filter"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 )
 
 func TestProductionExtensionsAssemble(t *testing.T) {
@@ -28,7 +28,8 @@ func TestProductionExtensionsAssemble(t *testing.T) {
 	coreExtension.SetStatic(http.NotFoundHandler())
 
 	handler, err := extplatform.NewHandler(extplatform.Options{
-		Mode: extplatform.FullPlatform,
+		Mode:     extplatform.FullPlatform,
+		Services: app.ServiceBag,
 		Extensions: []extplatform.Extension{
 			coreExtension,
 			reports.New(app.ServiceBag.MessageCounter),

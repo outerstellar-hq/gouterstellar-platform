@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/rygel/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
 )
 
 const csrfCookieName = "oss_csrf"

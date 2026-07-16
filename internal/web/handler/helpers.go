@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
 )
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {

@@ -1,6 +1,6 @@
 package security
 
-import "github.com/rygel/gouterstellar-platform/internal/model"
+import "github.com/outerstellar-hq/gouterstellar-platform/internal/model"
 
 type PermissionResolver interface {
 	PermissionsFor(user *model.User) []model.Permission

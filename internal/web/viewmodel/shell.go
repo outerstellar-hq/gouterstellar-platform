@@ -1,5 +1,7 @@
 package viewmodel
 
+import "github.com/outerstellar-hq/gouterstellar-platform/platform/buildinfo"
+
 type ShellViewModel struct {
 	Title       string
 	User        *UserContext
@@ -11,6 +13,7 @@ type ShellViewModel struct {
 	CurrentPath string
 	CSRFToken   string
 	Version     string
+	Build       buildinfo.Info
 	RequestID   string
 	Body        string
 	BodyData    interface{}

@@ -65,6 +65,8 @@ services:
       APPLE_OAUTH_CLIENT_ID: ${APPLE_OAUTH_CLIENT_ID:-}
       APPLE_OAUTH_KEY_ID: ${APPLE_OAUTH_KEY_ID:-}
       APPLE_OAUTH_PRIVATE_KEY_PEM: ${APPLE_OAUTH_PRIVATE_KEY_PEM:-}
+      STARFORGE_BASE_URL: ${STARFORGE_BASE_URL:-}
+      STARFORGE_CREDENTIAL: ${STARFORGE_CREDENTIAL:-}
     depends_on:
       seed:
         condition: service_completed_successfully

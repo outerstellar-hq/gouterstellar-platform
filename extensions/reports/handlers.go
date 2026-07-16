@@ -2,10 +2,9 @@ package reports
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 )
 
 // Contribute registers the reports extension's routes and navigation through
@@ -13,25 +12,39 @@ import (
 // the extension's owner ID and validated against the manifest's ownership
 // declaration by the platform's route registry.
 func (e *Extension) Contribute(ctx *extplatform.ContributionContext) error {
+	if err := ctx.Pages.Register(extplatform.TemplateSource{
+		FS:          templatesFS,
+		PagesDir:    "templates/pages",
+		PartialsDir: "templates/partials",
+	}); err != nil {
+		return err
+	}
+	e.pages = ctx.Pages
 	ctx.Routes.Protected(http.MethodGet, "/reports", "Reports home", http.HandlerFunc(e.home))
 	ctx.Routes.API(http.MethodGet, "/api/v1/reports/summary", "Message count summary", http.HandlerFunc(e.summary))
 	ctx.Navigation.Add("Reports", "/reports", "bar-chart")
 	return nil
 }
 
-// home renders a minimal HTML page showing the message count. It accesses data
-// exclusively through the MessageCounter capability interface.
+// home renders the report through the shared platform shell. It accesses data
+// exclusively through public platform capabilities.
 func (e *Extension) home(w http.ResponseWriter, r *http.Request) {
 	count, err := e.messages.CountMessages(r.Context())
 	if err != nil {
 		http.Error(w, "Failed to load report data", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = fmt.Fprintf(w, "<!DOCTYPE html><html><head><title>Reports</title></head><body>")
-	_, _ = fmt.Fprintf(w, "<h1>Reports</h1>")
-	_, _ = fmt.Fprintf(w, "<p>Messages: %d</p>", count)
-	_, _ = fmt.Fprintf(w, "</body></html>")
+	if err := e.pages.Render(w, r, "reports", reportPage{
+		MessageCount: count,
+		Request:      extplatform.RequestContextFrom(r),
+	}); err != nil {
+		http.Error(w, "Failed to render reports", http.StatusInternalServerError)
+	}
+}
+
+type reportPage struct {
+	MessageCount int64
+	Request      extplatform.RequestContext
 }
 
 // summary returns a JSON object with the message count.

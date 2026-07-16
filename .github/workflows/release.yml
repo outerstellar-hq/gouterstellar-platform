@@ -36,6 +36,9 @@ jobs:
             goarch: amd64
           - goos: darwin
             goarch: arm64
+    env:
+      GOMAXPROCS: "4"
+      GOFLAGS: "-p=4"
 
     steps:
       - name: Check out repository
@@ -63,9 +66,12 @@ jobs:
           fi
 
           mkdir -p "${package_dir}"
-          go build -trimpath -ldflags="-s -w" -o "${package_dir}/server${executable_suffix}" ./cmd/server
-          go build -trimpath -ldflags="-s -w" -o "${package_dir}/migrate${executable_suffix}" ./cmd/migrate
-          go build -trimpath -ldflags="-s -w" -o "${package_dir}/seed${executable_suffix}" ./cmd/seed
+          build_date="$(date -u +%F)"
+          short_sha="${GITHUB_SHA:0:12}"
+          ldflags="-s -w -X github.com/outerstellar-hq/gouterstellar-platform/platform/buildinfo.buildDate=${build_date} -X github.com/outerstellar-hq/gouterstellar-platform/platform/buildinfo.buildNumber=${GITHUB_RUN_NUMBER} -X github.com/outerstellar-hq/gouterstellar-platform/platform/buildinfo.commitSHA=${short_sha}"
+          go build -trimpath -ldflags="${ldflags}" -o "${package_dir}/server${executable_suffix}" ./cmd/server
+          go build -trimpath -ldflags="${ldflags}" -o "${package_dir}/migrate${executable_suffix}" ./cmd/migrate
+          go build -trimpath -ldflags="${ldflags}" -o "${package_dir}/seed${executable_suffix}" ./cmd/seed
           cp -R config static README.md LICENSE "${package_dir}/"
           sed -i "s/^version: .*/version: \"${GITHUB_REF_NAME}\"/" "${package_dir}/config/application.yaml"
 

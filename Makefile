@@ -20,7 +20,7 @@ vet:
 
 fmt:
 	gofumpt -w .
-	goimports -w -local github.com/rygel/gouterstellar-platform .
+	goimports -w -local github.com/outerstellar-hq/gouterstellar-platform .
 
 check: fmt vet lint
 	@echo "All checks passed."

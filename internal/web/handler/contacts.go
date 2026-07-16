@@ -9,12 +9,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/service"
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/service"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
 )
 
 type ContactsHandler struct {
@@ -86,6 +86,7 @@ func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	contactItems := make([]viewmodel.ContactItem, len(contacts))
 	language := web.LanguageFromRequest(r)
+	csrfToken := web.CSRFTokenFromRequest(r)
 	for i, c := range contacts {
 		contactItems[i] = viewmodel.ContactItem{
 			SyncID:    c.SyncID,
@@ -97,6 +98,7 @@ func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt: formatEpochMs(c.UpdatedAtEpochMs),
 			Dirty:     c.Dirty,
 			Deleted:   false,
+			CSRFToken: csrfToken,
 			Language:  language,
 		}
 	}
@@ -121,6 +123,7 @@ func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {
 		Contacts:   contactItems,
 		Pagination: pagination,
 		Query:      query,
+		RefreshURL: contactComponentURL(query, pageSize, offset, language),
 	}); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
@@ -164,8 +167,9 @@ func (h *ContactsHandler) TrashList(w http.ResponseWriter, r *http.Request) {
 		items[i].Language = web.LanguageFromRequest(r)
 	}
 	if err := h.renderer.RenderPartial(w, "contact_trash_list", viewmodel.ContactTrashList{
-		Contacts: items,
-		Language: web.LanguageFromRequest(r),
+		Contacts:   items,
+		Language:   web.LanguageFromRequest(r),
+		RefreshURL: "/contacts/trash/list?lang=" + web.LanguageFromRequest(r),
 	}); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
@@ -326,4 +330,17 @@ func contactListURL(query string, limit, offset int) string {
 	values.Set("limit", strconv.Itoa(limit))
 	values.Set("offset", strconv.Itoa(offset))
 	return "/contacts?" + values.Encode()
+}
+
+func contactComponentURL(query string, limit, offset int, language string) string {
+	values := url.Values{}
+	if query != "" {
+		values.Set("q", query)
+	}
+	values.Set("limit", strconv.Itoa(limit))
+	values.Set("offset", strconv.Itoa(offset))
+	if language != "" {
+		values.Set("lang", language)
+	}
+	return "/components/contact-list?" + values.Encode()
 }

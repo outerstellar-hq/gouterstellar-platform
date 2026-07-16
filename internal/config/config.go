@@ -31,6 +31,11 @@ type SegmentConfig struct {
 	Enabled  bool   `yaml:"enabled"`
 }
 
+type StarforgeConfig struct {
+	BaseURL    string `yaml:"base_url"`
+	Credential string `yaml:"credential"`
+}
+
 // OAuthConfig groups third-party OAuth provider configuration. Each provider is
 // independent; a provider is enabled when its ClientID/ClientSecret are set.
 type OAuthConfig struct {
@@ -55,26 +60,27 @@ type GoogleOAuthConfig struct {
 }
 
 type Config struct {
-	Version                string        `yaml:"version"`
-	Port                   int           `yaml:"port"`
-	DatabaseURL            string        `yaml:"database_url"`
-	DevDashboardEnabled    bool          `yaml:"dev_dashboard_enabled"`
-	DevMode                bool          `yaml:"dev_mode"`
-	SessionCookieSecure    bool          `yaml:"session_cookie_secure"`
-	SessionTimeoutMinutes  int           `yaml:"session_timeout_minutes"`
-	SessionAbsoluteMinutes int           `yaml:"session_absolute_timeout_minutes"`
-	RegistrationEnabled    bool          `yaml:"registration_enabled"`
-	MaxFailedLoginAttempts int32         `yaml:"max_failed_login_attempts"`
-	LockoutDurationSeconds int64         `yaml:"lockout_duration_seconds"`
-	CORSOrigins            string        `yaml:"cors_origins"`
-	CSRFEnabled            bool          `yaml:"csrf_enabled"`
-	AppBaseURL             string        `yaml:"app_base_url"`
-	CSPPolicy              string        `yaml:"csp_policy"`
-	PlatformMode           string        `yaml:"platform_mode"`
-	JWT                    JwtConfig     `yaml:"jwt"`
-	Email                  EmailConfig   `yaml:"email"`
-	Segment                SegmentConfig `yaml:"segment"`
-	OAuth                  OAuthConfig   `yaml:"oauth"`
+	Version                string          `yaml:"version"`
+	Port                   int             `yaml:"port"`
+	DatabaseURL            string          `yaml:"database_url"`
+	DevDashboardEnabled    bool            `yaml:"dev_dashboard_enabled"`
+	DevMode                bool            `yaml:"dev_mode"`
+	SessionCookieSecure    bool            `yaml:"session_cookie_secure"`
+	SessionTimeoutMinutes  int             `yaml:"session_timeout_minutes"`
+	SessionAbsoluteMinutes int             `yaml:"session_absolute_timeout_minutes"`
+	RegistrationEnabled    bool            `yaml:"registration_enabled"`
+	MaxFailedLoginAttempts int32           `yaml:"max_failed_login_attempts"`
+	LockoutDurationSeconds int64           `yaml:"lockout_duration_seconds"`
+	CORSOrigins            string          `yaml:"cors_origins"`
+	CSRFEnabled            bool            `yaml:"csrf_enabled"`
+	AppBaseURL             string          `yaml:"app_base_url"`
+	CSPPolicy              string          `yaml:"csp_policy"`
+	PlatformMode           string          `yaml:"platform_mode"`
+	JWT                    JwtConfig       `yaml:"jwt"`
+	Email                  EmailConfig     `yaml:"email"`
+	Segment                SegmentConfig   `yaml:"segment"`
+	OAuth                  OAuthConfig     `yaml:"oauth"`
+	Starforge              StarforgeConfig `yaml:"starforge"`
 }
 
 // defaults returns a Config populated with the same default values the previous
@@ -247,6 +253,12 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("APPLE_OAUTH_PRIVATE_KEY_PEM"); v != "" {
 		cfg.OAuth.Apple.PrivateKeyPEM = v
+	}
+	if v := os.Getenv("STARFORGE_BASE_URL"); v != "" {
+		cfg.Starforge.BaseURL = v
+	}
+	if v := os.Getenv("STARFORGE_CREDENTIAL"); v != "" {
+		cfg.Starforge.Credential = v
 	}
 }
 

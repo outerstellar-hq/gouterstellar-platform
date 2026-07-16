@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rygel/gouterstellar-platform/pkg/i18n"
+	"github.com/outerstellar-hq/gouterstellar-platform/pkg/i18n"
 )
 
 // i18nHolder stores the wired I18nService so the "translate" template func

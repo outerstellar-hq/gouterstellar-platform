@@ -10,9 +10,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/persistence"
-	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence/db"
 )
 
 type ContactService struct {
@@ -160,7 +160,7 @@ func (s *ContactService) CreateContact(ctx context.Context, name string, emails,
 		return nil, err
 	}
 
-	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "contacts")
+	s.eventPub.PublishRefresh(ContactListPanel)
 
 	s.notifyActor(ctx, "New Contact", name, "contact")
 
@@ -190,7 +190,7 @@ func (s *ContactService) UpdateContact(ctx context.Context, contact *model.Store
 		return nil, err
 	}
 
-	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "contacts")
+	s.eventPub.PublishRefresh(ContactListPanel)
 
 	return stored, nil
 }
@@ -208,7 +208,7 @@ func (s *ContactService) DeleteContact(ctx context.Context, syncID string) error
 		return err
 	}
 
-	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "contacts")
+	s.eventPub.PublishRefresh(ContactListPanel)
 	return nil
 }
 
@@ -225,7 +225,7 @@ func (s *ContactService) RestoreContact(ctx context.Context, syncID string) erro
 		return err
 	}
 
-	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "contacts")
+	s.eventPub.PublishRefresh(ContactListPanel)
 	return nil
 }
 
@@ -300,7 +300,7 @@ func (s *ContactService) ProcessPushRequest(ctx context.Context, req *model.Sync
 		conflicts = []model.SyncContactConflict{}
 	}
 
-	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "contacts")
+	s.eventPub.PublishRefresh(ContactListPanel)
 
 	return &model.SyncPushContactResponse{
 		AppliedCount: appliedCount,

@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
 )
 
 const exportPageSize int32 = 500

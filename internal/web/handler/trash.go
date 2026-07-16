@@ -3,11 +3,11 @@ package handler
 import (
 	"net/http"
 
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 
-	"github.com/rygel/gouterstellar-platform/internal/service"
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/service"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
 )
 
 const trashPageLimit int32 = 100
@@ -28,7 +28,9 @@ func (h *TrashHandler) ContributeRoutes(ctx *extplatform.ContributionContext) er
 }
 
 func (h *TrashHandler) Show(w http.ResponseWriter, r *http.Request) {
-	messages, err := h.messageService.ListDeletedMessages(r.Context(), trashPageLimit, 0)
+	pageSize := min(max(getIntParam(r, "limit", int(trashPageLimit)), 1), int(trashPageLimit))
+	offset := max(getIntParam(r, "offset", 0), 0)
+	messages, err := h.messageService.ListDeletedMessages(r.Context(), safeInt32(pageSize), safeInt32(offset))
 	if err != nil {
 		h.renderLoadError(w, r)
 		return
@@ -62,12 +64,38 @@ func (h *TrashHandler) Show(w http.ResponseWriter, r *http.Request) {
 	contactItems := make([]viewmodel.ContactItem, len(contacts))
 	for i, contact := range contacts {
 		contactItems[i] = contactSummaryItem(contact, true)
+		contactItems[i].CSRFToken = csrfToken
 		contactItems[i].Language = language
 	}
 
+	messagePagination := viewmodel.PaginationInfo{
+		CurrentPage: messages.Metadata.CurrentPage,
+		TotalPages:  messages.Metadata.TotalPages,
+		TotalItems:  messages.Metadata.TotalItems,
+		HasPrevious: messages.Metadata.HasPrevious,
+		HasNext:     messages.Metadata.HasNext,
+		PageSize:    messages.Metadata.PageSize,
+		Language:    language,
+	}
+	if messagePagination.HasPrevious {
+		messagePagination.PreviousURL = messagePageURL("/messages/trash", "", 0, pageSize, max(offset-pageSize, 0))
+	}
+	if messagePagination.HasNext {
+		messagePagination.NextURL = messagePageURL("/messages/trash", "", 0, pageSize, offset+pageSize)
+	}
+
 	if err := h.renderer.RenderPage(w, r, "trash", viewmodel.TrashPage{
-		Messages:     messageItems,
-		Contacts:     contactItems,
+		MessageList: viewmodel.MessagesPage{
+			Messages:   messageItems,
+			Pagination: messagePagination,
+			RefreshURL: messageComponentURL("", 0, pageSize, offset, language, true),
+			Trash:      true,
+		},
+		ContactList: viewmodel.ContactTrashList{
+			Contacts:   contactItems,
+			Language:   language,
+			RefreshURL: "/contacts/trash/list?lang=" + language,
+		},
 		MessageTotal: messages.Metadata.TotalItems,
 		ContactTotal: contactTotal,
 		DeletedTotal: messages.Metadata.TotalItems + contactTotal,

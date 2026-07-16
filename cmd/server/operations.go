@@ -9,7 +9,8 @@ import (
 	"strings"
 	"time"
 
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
+	"github.com/outerstellar-hq/gouterstellar-platform/platform/buildinfo"
 )
 
 func localhostOnly(next http.Handler) http.Handler {
@@ -42,6 +43,7 @@ func livenessHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"status":    "UP",
+			"build":     buildinfo.Current(),
 			"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
 		})
 	})
@@ -55,6 +57,7 @@ func readinessHandler(ping func(context.Context) error) http.Handler {
 		status := http.StatusOK
 		body := map[string]any{
 			"status":    "UP",
+			"build":     buildinfo.Current(),
 			"database":  map[string]string{"status": "UP"},
 			"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
 		}
@@ -129,6 +132,7 @@ func sitemapHandler(appBaseURL string) http.Handler {
 func routeDiagnosticsHandler(catalog *extplatform.Catalog) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
+			"build":              buildinfo.Current(),
 			"routes":             catalog.Routes(),
 			"excludedPageSets":   []string{},
 			"extensionReadiness": []any{},

@@ -9,11 +9,11 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 
-	"github.com/rygel/gouterstellar-platform/internal/persistence"
-	"github.com/rygel/gouterstellar-platform/internal/service"
-	"github.com/rygel/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/service"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
 )
 
 type SyncWebSocket struct {
@@ -46,9 +46,6 @@ func (h *SyncWebSocket) ContributeRoutes(ctx *extplatform.ContributionContext) e
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
 }
 
 func (h *SyncWebSocket) Handle(w http.ResponseWriter, r *http.Request) {
@@ -79,10 +76,7 @@ func (h *SyncWebSocket) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := &service.WsClient{
-		UserID: session.UserID.String(),
-		Conn:   conn,
-	}
+	client := &service.WsClient{Conn: conn}
 	h.publisher.Register(client)
 
 	// done coordinates shutdown of the read loop and the ping writer: when

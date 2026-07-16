@@ -8,8 +8,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
 )
 
 // Options configures the platform handler assembly.
@@ -57,7 +58,7 @@ func NewHandler(opts Options) (http.Handler, error) {
 	var allRoutes []RouteRegistration
 	var allNav []NavigationItem
 	for _, ext := range opts.Extensions {
-		ctx := NewContributionContext(ext.Manifest().ID)
+		ctx := newContributionContext(ext.Manifest().ID, opts.Services)
 		if err := ext.Contribute(ctx); err != nil {
 			return nil, fmt.Errorf("extension %s contribute: %w", ext.Manifest().ID, err)
 		}
@@ -84,6 +85,22 @@ func NewHandler(opts Options) (http.Handler, error) {
 	navVM := convertNavItems(allNav)
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			requestContext := RequestContextFrom(req)
+			if csrfToken := web.CSRFTokenFromRequest(req); csrfToken != "" {
+				requestContext.CSRFToken = csrfToken
+			}
+			if requestID := web.RequestIDFromContext(req.Context()); requestID != "" {
+				requestContext.RequestID = requestID
+			}
+			if user := web.UserFromRequest(req); user != nil {
+				requestContext.User = &RequestUser{
+					ID:       user.ID.String(),
+					Username: user.Username,
+					Role:     string(user.Role),
+					IsAdmin:  user.Role == model.RoleAdmin,
+				}
+			}
+			req = withRequestContext(req, requestContext)
 			next.ServeHTTP(w, web.WithNavItems(req, navVM))
 		})
 	})
@@ -164,7 +181,9 @@ func convertNavItems(items []NavigationItem) []viewmodel.NavItem {
 type TestOptions struct {
 	Mode            PlatformMode
 	Extensions      []Extension
+	Services        ServiceBag
 	MiddlewareChain []func(http.Handler) http.Handler
+	GroupMiddleware map[RouteGroup][]func(http.Handler) http.Handler
 }
 
 // TestApp is the result of NewTestApp. It exposes the assembled handler so
@@ -181,7 +200,9 @@ func NewTestApp(opts TestOptions) (*TestApp, error) {
 	handler, err := NewHandler(Options{
 		Mode:            opts.Mode,
 		Extensions:      opts.Extensions,
+		Services:        opts.Services,
 		MiddlewareChain: opts.MiddlewareChain,
+		GroupMiddleware: opts.GroupMiddleware,
 	})
 	if err != nil {
 		return nil, err

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
 )
 
 func TestPollCardRendersSelectedAndBlockedSingleChoiceStates(t *testing.T) {

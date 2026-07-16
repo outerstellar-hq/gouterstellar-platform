@@ -1,0 +1,46 @@
+{{ define "content" }}
+<section class="page-header">
+    <div>
+        <p class="eyebrow">Control plane</p>
+        <h1>Starforge workers</h1>
+        <p>Operator metadata from the Starforge service. Worker-local media and model data stay on each worker.</p>
+    </div>
+</section>
+
+{{ if .BodyData.Unavailable }}
+<section class="card unavailable-state" role="status">
+    <h2>Starforge is temporarily unavailable</h2>
+    <p>The control plane could not provide a trustworthy worker inventory. No empty-state assumption was made.</p>
+</section>
+{{ else if .BodyData.Workers }}
+<div class="worker-grid">
+{{ range .BodyData.Workers }}
+    <article class="card worker-card">
+        <div class="card-header">
+            <div>
+                <p class="eyebrow">{{ .State }}</p>
+                <h2>{{ if .OperatorLabel }}{{ .OperatorLabel }}{{ else }}{{ .DisplayName }}{{ end }}</h2>
+                {{ if .OperatorLabel }}<p>{{ .DisplayName }}</p>{{ end }}
+            </div>
+            <span class="badge">{{ .OS }} / {{ .Architecture }}</span>
+        </div>
+        <dl class="detail-list">
+            <div><dt>Worker ID</dt><dd><code>{{ .UUID }}</code></dd></div>
+            <div><dt>Agent</dt><dd>{{ .AgentVersion }}</dd></div>
+            <div><dt>Last seen</dt><dd>{{ .LastSeenAt.UTC.Format "2006-01-02 15:04 UTC" }}</dd></div>
+            <div><dt>Server</dt><dd>{{ .Heartbeat.ServerID }}</dd></div>
+            <div><dt>Session</dt><dd>{{ .Heartbeat.SessionID }}</dd></div>
+        </dl>
+        <form hx-put="/api/starforge/workers/{{ .UUID }}/label" hx-swap="none">
+            <input type="hidden" name="csrf_token" value="{{ $.BodyData.Request.CSRFToken }}">
+            <label for="worker-label-{{ .UUID }}">Operator label</label>
+            <input id="worker-label-{{ .UUID }}" name="label" value="{{ .OperatorLabel }}" maxlength="120" placeholder="Nova · Mac mini">
+            <button type="submit" class="btn btn-secondary">Save label</button>
+        </form>
+    </article>
+{{ end }}
+</div>
+{{ else }}
+<section class="card empty-state"><h2>No workers registered</h2><p>Starforge is available but has not reported any workers.</p></section>
+{{ end }}
+{{ end }}

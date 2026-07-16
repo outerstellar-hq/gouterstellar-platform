@@ -8,6 +8,8 @@ type MessagesPage struct {
 	Query      string
 	Year       int
 	Years      []int
+	RefreshURL string
+	Trash      bool
 }
 
 type SearchPage struct {
@@ -28,6 +30,7 @@ type SidebarSelector struct {
 	Name       string
 	Options    []SelectorOption
 	Hidden     url.Values
+	CSRFToken  string
 }
 
 type SelectorOption struct {
@@ -53,8 +56,8 @@ type SearchTypeFilter struct {
 }
 
 type TrashPage struct {
-	Messages     []MessageItem
-	Contacts     []ContactItem
+	MessageList  MessagesPage
+	ContactList  ContactTrashList
 	MessageTotal int64
 	ContactTotal int64
 	DeletedTotal int64
@@ -130,6 +133,7 @@ type ContactsPage struct {
 	Contacts   []ContactItem
 	Pagination PaginationInfo
 	Query      string
+	RefreshURL string
 }
 
 // ContactDetailPage is the view model for the contact detail HTML page.
@@ -162,8 +166,9 @@ type ContactItem struct {
 }
 
 type ContactTrashList struct {
-	Contacts []ContactItem
-	Language string
+	Contacts   []ContactItem
+	Language   string
+	RefreshURL string
 }
 
 type AuthPage struct {

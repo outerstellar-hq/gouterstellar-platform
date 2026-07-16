@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
 )
 
 var templateTranslationKeyPattern = regexp.MustCompile(`translate\s+[^\s}]+\s+"([^"]+)"`)
@@ -39,18 +39,53 @@ func TestNewRendererParsesAllPages(t *testing.T) {
 	assert.Contains(t, r.pages, "home", "home page should be parsed")
 }
 
+func TestRegisterTemplatesRejectsPageCollisionWithBothOwners(t *testing.T) {
+	renderer, err := NewRenderer(TemplateFS(), TemplateFuncMap(), "test")
+	require.NoError(t, err)
+
+	first := fstest.MapFS{
+		"pages/extension.html": &fstest.MapFile{Data: []byte(`{{ define "content" }}first{{ end }}`)},
+	}
+	require.NoError(t, renderer.RegisterTemplates("first-extension", first, "pages", ""))
+
+	second := fstest.MapFS{
+		"pages/extension.html": &fstest.MapFile{Data: []byte(`{{ define "content" }}second{{ end }}`)},
+	}
+	err = renderer.RegisterTemplates("second-extension", second, "pages", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "second-extension")
+	assert.Contains(t, err.Error(), "first-extension")
+}
+
+func TestRegisterTemplatesRejectsCorePartialCollision(t *testing.T) {
+	renderer, err := NewRenderer(TemplateFS(), TemplateFuncMap(), "test")
+	require.NoError(t, err)
+
+	source := fstest.MapFS{
+		"pages/extension.html":    &fstest.MapFile{Data: []byte(`{{ define "content" }}extension{{ end }}`)},
+		"partials/collision.html": &fstest.MapFile{Data: []byte(`{{ define "message_list" }}collision{{ end }}`)},
+	}
+	err = renderer.RegisterTemplates("colliding-extension", source, "pages", "partials")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "colliding-extension")
+	assert.Contains(t, err.Error(), "owner platform")
+}
+
 func TestSidebarSelectorOnlyListensToItsOwnChanges(t *testing.T) {
 	r, err := NewRenderer(TemplateFS(), TemplateFuncMap(), "1.0.0")
 	require.NoError(t, err)
 
 	var output strings.Builder
 	err = r.partials.ExecuteTemplate(&output, "sidebar_selector", viewmodel.SidebarSelector{
-		Heading: "Language",
-		Label:   "Choose your language",
-		Name:    "lang",
+		Heading:   "Language",
+		Label:     "Choose your language",
+		Name:      "lang",
+		CSRFToken: "selector-csrf",
 	})
 	require.NoError(t, err)
 	assert.Contains(t, output.String(), `hx-trigger="change"`)
+	assert.Contains(t, output.String(), `hx-post="/components/navigation/preferences"`)
+	assert.Contains(t, output.String(), `name="csrf_token" value="selector-csrf"`)
 	assert.NotContains(t, output.String(), `from:select`)
 }
 

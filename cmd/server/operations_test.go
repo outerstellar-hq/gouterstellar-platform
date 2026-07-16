@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 )
 
 func TestLocalhostOnly(t *testing.T) {
@@ -55,6 +55,7 @@ func TestLivenessDoesNotProbeDependencies(t *testing.T) {
 	assert.Equal(t, http.StatusOK, res.Code)
 	assert.Equal(t, "application/json; charset=utf-8", res.Header().Get("Content-Type"))
 	assert.Contains(t, res.Body.String(), `"status":"UP"`)
+	assert.Contains(t, res.Body.String(), `"identity":"local/dev"`)
 	assert.Contains(t, res.Body.String(), `"timestamp":`)
 }
 
@@ -121,7 +122,7 @@ func TestRouteDiagnosticsHandler(t *testing.T) {
 		httptest.NewRequest(http.MethodGet, "/debug/routes", nil),
 	)
 	require.Equal(t, http.StatusOK, res.Code)
-	assert.JSONEq(t, `{"excludedPageSets":[],"extensionReadiness":[],"routes":[],"timestamp":"ignored"}`,
+	assert.JSONEq(t, `{"build":{"date":"local","number":"dev","identity":"local/dev"},"excludedPageSets":[],"extensionReadiness":[],"routes":[],"timestamp":"ignored"}`,
 		strings.ReplaceAll(res.Body.String(), extractTimestamp(res.Body.String()), "ignored"))
 }
 

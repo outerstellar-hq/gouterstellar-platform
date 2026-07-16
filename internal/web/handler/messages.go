@@ -10,12 +10,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/service"
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/service"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
 )
 
 type MessagesHandler struct {
@@ -178,6 +178,7 @@ func (h *MessagesHandler) Show(w http.ResponseWriter, r *http.Request) {
 		Query:      query,
 		Year:       year,
 		Years:      years,
+		RefreshURL: messageComponentURL(query, year, pageSize, offset, web.LanguageFromRequest(r), false),
 	}); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
@@ -279,6 +280,10 @@ func (h *MessagesHandler) ResolveConflict(w http.ResponseWriter, r *http.Request
 }
 
 func messageListURL(query string, year, limit, offset int) string {
+	return messagePageURL("/", query, year, limit, offset)
+}
+
+func messagePageURL(path, query string, year, limit, offset int) string {
 	values := url.Values{}
 	if query != "" {
 		values.Set("q", query)
@@ -288,5 +293,24 @@ func messageListURL(query string, year, limit, offset int) string {
 	}
 	values.Set("limit", strconv.Itoa(limit))
 	values.Set("offset", strconv.Itoa(offset))
-	return "/?" + values.Encode()
+	return path + "?" + values.Encode()
+}
+
+func messageComponentURL(query string, year, limit, offset int, language string, trash bool) string {
+	values := url.Values{}
+	if query != "" {
+		values.Set("q", query)
+	}
+	if year > 0 {
+		values.Set("year", strconv.Itoa(year))
+	}
+	values.Set("limit", strconv.Itoa(limit))
+	values.Set("offset", strconv.Itoa(offset))
+	if language != "" {
+		values.Set("lang", language)
+	}
+	if trash {
+		values.Set("trash", "true")
+	}
+	return "/components/message-list?" + values.Encode()
 }

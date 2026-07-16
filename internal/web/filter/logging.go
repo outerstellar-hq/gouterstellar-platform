@@ -1,14 +1,17 @@
 package filter
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
 
-	"github.com/rygel/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
 )
 
 type responseCapture struct {
@@ -19,6 +22,15 @@ type responseCapture struct {
 func (rc *responseCapture) WriteHeader(code int) {
 	rc.status = code
 	rc.ResponseWriter.WriteHeader(code)
+}
+
+func (rc *responseCapture) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := rc.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("response writer does not support hijacking")
+	}
+	rc.status = http.StatusSwitchingProtocols
+	return hijacker.Hijack()
 }
 
 func Logging() func(http.Handler) http.Handler {

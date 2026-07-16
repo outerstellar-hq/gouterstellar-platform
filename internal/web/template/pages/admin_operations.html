@@ -1,0 +1,83 @@
+{{ define "content" }}
+<section class="page-header">
+    <div>
+        <p class="eyebrow">Extension operations</p>
+        <h1>{{ .BodyData.Label }}</h1>
+        <p>Backups and restores are executed by {{ .BodyData.Owner }}. The platform coordinates authorization, confirmation, and audit records.</p>
+    </div>
+</section>
+
+{{ if .BodyData.State.Maintenance }}
+<div class="toast toast-warning" role="status">This service is in maintenance mode. {{ .BodyData.State.Progress }}</div>
+{{ else if .BodyData.State.ReadOnly }}
+<div class="toast toast-warning" role="status">This service is currently read-only. {{ .BodyData.State.Progress }}</div>
+{{ end }}
+
+{{ if .BodyData.State.ActiveJob }}
+<section class="card" aria-labelledby="active-operation-heading">
+    <h2 id="active-operation-heading">Active operation</h2>
+    <p><strong>{{ .BodyData.State.ActiveJob.State }}</strong> — {{ .BodyData.State.ActiveJob.Message }}</p>
+</section>
+{{ end }}
+
+{{ if .BodyData.Job }}
+<div class="toast toast-success" role="status">Operation {{ .BodyData.Job.ID }} is {{ .BodyData.Job.State }}. {{ .BodyData.Job.Message }}</div>
+{{ end }}
+
+{{ if .BodyData.Plan }}
+<section class="card danger-zone" aria-labelledby="restore-confirm-heading">
+    <h2 id="restore-confirm-heading">Confirm restore</h2>
+    <p>{{ .BodyData.Plan.Summary }}</p>
+    {{ if .BodyData.Plan.Warnings }}
+    <ul>{{ range .BodyData.Plan.Warnings }}<li>{{ . }}</li>{{ end }}</ul>
+    {{ end }}
+    <p>This is a second, explicit confirmation. Type <code>{{ .BodyData.RestoreConfirmation }}</code> to continue.</p>
+    <form method="POST" action="/admin/operations/{{ .BodyData.Owner }}/restores">
+        <input type="hidden" name="csrf_token" value="{{ .BodyData.CSRFToken }}">
+        <input type="hidden" name="plan_id" value="{{ .BodyData.Plan.ID }}">
+        <label for="restore-confirmation">Confirmation</label>
+        <input id="restore-confirmation" name="confirmation" required autocomplete="off">
+        <button type="submit" class="btn btn-danger">Execute restore</button>
+    </form>
+</section>
+{{ end }}
+
+<section class="card" aria-labelledby="backup-heading">
+    <div class="card-header">
+        <div>
+            <h2 id="backup-heading">Backup snapshots</h2>
+            <p>Verification is reported by the service that owns the data.</p>
+        </div>
+        <form method="POST" action="/admin/operations/{{ .BodyData.Owner }}/backups">
+            <input type="hidden" name="csrf_token" value="{{ .BodyData.CSRFToken }}">
+            <button type="submit" class="btn btn-primary"{{ if .BodyData.State.ReadOnly }} disabled{{ end }}>Create backup</button>
+        </form>
+    </div>
+    {{ if .BodyData.Snapshots }}
+    <div class="table-wrapper">
+        <table>
+            <thead><tr><th>Snapshot</th><th>Created</th><th>Size</th><th>Verification</th><th>Restore</th></tr></thead>
+            <tbody>
+            {{ range .BodyData.Snapshots }}
+            <tr>
+                <td><code>{{ .ID }}</code></td>
+                <td>{{ .CreatedAt.UTC.Format "2006-01-02 15:04 UTC" }}</td>
+                <td>{{ .SizeBytes }} bytes</td>
+                <td><span class="badge">{{ .Verification }}</span></td>
+                <td>
+                    <form method="POST" action="/admin/operations/{{ $.BodyData.Owner }}/restore-plans">
+                        <input type="hidden" name="csrf_token" value="{{ $.BodyData.CSRFToken }}">
+                        <input type="hidden" name="snapshot_id" value="{{ .ID }}">
+                        <button type="submit" class="btn btn-secondary">Plan restore</button>
+                    </form>
+                </td>
+            </tr>
+            {{ end }}
+            </tbody>
+        </table>
+    </div>
+    {{ else }}
+    <p>No backup snapshots have been reported.</p>
+    {{ end }}
+</section>
+{{ end }}

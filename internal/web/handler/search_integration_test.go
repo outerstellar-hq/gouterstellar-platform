@@ -16,14 +16,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	"github.com/rygel/gouterstellar-platform/internal/config"
-	"github.com/rygel/gouterstellar-platform/internal/platform/core"
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/filter"
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
-	"github.com/rygel/gouterstellar-platform/internal/wire"
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
-	"github.com/rygel/gouterstellar-platform/platform/migration"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/config"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/platform/core"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/filter"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/wire"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
+	"github.com/outerstellar-hq/gouterstellar-platform/platform/migration"
 )
 
 func TestUnifiedSearchUsesRealMessageAndContactData(t *testing.T) {

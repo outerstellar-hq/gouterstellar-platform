@@ -3,9 +3,9 @@ package handler
 import (
 	"net/http"
 
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 )
 
 type ExtensionAdminHandler struct {

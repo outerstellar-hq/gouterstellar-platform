@@ -211,7 +211,7 @@ gouterstellar-platform/
 
 ```go
 // go.mod
-module github.com/rygel/gouterstellar-platform
+module github.com/outerstellar-hq/gouterstellar-platform
 
 go 1.24
 
@@ -1253,7 +1253,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rygel/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
 )
 
 type MessageRepository interface {
@@ -1507,8 +1507,8 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence/db"
 )
 
 type messageRepo struct {
@@ -1685,7 +1685,7 @@ func (e *bcryptEncoder) Matches(password, hash string) bool {
 // internal/security/auth_realm.go
 package security
 
-import "github.com/rygel/gouterstellar-platform/internal/model"
+import "github.com/outerstellar-hq/gouterstellar-platform/internal/model"
 
 type AuthResult interface{ authResult() }
 
@@ -1750,8 +1750,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/persistence"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence"
 )
 
 type mockMessageRepo struct {
@@ -1865,8 +1865,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/pkg/i18n"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/pkg/i18n"
 )
 
 type contextKey string
@@ -2040,8 +2040,8 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/service"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/service"
 )
 
 type SyncAPI struct {
@@ -2104,7 +2104,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/rygel/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
 )
 
 func TestPullMessages(t *testing.T) {
@@ -2148,11 +2148,11 @@ import (
 	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/rygel/gouterstellar-platform/internal/config"
-	"github.com/rygel/gouterstellar-platform/internal/persistence"
-	"github.com/rygel/gouterstellar-platform/internal/security"
-	"github.com/rygel/gouterstellar-platform/internal/service"
-	"github.com/rygel/gouterstellar-platform/internal/web/handler"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/config"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/security"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/service"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/handler"
 )
 
 type App struct {
@@ -2223,9 +2223,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/rygel/gouterstellar-platform/internal/config"
-	"github.com/rygel/gouterstellar-platform/internal/web/filter"
-	"github.com/rygel/gouterstellar-platform/internal/wire"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/config"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/filter"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/wire"
 )
 
 func main() {
@@ -2356,9 +2356,9 @@ import (
 	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/rygel/gouterstellar-platform/internal/config"
-	"github.com/rygel/gouterstellar-platform/internal/persistence"
-	"github.com/rygel/gouterstellar-platform/internal/security"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/config"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/security"
 )
 
 func main() {

@@ -19,14 +19,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
-	"github.com/rygel/gouterstellar-platform/extensions/reports"
-	"github.com/rygel/gouterstellar-platform/internal/config"
-	"github.com/rygel/gouterstellar-platform/internal/observability"
-	"github.com/rygel/gouterstellar-platform/internal/persistence"
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/filter"
-	"github.com/rygel/gouterstellar-platform/internal/wire"
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	"github.com/outerstellar-hq/gouterstellar-platform/extensions/reports"
+	"github.com/outerstellar-hq/gouterstellar-platform/extensions/starforge"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/config"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/observability"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/filter"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/wire"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
+	"github.com/outerstellar-hq/gouterstellar-platform/platform/buildinfo"
 )
 
 func main() {
@@ -35,7 +37,7 @@ func main() {
 		slog.Error("Configuration validation failed", "error", err)
 		os.Exit(1)
 	}
-	slog.Info("Starting Outerstellar Platform", "version", cfg.Version, "port", cfg.Port)
+	slog.Info("Starting Outerstellar Platform", "version", cfg.Version, "build", buildinfo.Current().Identity, "port", cfg.Port)
 
 	ctx := context.Background()
 
@@ -92,6 +94,12 @@ func main() {
 	coreExt.SetStatic(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
 	reportsExt := reports.New(app.ServiceBag.MessageCounter)
+	starforgeClient, err := starforge.NewHTTPClient(cfg.Starforge.BaseURL, cfg.Starforge.Credential, nil)
+	if err != nil {
+		slog.Error("Invalid Starforge configuration", "error", err)
+		os.Exit(1)
+	}
+	starforgeExt := starforge.New(starforgeClient)
 
 	// The middleware chain is applied to every route in the same order as
 	// the previous Chi-based wire root.
@@ -134,6 +142,7 @@ func main() {
 		Extensions: []extplatform.Extension{
 			coreExt,
 			reportsExt,
+			starforgeExt,
 		},
 		Services:        app.ServiceBag,
 		MiddlewareChain: middlewareChain,

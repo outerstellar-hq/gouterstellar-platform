@@ -17,28 +17,7 @@
             <h2 id="deleted-messages-heading">{{ translate .Language "web.search.filter.message" }}</h2>
             <span>{{ .BodyData.MessageTotal }} {{ translate .Language "web.common.deleted" }}</span>
         </div>
-        <div class="message-list trash-list">
-            {{ range .BodyData.Messages }}
-            <article class="message-row trash-row">
-                <div class="message-body">
-                    <div class="message-author">{{ .Author }}</div>
-                    <div class="message-content">{{ .Content }}</div>
-                    <div class="message-meta">
-                        <span class="message-time" title="{{ .UpdatedAt }}">Last updated {{ .UpdatedLabel }}</span>
-                        {{ if .Dirty }}<span class="badge badge-warning">{{ translate $.Language "web.messages.local.badge" }}</span>{{ end }}
-                    </div>
-                </div>
-                <form method="POST" action="/messages/restore/{{ .SyncID }}" class="inline-form">
-                    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
-                    <button type="submit" class="btn btn-sm btn-secondary" aria-label="{{ translate $.Language "web.messages.restore" }} {{ .Author }}">{{ translate $.Language "web.messages.restore" }}</button>
-                </form>
-            </article>
-            {{ else }}
-            <div class="empty-state">
-                <p>{{ translate $.Language "web.trash.empty" }}</p>
-            </div>
-            {{ end }}
-        </div>
+        {{ template "message_list" .BodyData.MessageList }}
         {{ if gt .BodyData.MessageTotal 100 }}<p class="trash-limit-note">{{ translate .Language "web.trash.messages.limit" }}</p>{{ end }}
     </section>
 
@@ -47,29 +26,7 @@
             <h2 id="deleted-contacts-heading">{{ translate .Language "web.nav.contacts" }}</h2>
             <span>{{ .BodyData.ContactTotal }} {{ translate .Language "web.common.deleted" }}</span>
         </div>
-        <div class="contact-list trash-list">
-            {{ range .BodyData.Contacts }}
-            <article class="contact-row trash-row">
-                <div class="trash-contact-body">
-                    <div class="contact-name">{{ .Name }}</div>
-                    <div class="contact-details">
-                        {{ if .Company }}<span class="contact-company">{{ .Company }}</span>{{ end }}
-                        {{ if .Department }}<span>{{ .Department }}</span>{{ end }}
-                        {{ range .Emails }}<span class="contact-email">{{ . }}</span>{{ end }}
-                        {{ range .Phones }}<span class="contact-phone">{{ . }}</span>{{ end }}
-                    </div>
-                </div>
-                <form method="POST" action="/contacts/{{ .SyncID }}/restore" class="inline-form">
-                    <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
-                    <button type="submit" class="btn btn-sm btn-secondary" aria-label="{{ translate $.Language "web.contacts.restore" }} {{ .Name }}">{{ translate $.Language "web.contacts.restore" }}</button>
-                </form>
-            </article>
-            {{ else }}
-            <div class="empty-state">
-                <p>{{ translate $.Language "web.trash.contacts.empty" }}</p>
-            </div>
-            {{ end }}
-        </div>
+        {{ template "contact_trash_list" .BodyData.ContactList }}
         {{ if gt .BodyData.ContactTotal 100 }}<p class="trash-limit-note">{{ translate .Language "web.trash.contacts.limit" }}</p>{{ end }}
     </section>
 </div>

@@ -1,8 +1,10 @@
 {{ define "message_list" }}
-<div class="message-list">
+<div id="message-list-container" class="message-list" hx-get="{{ .RefreshURL }}" hx-trigger="refresh from:body, htmx:oobAfterSwap from:body" hx-swap="outerHTML">
     {{ range .Messages }}
     {{ template "message_row" . }}
+    {{ else }}
+    <p class="empty-state">{{ if .Trash }}{{ translate .Pagination.Language "web.trash.empty" }}{{ else }}{{ translate .Pagination.Language "web.messages.empty" }}{{ end }}</p>
     {{ end }}
+    {{ template "pagination" .Pagination }}
 </div>
-{{ template "pagination" .Pagination }}
 {{ end }}

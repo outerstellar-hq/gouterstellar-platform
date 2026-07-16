@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	"github.com/rygel/gouterstellar-platform/internal/platform/core"
-	"github.com/rygel/gouterstellar-platform/platform/migration"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/platform/core"
+	"github.com/outerstellar-hq/gouterstellar-platform/platform/migration"
 )
 
 func TestPrefixedSyncIDMigrationUpgradesExistingSchema(t *testing.T) {

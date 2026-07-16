@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
 )
 
 func TestAuthenticatedShellUsesSavedLayoutAndSemanticLandmarks(t *testing.T) {
@@ -65,5 +65,8 @@ func TestPublicShellStaysInSingleColumnWithoutNavigation(t *testing.T) {
 	}
 	if strings.Contains(body, `class="app-nav"`) {
 		t.Error("public shell unexpectedly renders authenticated navigation")
+	}
+	if strings.Contains(body, `hx-boost="true"`) {
+		t.Error("public shell must not boost authentication transitions")
 	}
 }

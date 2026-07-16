@@ -11,9 +11,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/persistence"
-	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence/db"
 )
 
 type MessageService struct {
@@ -265,7 +265,7 @@ func (s *MessageService) CreateLocalMessage(ctx context.Context, author, content
 	// notifications), so invalidate the prefix directly. A future hook could
 	// model "local create" explicitly if notifications are ever wanted.
 	s.cache.InvalidateByPrefix("messages:")
-	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
+	s.eventPub.PublishRefresh(MessageListPanel)
 
 	return stored, nil
 }
@@ -334,7 +334,7 @@ func (s *MessageService) ProcessPushRequest(ctx context.Context, req *model.Sync
 	}
 
 	s.cache.InvalidateAll()
-	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
+	s.eventPub.PublishRefresh(MessageListPanel)
 
 	return &model.SyncPushResponse{
 		AppliedCount: appliedCount,
