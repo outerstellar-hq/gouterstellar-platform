@@ -71,6 +71,47 @@ func TestCSRFBearerRequestsRemainCookieFree(t *testing.T) {
 	assert.Empty(t, recorder.Body.String())
 }
 
+func TestCSRFPublicAPIEntryPointsRemainCookieFree(t *testing.T) {
+	handler := CSRF(true, true)(csrfTestHandler())
+	paths := []string{
+		"/api/v1/auth/login",
+		"/api/v1/auth/register",
+		"/api/v1/auth/reset-request",
+		"/api/v1/auth/reset-confirm",
+		"/api/v1/auth/totp/verify",
+		"/api/v1/auth/token",
+		"/auth/oauth/apple/callback",
+	}
+	for _, path := range paths {
+		t.Run(path, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, path, nil))
+
+			assert.Equal(t, http.StatusOK, recorder.Code)
+			assert.Empty(t, recorder.Result().Cookies())
+			assert.Empty(t, recorder.Body.String())
+		})
+	}
+}
+
+func TestCSRFDoesNotExemptLookalikeAPIOrOAuthPaths(t *testing.T) {
+	handler := CSRF(true, false)(csrfTestHandler())
+	paths := []string{
+		"/api/v1/auth/login/extra",
+		"/api/v1/auth/profile",
+		"/auth/oauth/apple/callback/extra",
+		"/auth/oauth//callback",
+	}
+	for _, path := range paths {
+		t.Run(path, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, path, nil))
+
+			assert.Equal(t, http.StatusForbidden, recorder.Code)
+		})
+	}
+}
+
 func TestCSRFDisabledStillProvidesTemplateToken(t *testing.T) {
 	handler := CSRF(false, true)(csrfTestHandler())
 	recorder := httptest.NewRecorder()

@@ -40,10 +40,10 @@ func (h *DevDashboardHandler) ContributeRoutes(ctx *extplatform.ContributionCont
 	if !h.enabled {
 		return nil
 	}
-	ctx.Routes.Admin(http.MethodGet, "/dev/dashboard", "Dev dashboard", http.HandlerFunc(h.Show))
-	ctx.Routes.Admin(http.MethodPost, "/dev/outbox/process", "Process outbox", http.HandlerFunc(h.ProcessOutbox))
-	ctx.Routes.Admin(http.MethodPost, "/dev/sessions/cleanup", "Cleanup sessions", http.HandlerFunc(h.CleanupSessions))
-	ctx.Routes.Admin(http.MethodPost, "/dev/cache/invalidate", "Invalidate cache", http.HandlerFunc(h.InvalidateCache))
+	ctx.Routes.Admin(http.MethodGet, "/admin/dev", "Dev dashboard", http.HandlerFunc(h.Show))
+	ctx.Routes.Admin(http.MethodPost, "/admin/dev/outbox/process", "Process outbox", http.HandlerFunc(h.ProcessOutbox))
+	ctx.Routes.Admin(http.MethodPost, "/admin/dev/sessions/cleanup", "Cleanup sessions", http.HandlerFunc(h.CleanupSessions))
+	ctx.Routes.Admin(http.MethodPost, "/admin/dev/cache/invalidate", "Invalidate cache", http.HandlerFunc(h.InvalidateCache))
 	return nil
 }
 

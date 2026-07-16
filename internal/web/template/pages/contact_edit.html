@@ -1,0 +1,12 @@
+{{ define "content" }}
+<div class="contact-edit-page">
+    <div class="page-header">
+        <div>
+            <h1>{{ if .BodyData.Editing }}{{ translate .Language "web.contacts.edit" }}{{ else }}{{ translate .Language "web.contacts.create" }}{{ end }}</h1>
+            <p>{{ if .BodyData.Editing }}{{ translate .Language "web.contacts.edit.description" }}{{ else }}{{ translate .Language "web.contacts.create.description" }}{{ end }}</p>
+        </div>
+        <a href="/contacts" class="btn btn-secondary">{{ translate .Language "web.contacts.back" }}</a>
+    </div>
+    {{ template "contact_form" .BodyData }}
+</div>
+{{ end }}

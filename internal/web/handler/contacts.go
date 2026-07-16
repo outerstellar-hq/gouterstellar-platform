@@ -2,6 +2,8 @@ package handler
 
 import (
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,8 +32,11 @@ func NewContactsHandler(contactSvc *service.ContactService, renderer *web.Render
 // ContributeRoutes registers the contacts UI routes (protected).
 func (h *ContactsHandler) ContributeRoutes(ctx *extplatform.ContributionContext) error {
 	ctx.Routes.Protected(http.MethodGet, "/contacts", "Contacts list", http.HandlerFunc(h.List))
+	ctx.Routes.Protected(http.MethodGet, "/contacts/new", "Contact create form", http.HandlerFunc(h.New))
+	ctx.Routes.Protected(http.MethodPost, "/contacts", "Create contact", http.HandlerFunc(h.Create))
+	ctx.Routes.Protected(http.MethodGet, "/contacts/{syncId}/edit", "Contact edit form", http.HandlerFunc(h.Edit))
+	ctx.Routes.Protected(http.MethodGet, "/contacts/trash/list", "Contact trash list", http.HandlerFunc(h.TrashList))
 	ctx.Routes.Protected(http.MethodGet, "/contacts/{syncId}", "Contact detail", http.HandlerFunc(h.Detail))
-	ctx.Routes.Protected(http.MethodPost, "/contacts/create", "Create contact", http.HandlerFunc(h.Create))
 	ctx.Routes.Protected(http.MethodPost, "/contacts/{syncId}/update", "Update contact", http.HandlerFunc(h.Update))
 	ctx.Routes.Protected(http.MethodPost, "/contacts/{syncId}/delete", "Delete contact", http.HandlerFunc(h.Delete))
 	ctx.Routes.Protected(http.MethodPost, "/contacts/{syncId}/restore", "Restore contact", http.HandlerFunc(h.Restore))
@@ -39,9 +44,15 @@ func (h *ContactsHandler) ContributeRoutes(ctx *extplatform.ContributionContext)
 }
 
 func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {
-	page := getIntParam(r, "page", 1)
-	pageSize := getIntParam(r, "pageSize", 20)
-	offset := (page - 1) * pageSize
+	pageSize := min(max(getIntParam(r, "limit", 12), 1), 50)
+	if !r.URL.Query().Has("limit") && r.URL.Query().Has("pageSize") {
+		pageSize = min(max(getIntParam(r, "pageSize", 12), 1), 50)
+	}
+	offset := max(getIntParam(r, "offset", 0), 0)
+	if !r.URL.Query().Has("offset") && r.URL.Query().Has("page") {
+		offset = (max(getIntParam(r, "page", 1), 1) - 1) * pageSize
+	}
+	page := offset/pageSize + 1
 
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 
@@ -74,6 +85,7 @@ func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	contactItems := make([]viewmodel.ContactItem, len(contacts))
+	language := web.LanguageFromRequest(r)
 	for i, c := range contacts {
 		contactItems[i] = viewmodel.ContactItem{
 			SyncID:    c.SyncID,
@@ -85,6 +97,7 @@ func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt: formatEpochMs(c.UpdatedAtEpochMs),
 			Dirty:     c.Dirty,
 			Deleted:   false,
+			Language:  language,
 		}
 	}
 
@@ -95,12 +108,64 @@ func (h *ContactsHandler) List(w http.ResponseWriter, r *http.Request) {
 		HasPrevious: page > 1,
 		HasNext:     page < totalPages,
 		PageSize:    pageSize,
+		Language:    web.LanguageFromRequest(r),
+	}
+	if pagination.HasPrevious {
+		pagination.PreviousURL = contactListURL(query, pageSize, max(offset-pageSize, 0))
+	}
+	if pagination.HasNext {
+		pagination.NextURL = contactListURL(query, pageSize, offset+pageSize)
 	}
 
 	if err := h.renderer.RenderPage(w, r, "contacts", viewmodel.ContactsPage{
 		Contacts:   contactItems,
 		Pagination: pagination,
 		Query:      query,
+	}); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
+}
+
+func (h *ContactsHandler) New(w http.ResponseWriter, r *http.Request) {
+	if err := h.renderer.RenderPage(w, r, "contact_edit", viewmodel.ContactForm{
+		CSRFToken: web.CSRFTokenFromRequest(r),
+		Language:  web.LanguageFromRequest(r),
+	}); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
+}
+
+func (h *ContactsHandler) Edit(w http.ResponseWriter, r *http.Request) {
+	contact, err := h.contactService.GetContactBySyncID(r.Context(), chi.URLParam(r, "syncId"))
+	if err != nil {
+		handleServiceError(w, err)
+		return
+	}
+	if err := h.renderer.RenderPage(w, r, "contact_edit", viewmodel.ContactForm{
+		Editing:   true,
+		Contact:   storedContactItem(contact),
+		CSRFToken: web.CSRFTokenFromRequest(r),
+		Language:  web.LanguageFromRequest(r),
+	}); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
+}
+
+func (h *ContactsHandler) TrashList(w http.ResponseWriter, r *http.Request) {
+	contacts, _, err := h.contactService.ListDeletedContacts(r.Context(), trashPageLimit, 0)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to load deleted contacts")
+		return
+	}
+	items := make([]viewmodel.ContactItem, len(contacts))
+	for i := range contacts {
+		items[i] = contactSummaryItem(contacts[i], true)
+		items[i].CSRFToken = web.CSRFTokenFromRequest(r)
+		items[i].Language = web.LanguageFromRequest(r)
+	}
+	if err := h.renderer.RenderPartial(w, "contact_trash_list", viewmodel.ContactTrashList{
+		Contacts: items,
+		Language: web.LanguageFromRequest(r),
 	}); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
@@ -115,21 +180,14 @@ func (h *ContactsHandler) Detail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item := viewmodel.ContactItem{
-		SyncID:         contact.SyncID,
-		Name:           contact.Name,
-		Emails:         contact.Emails,
-		Phones:         contact.Phones,
-		Social:         contact.SocialMedia,
-		Company:        contact.Company,
-		CompanyAddress: contact.CompanyAddress,
-		Department:     contact.Department,
-		UpdatedAt:      formatEpochMs(contact.UpdatedAtEpochMs),
-		Dirty:          contact.Dirty,
-		Deleted:        contact.Deleted,
-	}
+	item := storedContactItem(contact)
 
-	if err := h.renderer.RenderPage(w, r, "contact_detail", viewmodel.ContactDetailPage{Contact: item}); err != nil {
+	if err := h.renderer.RenderPage(w, r, "contact_detail", viewmodel.ContactDetailPage{
+		Contact: item,
+		Form: viewmodel.ContactForm{
+			Editing: true, Contact: item, CSRFToken: web.CSRFTokenFromRequest(r), Language: web.LanguageFromRequest(r),
+		},
+	}); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}
 }
@@ -141,9 +199,9 @@ func (h *ContactsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := r.FormValue("name")
-	emails := r.Form["emails"]
-	phones := r.Form["phones"]
-	socials := r.Form["socials"]
+	emails := formList(r, "emails")
+	phones := formList(r, "phones")
+	socials := formList(r, "socialMedia")
 	company := r.FormValue("company")
 	companyAddress := r.FormValue("companyAddress")
 	department := r.FormValue("department")
@@ -168,9 +226,9 @@ func (h *ContactsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	contact := &model.StoredContact{
 		SyncID:         syncID,
 		Name:           r.FormValue("name"),
-		Emails:         r.Form["emails"],
-		Phones:         r.Form["phones"],
-		SocialMedia:    r.Form["socials"],
+		Emails:         formList(r, "emails"),
+		Phones:         formList(r, "phones"),
+		SocialMedia:    formList(r, "socialMedia"),
 		Company:        r.FormValue("company"),
 		CompanyAddress: r.FormValue("companyAddress"),
 		Department:     r.FormValue("department"),
@@ -214,4 +272,58 @@ func formatEpochMs(ms int64) string {
 	}
 	t := time.UnixMilli(ms)
 	return t.Format("2006-01-02 15:04")
+}
+
+func formList(r *http.Request, key string) []string {
+	var values []string
+	for _, raw := range r.Form[key] {
+		for _, value := range strings.Split(raw, ",") {
+			if value = strings.TrimSpace(value); value != "" {
+				values = append(values, value)
+			}
+		}
+	}
+	return values
+}
+
+func storedContactItem(contact *model.StoredContact) viewmodel.ContactItem {
+	return viewmodel.ContactItem{
+		SyncID:         contact.SyncID,
+		Name:           contact.Name,
+		Emails:         contact.Emails,
+		Phones:         contact.Phones,
+		Social:         contact.SocialMedia,
+		Company:        contact.Company,
+		CompanyAddress: contact.CompanyAddress,
+		Department:     contact.Department,
+		UpdatedAt:      formatEpochMs(contact.UpdatedAtEpochMs),
+		Dirty:          contact.Dirty,
+		Deleted:        contact.Deleted,
+	}
+}
+
+func contactSummaryItem(contact model.ContactSummary, deleted bool) viewmodel.ContactItem {
+	return viewmodel.ContactItem{
+		SyncID:         contact.SyncID,
+		Name:           contact.Name,
+		Emails:         contact.Emails,
+		Phones:         contact.Phones,
+		Social:         contact.SocialMedia,
+		Company:        contact.Company,
+		CompanyAddress: contact.CompanyAddress,
+		Department:     contact.Department,
+		UpdatedAt:      formatEpochMs(contact.UpdatedAtEpochMs),
+		Dirty:          contact.Dirty,
+		Deleted:        deleted,
+	}
+}
+
+func contactListURL(query string, limit, offset int) string {
+	values := url.Values{}
+	if query != "" {
+		values.Set("q", query)
+	}
+	values.Set("limit", strconv.Itoa(limit))
+	values.Set("offset", strconv.Itoa(offset))
+	return "/contacts?" + values.Encode()
 }

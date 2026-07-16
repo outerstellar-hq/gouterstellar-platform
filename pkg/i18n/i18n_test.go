@@ -31,6 +31,17 @@ func TestParameterInjection(t *testing.T) {
 
 	result = injectParams("Out of range {2}", []interface{}{"a", "b"})
 	assert.Equal(t, "Out of range {2}", result)
+
+	result = injectParams("Version %s has %d messages", []interface{}{"3.6.11", 4})
+	assert.Equal(t, "Version 3.6.11 has 4 messages", result)
+}
+
+func TestParsePropertiesDecodesJavaEscapes(t *testing.T) {
+	props := parseProperties([]byte("accent=Param\\u00e8tres\nline=first\\nsecond\nseparator=one\\:two\n"))
+
+	assert.Equal(t, "Paramètres", props["accent"])
+	assert.Equal(t, "first\nsecond", props["line"])
+	assert.Equal(t, "one:two", props["separator"])
 }
 
 func TestLocaleSwitching(t *testing.T) {
@@ -45,6 +56,13 @@ func TestLocaleSwitching(t *testing.T) {
 	svc.SetLocale("fr")
 	assert.Equal(t, "fr", svc.Locale())
 	assert.Equal(t, "Hello World", svc.Translate("greeting"))
+}
+
+func TestTranslateForLocaleInjectsParametersWithoutChangingGlobalLocale(t *testing.T) {
+	svc := NewI18nService(testFS, "testdata")
+
+	assert.Equal(t, "Hallo Alice", svc.TranslateForLocale("de", "welcome", "Alice"))
+	assert.Equal(t, "en", svc.Locale())
 }
 
 func TestLanguageHelpers(t *testing.T) {

@@ -23,6 +23,12 @@ type Options struct {
 	// (GroupAPI, GroupAdmin, etc.). The middleware is applied via Chi
 	// route groups, so it only affects routes in that group.
 	GroupMiddleware map[RouteGroup][]func(http.Handler) http.Handler
+	// NotFoundHandler renders unmatched requests after extension routes mount.
+	// When nil, Chi's default plain-text 404 response is retained.
+	NotFoundHandler http.Handler
+	// Catalog receives the validated, mounted extension and route inventory.
+	// It may be shared with diagnostic handlers created before assembly.
+	Catalog *Catalog
 }
 
 // NewHandler assembles the complete web application as an http.Handler.
@@ -83,6 +89,10 @@ func NewHandler(opts Options) (http.Handler, error) {
 	})
 
 	mounted := buildRoutes(r, allRoutes, opts.Mode, ownershipMap, opts.GroupMiddleware)
+	if opts.NotFoundHandler != nil {
+		r.NotFound(opts.NotFoundHandler.ServeHTTP)
+	}
+	opts.Catalog.replace(opts.Extensions, mounted)
 
 	// 5. Log the route table (observability).
 	logRouteTable(mounted, allNav)

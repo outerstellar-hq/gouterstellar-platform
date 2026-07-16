@@ -41,6 +41,7 @@ func (h *TrashHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 
 	csrfToken := web.CSRFTokenFromRequest(r)
+	language := web.LanguageFromRequest(r)
 	messageItems := make([]viewmodel.MessageItem, len(messages.Items))
 	for i, message := range messages.Items {
 		messageItems[i] = viewmodel.MessageItem{
@@ -54,24 +55,14 @@ func (h *TrashHandler) Show(w http.ResponseWriter, r *http.Request) {
 			HasConflict:  message.HasConflict,
 			Deleted:      true,
 			CSRFToken:    csrfToken,
+			Language:     language,
 		}
 	}
 
 	contactItems := make([]viewmodel.ContactItem, len(contacts))
 	for i, contact := range contacts {
-		contactItems[i] = viewmodel.ContactItem{
-			SyncID:         contact.SyncID,
-			Name:           contact.Name,
-			Emails:         contact.Emails,
-			Phones:         contact.Phones,
-			Social:         contact.SocialMedia,
-			Company:        contact.Company,
-			CompanyAddress: contact.CompanyAddress,
-			Department:     contact.Department,
-			UpdatedAt:      formatEpochMs(contact.UpdatedAtEpochMs),
-			Dirty:          contact.Dirty,
-			Deleted:        true,
-		}
+		contactItems[i] = contactSummaryItem(contact, true)
+		contactItems[i].Language = language
 	}
 
 	if err := h.renderer.RenderPage(w, r, "trash", viewmodel.TrashPage{

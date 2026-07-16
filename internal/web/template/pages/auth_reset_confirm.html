@@ -1,8 +1,8 @@
 {{ define "content" }}
 <div class="auth-page">
     <div class="auth-card">
-        <h1>Set a New Password</h1>
-        <p>Enter your new password below.</p>
+        <h1>{{ translate .Language "web.reset.title" }}</h1>
+        <p>{{ translate .Language "web.reset.new.description" }}</p>
         {{ if .BodyData.Error }}
         <div class="toast toast-error">{{ .BodyData.Error }}</div>
         {{ end }}
@@ -10,11 +10,11 @@
             <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
             <input type="hidden" name="token" value="{{ .BodyData.ReturnTo }}">
             <div class="form-group">
-                <label for="new_password">New Password</label>
+                <label for="new_password">{{ translate .Language "web.reset.newPassword" }}</label>
                 <input type="password" id="new_password" name="newPassword" autocomplete="new-password" minlength="8" maxlength="72" aria-describedby="reset-password-requirements" required>
-                <p id="reset-password-requirements">Use at least 8 characters with uppercase, lowercase, a number, and a special character. Passwords are limited to 72 UTF-8 bytes.</p>
+                <p id="reset-password-requirements">{{ translate .Language "web.password.requirements" }}</p>
             </div>
-            <button type="submit" class="btn btn-primary">Reset Password</button>
+            <button type="submit" class="btn btn-primary">{{ translate .Language "web.reset.submit" }}</button>
         </form>
     </div>
 </div>

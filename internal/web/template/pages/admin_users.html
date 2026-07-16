@@ -1,8 +1,8 @@
 {{ define "content" }}
 <div class="admin-users-page">
     <div class="page-header">
-        <h1>User Management</h1>
-		<div class="export-actions" aria-label="Export users">
+        <h1>{{ translate .Language "web.admin.users.title" }}</h1>
+		<div class="export-actions" aria-label="{{ translate .Language "web.admin.users.export" }}">
 			<a href="/admin/users/export" class="btn btn-sm btn-secondary" download>CSV</a>
 			<a href="/admin/users/export/json" class="btn btn-sm btn-secondary" download>JSON</a>
 		</div>
@@ -11,11 +11,11 @@
     <table class="data-table">
         <thead>
             <tr>
-                <th>Username</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th>{{ translate .Language "web.admin.users.header.username" }}</th>
+                <th>{{ translate .Language "web.admin.users.header.email" }}</th>
+                <th>{{ translate .Language "web.admin.users.header.role" }}</th>
+                <th>{{ translate .Language "web.admin.users.header.enabled" }}</th>
+                <th>{{ translate .Language "web.admin.users.header.actions" }}</th>
             </tr>
         </thead>
         <tbody>
@@ -26,38 +26,38 @@
                 <td><span class="badge badge-{{ .Role }}">{{ .Role }}</span></td>
                 <td>
                     {{ if .IsLocked }}
-                    <span class="badge badge-error">Locked</span>
+                    <span class="badge badge-error">{{ translate $.Language "web.admin.users.status.locked" }}</span>
                     {{ else if .Enabled }}
-                    <span class="badge badge-success">Active</span>
+                    <span class="badge badge-success">{{ translate $.Language "web.admin.users.status.active" }}</span>
                     {{ else }}
-                    <span class="badge badge-error">Disabled</span>
+                    <span class="badge badge-error">{{ translate $.Language "web.admin.users.status.disabled" }}</span>
                     {{ end }}
                 </td>
                 <td>
-                    <form method="POST" action="/admin/users/{{ .ID }}/role" class="inline-form">
+					{{ if .IsSelf }}
+					<span class="muted">({{ translate $.Language "web.admin.users.self" }})</span>
+					{{ else }}
+                    <form method="POST" action="/admin/users/{{ .ID }}/toggle-role" class="inline-form">
                         <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
-                        <select name="role" onchange="this.form.submit()">
-                            <option value="USER" {{ if eq .Role "USER" }}selected{{ end }}>USER</option>
-                            <option value="ADMIN" {{ if eq .Role "ADMIN" }}selected{{ end }}>ADMIN</option>
-                        </select>
+						<button type="submit" class="btn btn-sm">{{ if eq .Role "ADMIN" }}{{ translate $.Language "web.admin.users.action.demote" }}{{ else }}{{ translate $.Language "web.admin.users.action.promote" }}{{ end }}</button>
                     </form>
-                    <form method="POST" action="/admin/users/{{ .ID }}/enabled" class="inline-form">
+                    <form method="POST" action="/admin/users/{{ .ID }}/toggle-enabled" class="inline-form">
                         <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
-                        <input type="hidden" name="enabled" value="{{ if .Enabled }}false{{ else }}true{{ end }}">
                         <button type="submit" class="btn btn-sm">
-                            {{ if .Enabled }}Disable{{ else }}Enable{{ end }}
+                            {{ if .Enabled }}{{ translate $.Language "web.admin.users.action.disable" }}{{ else }}{{ translate $.Language "web.admin.users.action.enable" }}{{ end }}
                         </button>
                     </form>
                     {{ if .IsLocked }}
                     <form method="POST" action="/admin/users/{{ .ID }}/unlock" class="inline-form">
                         <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
-                        <button type="submit" class="btn btn-sm">Unlock ({{ .FailedLoginAttempts }})</button>
+                        <button type="submit" class="btn btn-sm">{{ translate $.Language "web.admin.users.action.unlock" }} ({{ .FailedLoginAttempts }})</button>
                     </form>
                     {{ end }}
+					{{ end }}
                 </td>
             </tr>
             {{ else }}
-            <tr><td colspan="5" class="empty-state">No users found.</td></tr>
+            <tr><td colspan="5" class="empty-state">{{ translate $.Language "web.admin.users.empty" }}</td></tr>
             {{ end }}
         </tbody>
     </table>

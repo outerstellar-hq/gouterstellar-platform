@@ -1,11 +1,55 @@
 package viewmodel
 
+import "net/url"
+
 type MessagesPage struct {
 	Messages   []MessageItem
 	Pagination PaginationInfo
 	Query      string
 	Year       int
 	Years      []int
+}
+
+type SearchPage struct {
+	Query       string
+	Results     []SearchResult
+	TypeFilter  string
+	TypeFilters []SearchTypeFilter
+}
+
+type FooterStatus struct {
+	Text string
+}
+
+type SidebarSelector struct {
+	Heading    string
+	Label      string
+	ApplyLabel string
+	Name       string
+	Options    []SelectorOption
+	Hidden     url.Values
+}
+
+type SelectorOption struct {
+	Value    string
+	Label    string
+	Selected bool
+}
+
+type SearchResult struct {
+	ID       string  `json:"id"`
+	Title    string  `json:"title"`
+	Subtitle string  `json:"subtitle"`
+	URL      string  `json:"url"`
+	Type     string  `json:"type"`
+	Score    float64 `json:"score"`
+}
+
+type SearchTypeFilter struct {
+	Value  string
+	Label  string
+	URL    string
+	Active bool
 }
 
 type TrashPage struct {
@@ -32,6 +76,7 @@ type MessageItem struct {
 	HasUpvoted   bool
 	HasDownvoted bool
 	CSRFToken    string
+	Language     string
 }
 
 type MessageEditPage struct {
@@ -39,6 +84,14 @@ type MessageEditPage struct {
 	Author  string
 	Content string
 	Error   string
+}
+
+type MessageConflictPage struct {
+	SyncID        string
+	MyAuthor      string
+	MyContent     string
+	ServerAuthor  string
+	ServerContent string
 }
 
 type VoteControls struct {
@@ -49,6 +102,7 @@ type VoteControls struct {
 	HasUpvoted   bool
 	HasDownvoted bool
 	CSRFToken    string
+	Language     string
 }
 
 type PollCard struct {
@@ -60,6 +114,7 @@ type PollCard struct {
 	TotalVotes    int32
 	Options       []PollOption
 	CSRFToken     string
+	Language      string
 }
 
 type PollOption struct {
@@ -80,6 +135,14 @@ type ContactsPage struct {
 // ContactDetailPage is the view model for the contact detail HTML page.
 type ContactDetailPage struct {
 	Contact ContactItem
+	Form    ContactForm
+}
+
+type ContactForm struct {
+	Editing   bool
+	Contact   ContactItem
+	CSRFToken string
+	Language  string
 }
 
 type ContactItem struct {
@@ -94,6 +157,13 @@ type ContactItem struct {
 	UpdatedAt      string
 	Dirty          bool
 	Deleted        bool
+	CSRFToken      string
+	Language       string
+}
+
+type ContactTrashList struct {
+	Contacts []ContactItem
+	Language string
 }
 
 type AuthPage struct {
@@ -102,6 +172,7 @@ type AuthPage struct {
 	Error               string
 	CSRFToken           string
 	GoogleLoginEnabled  bool
+	AppleLoginEnabled   bool
 	RegistrationEnabled bool
 	RegisterMode        bool
 	TOTPRequired        bool
@@ -113,6 +184,18 @@ type AdminUsersPage struct {
 	Pagination PaginationInfo
 }
 
+type ExtensionsPage struct {
+	Extensions []ExtensionCard
+}
+
+type ExtensionCard struct {
+	ID             string
+	Label          string
+	Mode           string
+	RouteCount     int
+	MigrationCount int
+}
+
 type UserItem struct {
 	ID                  string
 	Username            string
@@ -121,6 +204,7 @@ type UserItem struct {
 	Enabled             bool
 	FailedLoginAttempts int32
 	IsLocked            bool
+	IsSelf              bool
 }
 
 type AdminAuditPage struct {
@@ -144,6 +228,7 @@ type NotificationsPage struct {
 
 type NotificationBell struct {
 	UnreadCount int64
+	Language    string
 }
 
 type NotificationItem struct {
@@ -168,6 +253,9 @@ type SettingsPage struct {
 	TOTPSetup                *TOTPSetupData
 	TOTPBackupCodes          []string
 	Error                    string
+	ThemeOptions             []SelectorOption
+	LanguageOptions          []SelectorOption
+	LayoutOptions            []SelectorOption
 }
 
 type TOTPSetupData struct {
@@ -213,6 +301,9 @@ type PaginationInfo struct {
 	HasPrevious bool
 	HasNext     bool
 	PageSize    int
+	PreviousURL string
+	NextURL     string
+	Language    string
 }
 
 type ErrorPage struct {
@@ -222,8 +313,7 @@ type ErrorPage struct {
 	RequestID  string
 }
 
-type HomePage struct {
-	MessageCount int64
-	ContactCount int64
-	UserCount    int64
+type ErrorHelp struct {
+	Title string
+	Items []string
 }

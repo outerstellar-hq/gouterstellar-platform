@@ -1,21 +1,23 @@
 package viewmodel
 
 type ShellViewModel struct {
-	Title     string
-	User      *UserContext
-	Theme     string
-	IsDark    bool
-	Layout    string
-	Language  string
-	CSRFToken string
-	Version   string
-	RequestID string
-	Body      string
-	BodyData  interface{}
-	Page      *PageInfo
-	NavItems  []NavItem
-	CustomCSS string
-	Messages  []ToastMessage
+	Title       string
+	User        *UserContext
+	Theme       string
+	IsDark      bool
+	Layout      string
+	LayoutCSS   string
+	Language    string
+	CurrentPath string
+	CSRFToken   string
+	Version     string
+	RequestID   string
+	Body        string
+	BodyData    interface{}
+	Page        *PageInfo
+	NavItems    []NavItem
+	CustomCSS   string
+	Messages    []ToastMessage
 }
 
 type UserContext struct {

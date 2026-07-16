@@ -81,13 +81,16 @@ type UpdateNotificationPrefsRequest struct {
 	PushEnabled  bool `json:"pushEnabled"`
 }
 
+type DeleteAccountRequest struct {
+	CurrentPassword string `json:"currentPassword" validate:"required"`
+}
+
 type UserProfileResponse struct {
 	Username                  string  `json:"username"`
 	Email                     string  `json:"email"`
 	AvatarURL                 *string `json:"avatarUrl"`
 	EmailNotificationsEnabled bool    `json:"emailNotificationsEnabled"`
 	PushNotificationsEnabled  bool    `json:"pushNotificationsEnabled"`
-	TOTPEnabled               bool    `json:"totpEnabled"`
 }
 
 type SetUserEnabledRequest struct {

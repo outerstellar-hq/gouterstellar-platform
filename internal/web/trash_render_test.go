@@ -44,7 +44,7 @@ func TestTrashPageRendersRecoverableItemsSafely(t *testing.T) {
 	body := recorder.Body.String()
 	for _, want := range []string{
 		`<strong>2</strong>`,
-		`action="/messages/srv_message/restore"`,
+		`action="/messages/restore/srv_message"`,
 		`action="/contacts/srv_contact/restore"`,
 		`name="csrf_token" value="TOKEN-123"`,
 		`aria-label="Restore contact Alice"`,

@@ -1,0 +1,13 @@
+{{ define "sidebar_selector" }}
+<form method="GET" action="/components/navigation/page" class="sidebar-selector"
+      hx-get="/components/navigation/page" hx-trigger="change">
+    <span class="sidebar-selector-heading">{{ .Heading }}</span>
+    <label>{{ .Label }}
+        <select name="{{ .Name }}" aria-label="{{ .Label }}">
+            {{ range .Options }}<option value="{{ .Value }}"{{ if .Selected }} selected{{ end }}>{{ .Label }}</option>{{ end }}
+        </select>
+    </label>
+    {{ range $name, $values := .Hidden }}{{ range $values }}<input type="hidden" name="{{ $name }}" value="{{ . }}">{{ end }}{{ end }}
+    <noscript><button type="submit">{{ .ApplyLabel }}</button></noscript>
+</form>
+{{ end }}

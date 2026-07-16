@@ -25,6 +25,7 @@ func (e *stubExtension) Contribute(ctx *ContributionContext) error {
 }
 
 func TestNewHandlerAssemblesRoutes(t *testing.T) {
+	catalog := NewCatalog()
 	ext := &stubExtension{
 		manifest: Manifest{
 			ID: "test-ext", Label: "Test", Mode: FullPlatform,
@@ -43,6 +44,7 @@ func TestNewHandlerAssemblesRoutes(t *testing.T) {
 	handler, err := NewHandler(Options{
 		Mode:       FullPlatform,
 		Extensions: []Extension{ext},
+		Catalog:    catalog,
 	})
 	require.NoError(t, err)
 
@@ -52,6 +54,28 @@ func TestNewHandlerAssemblesRoutes(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), "hello from test-ext")
+	require.Len(t, catalog.Extensions(), 1)
+	assert.Equal(t, "test-ext", catalog.Extensions()[0].ID)
+	require.Len(t, catalog.Routes(), 1)
+	assert.Equal(t, "/test", catalog.Routes()[0].PathPattern)
+}
+
+func TestNewHandlerUsesConfiguredNotFoundHandler(t *testing.T) {
+	handler, err := NewHandler(Options{
+		Mode:       FullPlatform,
+		Extensions: []Extension{},
+		NotFoundHandler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte("themed missing page"))
+		}),
+	})
+	require.NoError(t, err)
+
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/missing", nil))
+
+	assert.Equal(t, http.StatusNotFound, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "themed missing page")
 }
 
 func TestNewHandlerRejectsInvalidOwnership(t *testing.T) {

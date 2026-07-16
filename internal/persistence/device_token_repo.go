@@ -34,6 +34,13 @@ func (r *deviceTokenRepo) DeleteDeviceToken(ctx context.Context, id int64, userI
 	})
 }
 
+func (r *deviceTokenRepo) DeleteDeviceTokenByValue(ctx context.Context, token string, userID uuid.UUID) (int64, error) {
+	return r.q.DeleteDeviceTokenByValue(ctx, db.DeleteDeviceTokenByValueParams{
+		Token:  token,
+		UserID: userID,
+	})
+}
+
 func (r *deviceTokenRepo) FindByUserID(ctx context.Context, userID uuid.UUID) ([]db.PltDeviceToken, error) {
 	return r.q.FindDeviceTokensByUserID(ctx, userID)
 }

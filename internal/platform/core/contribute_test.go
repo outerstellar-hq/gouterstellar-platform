@@ -42,7 +42,8 @@ func (s stubContributor) ContributeRoutes(ctx *extplatform.ContributionContext) 
 
 func TestCoreContributesAllRouteGroups(t *testing.T) {
 	ext := NewExtension()
-	ext.SetHealth(stub)
+	ext.SetOperations(stub, stub, stub, stub)
+	ext.SetDiagnostics(stub)
 	ext.SetMetrics(stub)
 	ext.SetStatic(stub)
 	ext.SetOpenAPI(stub)
@@ -67,6 +68,17 @@ func TestCoreContributesAllRouteGroups(t *testing.T) {
 	assert.True(t, groups[extplatform.GroupProtectedUI], "should have protected UI routes")
 	assert.True(t, groups[extplatform.GroupAPI], "should have API routes")
 	assert.True(t, groups[extplatform.GroupAdmin], "should have admin routes")
+
+	patterns := make(map[string]extplatform.RouteGroup)
+	for _, route := range routes {
+		patterns[route.Pattern] = route.Group
+	}
+	assert.Equal(t, extplatform.GroupAPI, patterns["/api/openapi.json"])
+	assert.Equal(t, extplatform.GroupAPI, patterns["/api/v1/sync/openapi.json"])
+	assert.Equal(t, extplatform.GroupAPI, patterns["/api/v1/admin/api-openapi.json"])
+	assert.Equal(t, extplatform.GroupPublicUI, patterns["/components/openapi.json"])
+	assert.Equal(t, extplatform.GroupProtectedUI, patterns["/components-protected/openapi.json"])
+	assert.Equal(t, extplatform.GroupAdmin, patterns["/admin/openapi.json"])
 }
 
 func TestCoreManifest(t *testing.T) {
@@ -82,7 +94,8 @@ func TestCoreManifest(t *testing.T) {
 
 func TestCoreNavigationItems(t *testing.T) {
 	ext := NewExtension()
-	ext.SetHealth(stub)
+	ext.SetOperations(stub, stub, stub, stub)
+	ext.SetDiagnostics(stub)
 	ext.SetMetrics(stub)
 	ext.SetStatic(stub)
 	ext.SetOpenAPI(stub)

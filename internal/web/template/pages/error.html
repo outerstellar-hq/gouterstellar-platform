@@ -3,8 +3,8 @@
     <h1>{{ .BodyData.StatusCode }} - {{ .BodyData.Title }}</h1>
     <p>{{ .BodyData.Message }}</p>
     {{ if .BodyData.RequestID }}
-    <p class="request-id">Request ID: {{ .BodyData.RequestID }}</p>
+    <p class="request-id">{{ translate .Language "web.footer.request" }} ID: {{ .BodyData.RequestID }}</p>
     {{ end }}
-    <a href="/" class="btn btn-primary">Back to Home</a>
+    <a href="/" class="btn btn-primary">{{ translate .Language "web.error.primary" }}</a>
 </div>
 {{ end }}

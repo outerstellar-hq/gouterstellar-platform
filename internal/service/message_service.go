@@ -501,6 +501,11 @@ func (s *MessageService) CountMessages(ctx context.Context) (int64, error) {
 	return s.repo.CountMessages(ctx)
 }
 
+// CountDirtyMessages returns the number of messages still awaiting sync.
+func (s *MessageService) CountDirtyMessages(ctx context.Context) (int64, error) {
+	return s.repo.CountDirtyMessages(ctx)
+}
+
 // InvalidateCache flushes all cached message entries. It is exposed for the dev
 // dashboard's manual cache-invalidation control so operators can force a fresh
 // read from the database without restarting the process.

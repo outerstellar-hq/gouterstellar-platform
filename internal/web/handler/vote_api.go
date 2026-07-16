@@ -23,9 +23,9 @@ func NewVoteAPI(voteService messageVoteService) *VoteAPI {
 }
 
 func (h *VoteAPI) ContributeRoutes(ctx *extplatform.ContributionContext) error {
-	ctx.Routes.API(http.MethodGet, "/messages/{syncId}/vote", "Get message vote score", http.HandlerFunc(h.Get))
-	ctx.Routes.API(http.MethodPost, "/messages/{syncId}/vote", "Vote on message", http.HandlerFunc(h.Post))
-	ctx.Routes.API(http.MethodDelete, "/messages/{syncId}/vote", "Remove message vote", http.HandlerFunc(h.Delete))
+	ctx.Routes.API(http.MethodGet, "/api/v1/messages/{syncId}/vote", "Get message vote score", http.HandlerFunc(h.Get))
+	ctx.Routes.API(http.MethodPost, "/api/v1/messages/{syncId}/vote", "Vote on message", http.HandlerFunc(h.Post))
+	ctx.Routes.API(http.MethodDelete, "/api/v1/messages/{syncId}/vote", "Remove message vote", http.HandlerFunc(h.Delete))
 	return nil
 }
 

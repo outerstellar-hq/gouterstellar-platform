@@ -4,6 +4,9 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+	extplatform "github.com/rygel/gouterstellar-platform/platform"
+
 	"github.com/rygel/gouterstellar-platform/internal/web"
 	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
 )
@@ -11,6 +14,56 @@ import (
 type ErrorHandler struct {
 	renderer *web.Renderer
 	version  string
+}
+
+func (h *ErrorHandler) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.Public(http.MethodGet, "/errors/{kind}", "Themed error page", http.HandlerFunc(h.Show))
+	ctx.Routes.Public(http.MethodGet, "/errors/components/help/{kind}", "Error help component", http.HandlerFunc(h.Help))
+	return nil
+}
+
+func (h *ErrorHandler) Show(w http.ResponseWriter, r *http.Request) {
+	page, ok := errorPage(chi.URLParam(r, "kind"), web.LanguageFromRequest(r))
+	if !ok {
+		writeError(w, http.StatusBadRequest, "Unknown error page kind")
+		return
+	}
+	if err := h.renderer.RenderPage(w, r, "error", page); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
+}
+
+func (h *ErrorHandler) Help(w http.ResponseWriter, r *http.Request) {
+	kind := chi.URLParam(r, "kind")
+	language := web.LanguageFromRequest(r)
+	_, ok := errorPage(kind, language)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "Unknown error help kind")
+		return
+	}
+	if err := h.renderer.RenderPartial(w, "error_help", viewmodel.ErrorHelp{
+		Title: web.TranslateForTemplate(language, "web.error."+kind+".help.title"),
+		Items: []string{
+			web.TranslateForTemplate(language, "web.error."+kind+".help.item1"),
+			web.TranslateForTemplate(language, "web.error."+kind+".help.item2"),
+			web.TranslateForTemplate(language, "web.error."+kind+".help.item3"),
+		},
+	}); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
+}
+
+func errorPage(kind, language string) (viewmodel.ErrorPage, bool) {
+	switch kind {
+	case "not-found":
+		return viewmodel.ErrorPage{StatusCode: http.StatusNotFound, Title: web.TranslateForTemplate(language, "web.error.not-found.title"), Message: web.TranslateForTemplate(language, "web.error.not-found.message")}, true
+	case "server-error":
+		return viewmodel.ErrorPage{StatusCode: http.StatusInternalServerError, Title: web.TranslateForTemplate(language, "web.error.server-error.title"), Message: web.TranslateForTemplate(language, "web.error.server-error.message")}, true
+	case "forbidden":
+		return viewmodel.ErrorPage{StatusCode: http.StatusForbidden, Title: web.TranslateForTemplate(language, "web.error.forbidden.title"), Message: web.TranslateForTemplate(language, "web.error.forbidden.message")}, true
+	default:
+		return viewmodel.ErrorPage{}, false
+	}
 }
 
 func NewErrorHandler(renderer *web.Renderer, version string) *ErrorHandler {
@@ -21,12 +74,9 @@ func NewErrorHandler(renderer *web.Renderer, version string) *ErrorHandler {
 }
 
 func (h *ErrorHandler) NotFound(w http.ResponseWriter, r *http.Request) {
-	_ = h.renderer.RenderWithStatus(w, r, "error", viewmodel.ErrorPage{
-		StatusCode: http.StatusNotFound,
-		Title:      "Not Found",
-		Message:    "The page you are looking for does not exist.",
-		RequestID:  web.RequestIDFromContext(r.Context()),
-	}, http.StatusNotFound)
+	page, _ := errorPage("not-found", web.LanguageFromRequest(r))
+	page.RequestID = web.RequestIDFromContext(r.Context())
+	_ = h.renderer.RenderWithStatus(w, r, "error", page, http.StatusNotFound)
 }
 
 func (h *ErrorHandler) InternalError(w http.ResponseWriter, r *http.Request, err error) {
@@ -37,10 +87,7 @@ func (h *ErrorHandler) InternalError(w http.ResponseWriter, r *http.Request, err
 		"method", r.Method,
 	)
 
-	_ = h.renderer.RenderWithStatus(w, r, "error", viewmodel.ErrorPage{
-		StatusCode: http.StatusInternalServerError,
-		Title:      "Internal Server Error",
-		Message:    "Something went wrong. Please try again later.",
-		RequestID:  web.RequestIDFromContext(r.Context()),
-	}, http.StatusInternalServerError)
+	page, _ := errorPage("server-error", web.LanguageFromRequest(r))
+	page.RequestID = web.RequestIDFromContext(r.Context())
+	_ = h.renderer.RenderWithStatus(w, r, "error", page, http.StatusInternalServerError)
 }

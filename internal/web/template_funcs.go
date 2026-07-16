@@ -18,7 +18,7 @@ import (
 // read on every render.
 var (
 	i18nMu  sync.RWMutex
-	i18nSvc *i18n.I18nService
+	i18nSvc = i18n.NewI18nService(LocaleFS, LocaleBasePath)
 )
 
 // SetGlobalI18nService installs the i18n service used by the translate template
@@ -34,7 +34,7 @@ func SetGlobalI18nService(svc *i18n.I18nService) {
 // even when the i18n service has not been wired. It translates for the given
 // locale WITHOUT mutating the service's process-wide locale, making it safe
 // under concurrent renders that use different languages.
-func TranslateForTemplate(lang, key string) string {
+func TranslateForTemplate(lang, key string, params ...interface{}) string {
 	i18nMu.RLock()
 	svc := i18nSvc
 	i18nMu.RUnlock()
@@ -42,9 +42,9 @@ func TranslateForTemplate(lang, key string) string {
 		return key
 	}
 	if lang == "" || !i18n.IsSupported(lang) {
-		return svc.TranslateForLocale("en", key)
+		return svc.TranslateForLocale("en", key, params...)
 	}
-	return svc.TranslateForLocale(lang, key)
+	return svc.TranslateForLocale(lang, key, params...)
 }
 
 func TemplateFuncMap() template.FuncMap {
@@ -78,6 +78,7 @@ func TemplateFuncMap() template.FuncMap {
 		"trim":     strings.TrimSpace,
 		"json":     func(v interface{}) (string, error) { b, err := json.Marshal(v); return string(b), err },
 		"safeHTML": func(s string) template.HTML { return template.HTML(s) }, // #nosec G203 -- intentional: used for trusted server-rendered HTML only
+		"safeURL":  func(s string) template.URL { return template.URL(s) },   // #nosec G203 -- only used for server-generated QR data URIs
 		"urlEncode": func(s string) string {
 			return url.QueryEscape(s)
 		},

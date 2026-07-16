@@ -98,6 +98,10 @@ func (r *userRepo) UpdateUsername(ctx context.Context, id uuid.UUID, username st
 	})
 }
 
+func (r *userRepo) UpdateEmail(ctx context.Context, id uuid.UUID, email string) (db.PltUser, error) {
+	return r.q.UpdateEmail(ctx, db.UpdateEmailParams{ID: id, Email: email})
+}
+
 func (r *userRepo) UpdateAvatarURL(ctx context.Context, id uuid.UUID, avatarURL *string) (db.PltUser, error) {
 	return r.q.UpdateAvatarURL(ctx, db.UpdateAvatarURLParams{
 		ID:        id,

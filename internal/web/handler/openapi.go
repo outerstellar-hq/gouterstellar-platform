@@ -52,6 +52,9 @@ func buildOpenAPISpec() map[string]interface{} {
 			{"url": "/api/v1", "description": "Current server"},
 		},
 		"paths": map[string]interface{}{
+			"/search": map[string]interface{}{
+				"get": op("Search messages and contacts", true, ok("Search results")),
+			},
 			"/polls": map[string]interface{}{
 				"get": op("List open polls", false, ok("Open poll list")),
 				"post": op("Create a poll", true, map[string]interface{}{
@@ -153,16 +156,16 @@ func buildOpenAPISpec() map[string]interface{} {
 			"/auth/logout": map[string]interface{}{
 				"post": op("Invalidate the current session", true, ok("Session invalidated")),
 			},
-			"/auth/change-password": map[string]interface{}{
-				"post": op("Change the current user's password", true, map[string]interface{}{
+			"/auth/password": map[string]interface{}{
+				"put": op("Change the current user's password", true, map[string]interface{}{
 					"200": map[string]interface{}{"description": "Password changed"},
 					"400": map[string]interface{}{"description": "Invalid input"},
 				}),
 			},
-			"/auth/reset-password": map[string]interface{}{
+			"/auth/reset-request": map[string]interface{}{
 				"post": op("Request a password reset email", false, ok("Reset requested")),
 			},
-			"/auth/confirm-reset": map[string]interface{}{
+			"/auth/reset-confirm": map[string]interface{}{
 				"post": op("Confirm a password reset with a token", false, map[string]interface{}{
 					"200": map[string]interface{}{"description": "Password reset"},
 					"400": map[string]interface{}{"description": "Invalid or expired token"},
@@ -185,7 +188,7 @@ func buildOpenAPISpec() map[string]interface{} {
 				}),
 			},
 			// Users / admin
-			"/users": map[string]interface{}{
+			"/admin/users": map[string]interface{}{
 				"get": op("List all users (admin only)", true, map[string]interface{}{
 					"200": map[string]interface{}{"description": "User list"},
 					"403": map[string]interface{}{"description": "Forbidden"},
@@ -197,13 +200,13 @@ func buildOpenAPISpec() map[string]interface{} {
 					"403": map[string]interface{}{"description": "Forbidden"},
 				}),
 			},
-			"/users/{id}/enabled": map[string]interface{}{
+			"/admin/users/{id}/enabled": map[string]interface{}{
 				"put": op("Enable or disable a user (admin only)", true, map[string]interface{}{
 					"200": map[string]interface{}{"description": "User enabled state updated"},
 					"403": map[string]interface{}{"description": "Forbidden"},
 				}),
 			},
-			"/users/{id}/role": map[string]interface{}{
+			"/admin/users/{id}/role": map[string]interface{}{
 				"put": op("Change a user's role (admin only)", true, map[string]interface{}{
 					"200": map[string]interface{}{"description": "User role updated"},
 					"403": map[string]interface{}{"description": "Forbidden"},
@@ -253,10 +256,14 @@ func buildOpenAPISpec() map[string]interface{} {
 				}),
 			},
 			"/notifications/{id}/read": map[string]interface{}{
-				"put": op("Mark a single notification as read", true, ok("Notification marked read")),
+				"put": op("Mark a single notification as read", true, map[string]interface{}{
+					"204": map[string]interface{}{"description": "Notification marked read"},
+				}),
 			},
 			"/notifications/read-all": map[string]interface{}{
-				"put": op("Mark all notifications as read", true, ok("All notifications marked read")),
+				"put": op("Mark all notifications as read", true, map[string]interface{}{
+					"204": map[string]interface{}{"description": "All notifications marked read"},
+				}),
 			},
 			"/notifications/{id}": map[string]interface{}{
 				"delete": op("Delete a single notification", true, map[string]interface{}{
@@ -267,8 +274,13 @@ func buildOpenAPISpec() map[string]interface{} {
 			// Devices
 			"/devices/register": map[string]interface{}{
 				"post": op("Register a device push token", true, map[string]interface{}{
-					"201": map[string]interface{}{"description": "Device registered"},
+					"204": map[string]interface{}{"description": "Device registered"},
 					"400": map[string]interface{}{"description": "Invalid input"},
+				}),
+				"delete": op("Unregister a device token by value", true, map[string]interface{}{
+					"204": map[string]interface{}{"description": "Device removed"},
+					"400": map[string]interface{}{"description": "Token required"},
+					"403": map[string]interface{}{"description": "Token not owned by user"},
 				}),
 			},
 			"/devices/{id}": map[string]interface{}{

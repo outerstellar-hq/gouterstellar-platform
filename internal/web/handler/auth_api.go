@@ -57,8 +57,11 @@ func (h *AuthAPI) ContributeRoutes(ctx *extplatform.ContributionContext) error {
 	ctx.Routes.API(http.MethodPost, "/api/v1/auth/totp/disable", "Disable TOTP", http.HandlerFunc(h.DisableTOTP))
 	ctx.Routes.API(http.MethodPost, "/api/v1/auth/token", "Issue token", http.HandlerFunc(h.IssueToken))
 	ctx.Routes.API(http.MethodPost, "/api/v1/auth/register", "API register", http.HandlerFunc(h.Register))
+	ctx.Routes.API(http.MethodPut, "/api/v1/auth/password", "API change password", http.HandlerFunc(h.ChangePassword))
 	ctx.Routes.API(http.MethodPost, "/api/v1/auth/change-password", "API change password", http.HandlerFunc(h.ChangePassword))
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/reset-request", "Request password reset", http.HandlerFunc(h.RequestPasswordReset))
 	ctx.Routes.API(http.MethodPost, "/api/v1/auth/reset-password", "Request password reset", http.HandlerFunc(h.RequestPasswordReset))
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/reset-confirm", "Confirm password reset", http.HandlerFunc(h.ConfirmPasswordReset))
 	ctx.Routes.API(http.MethodPost, "/api/v1/auth/confirm-reset", "Confirm password reset", http.HandlerFunc(h.ConfirmPasswordReset))
 	ctx.Routes.API(http.MethodPost, "/api/v1/auth/logout", "API logout", http.HandlerFunc(h.Logout))
 	ctx.Routes.API(http.MethodGet, "/api/v1/auth/profile", "Get profile", http.HandlerFunc(h.GetProfile))
@@ -107,7 +110,6 @@ func (h *AuthAPI) Login(w http.ResponseWriter, r *http.Request) {
 	})
 
 	writeJSON(w, http.StatusOK, model.AuthTokenResponse{
-		Status:   "success",
 		Token:    token,
 		Username: user.Username,
 		Role:     string(user.Role),
@@ -279,7 +281,7 @@ func (h *AuthAPI) Register(w http.ResponseWriter, r *http.Request) {
 		"username": user.Username,
 	})
 
-	writeJSON(w, http.StatusCreated, model.AuthTokenResponse{
+	writeJSON(w, http.StatusOK, model.AuthTokenResponse{
 		Token:    token,
 		Username: user.Username,
 		Role:     string(user.Role),
@@ -301,6 +303,11 @@ func (h *AuthAPI) ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	err := h.securityService.ChangePassword(r.Context(), user.ID, req.CurrentPassword, req.NewPassword)
 	if err != nil {
+		var invalidPassword *model.InvalidPasswordError
+		if errors.As(err, &invalidPassword) {
+			writeText(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		handleServiceError(w, err)
 		return
 	}
@@ -309,7 +316,7 @@ func (h *AuthAPI) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		"userID": user.ID.String(),
 	})
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "Password changed successfully"})
+	writeText(w, http.StatusOK, "Password changed successfully")
 }
 
 func (h *AuthAPI) RequestPasswordReset(w http.ResponseWriter, r *http.Request) {
@@ -325,7 +332,7 @@ func (h *AuthAPI) RequestPasswordReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "If an account with that email exists, a reset link has been sent"})
+	writeText(w, http.StatusOK, "Reset request accepted")
 }
 
 func (h *AuthAPI) ConfirmPasswordReset(w http.ResponseWriter, r *http.Request) {
@@ -341,7 +348,7 @@ func (h *AuthAPI) ConfirmPasswordReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "Password reset successfully"})
+	writeText(w, http.StatusOK, "Password has been reset")
 }
 
 func (h *AuthAPI) Logout(w http.ResponseWriter, r *http.Request) {
@@ -359,7 +366,7 @@ func (h *AuthAPI) Logout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	http.SetCookie(w, web.ClearSessionCookie(h.sessionSecure))
-	writeJSON(w, http.StatusOK, map[string]string{"message": "Logged out"})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *AuthAPI) GetProfile(w http.ResponseWriter, r *http.Request) {
@@ -381,7 +388,6 @@ func (h *AuthAPI) GetProfile(w http.ResponseWriter, r *http.Request) {
 		AvatarURL:                 avatarURL,
 		EmailNotificationsEnabled: user.EmailNotificationsEnabled,
 		PushNotificationsEnabled:  user.PushNotificationsEnabled,
-		TOTPEnabled:               user.TOTPEnabled,
 	})
 }
 
@@ -408,7 +414,7 @@ func (h *AuthAPI) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		"userID": user.ID.String(),
 	})
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "Profile updated"})
+	writeText(w, http.StatusOK, "Profile updated")
 }
 
 func (h *AuthAPI) UpdateNotificationPreferences(w http.ResponseWriter, r *http.Request) {
@@ -430,7 +436,7 @@ func (h *AuthAPI) UpdateNotificationPreferences(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "Notification preferences updated"})
+	writeText(w, http.StatusOK, "Preferences updated")
 }
 
 func (h *AuthAPI) DeleteAccount(w http.ResponseWriter, r *http.Request) {
@@ -440,9 +446,24 @@ func (h *AuthAPI) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.securityService.DeleteAccount(r.Context(), user.ID)
+	var req model.DeleteAccountRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.CurrentPassword == "" {
+		writeError(w, http.StatusBadRequest, "Current password is required")
+		return
+	}
+
+	err := h.securityService.DeleteAccount(r.Context(), user.ID, req.CurrentPassword)
 	if err != nil {
-		handleServiceError(w, err)
+		var invalidPassword *model.InvalidPasswordError
+		var insufficientPermission *model.InsufficientPermissionError
+		switch {
+		case errors.As(err, &invalidPassword):
+			writeText(w, http.StatusBadRequest, err.Error())
+		case errors.As(err, &insufficientPermission):
+			writeText(w, http.StatusForbidden, err.Error())
+		default:
+			handleServiceError(w, err)
+		}
 		return
 	}
 
@@ -452,7 +473,7 @@ func (h *AuthAPI) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 		"userID": user.ID.String(),
 	})
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "Account deleted"})
+	writeText(w, http.StatusOK, "Account deleted")
 }
 
 func (h *AuthAPI) CreateApiKey(w http.ResponseWriter, r *http.Request) {
@@ -479,7 +500,7 @@ func (h *AuthAPI) CreateApiKey(w http.ResponseWriter, r *http.Request) {
 		"name":   req.Name,
 	})
 
-	writeJSON(w, http.StatusCreated, result)
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *AuthAPI) ListApiKeys(w http.ResponseWriter, r *http.Request) {
@@ -518,5 +539,5 @@ func (h *AuthAPI) DeleteApiKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "API key deleted"})
+	writeText(w, http.StatusOK, "API key deleted")
 }

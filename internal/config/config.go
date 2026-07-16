@@ -35,6 +35,15 @@ type SegmentConfig struct {
 // independent; a provider is enabled when its ClientID/ClientSecret are set.
 type OAuthConfig struct {
 	Google GoogleOAuthConfig `yaml:"google"`
+	Apple  AppleOAuthConfig  `yaml:"apple"`
+}
+
+type AppleOAuthConfig struct {
+	Enabled       bool   `yaml:"enabled"`
+	TeamID        string `yaml:"team_id"`
+	ClientID      string `yaml:"client_id"`
+	KeyID         string `yaml:"key_id"`
+	PrivateKeyPEM string `yaml:"private_key_pem"`
 }
 
 // GoogleOAuthConfig holds the credentials for the Google OAuth 2.0 / OpenID
@@ -223,6 +232,21 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("JWT_ENABLED"); v == "true" {
 		cfg.JWT.Enabled = true
+	}
+	if v := os.Getenv("APPLE_OAUTH_ENABLED"); v == "true" {
+		cfg.OAuth.Apple.Enabled = true
+	}
+	if v := os.Getenv("APPLE_OAUTH_TEAM_ID"); v != "" {
+		cfg.OAuth.Apple.TeamID = v
+	}
+	if v := os.Getenv("APPLE_OAUTH_CLIENT_ID"); v != "" {
+		cfg.OAuth.Apple.ClientID = v
+	}
+	if v := os.Getenv("APPLE_OAUTH_KEY_ID"); v != "" {
+		cfg.OAuth.Apple.KeyID = v
+	}
+	if v := os.Getenv("APPLE_OAUTH_PRIVATE_KEY_PEM"); v != "" {
+		cfg.OAuth.Apple.PrivateKeyPEM = v
 	}
 }
 

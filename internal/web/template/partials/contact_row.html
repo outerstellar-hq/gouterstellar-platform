@@ -9,8 +9,8 @@
     </div>
     <div class="contact-meta">
         <span class="contact-time">{{ .UpdatedAt }}</span>
-        {{ if .Dirty }}<span class="badge badge-warning">Unsynced</span>{{ end }}
-        {{ if .Deleted }}<span class="badge badge-error">Deleted</span>{{ end }}
+        {{ if .Dirty }}<span class="badge badge-warning">{{ translate .Language "web.messages.local.badge" }}</span>{{ end }}
+        {{ if .Deleted }}<span class="badge badge-error">{{ translate .Language "web.common.deleted" }}</span>{{ end }}
     </div>
 </div>
 {{ end }}

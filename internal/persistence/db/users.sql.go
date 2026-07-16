@@ -441,6 +441,47 @@ func (q *Queries) UpdateAvatarURL(ctx context.Context, arg UpdateAvatarURLParams
 	return i, err
 }
 
+const updateEmail = `-- name: UpdateEmail :one
+UPDATE plt_users SET email = $2 WHERE id = $1
+RETURNING id, username, email, password_hash, role, enabled, created_at, last_activity_at,
+       avatar_url, email_notifications_enabled, push_notifications_enabled,
+       language, theme, layout, failed_login_attempts, locked_until,
+       totp_secret, totp_enabled, totp_backup_codes, failed_totp_attempts
+`
+
+type UpdateEmailParams struct {
+	ID    uuid.UUID `json:"id"`
+	Email string    `json:"email"`
+}
+
+func (q *Queries) UpdateEmail(ctx context.Context, arg UpdateEmailParams) (PltUser, error) {
+	row := q.db.QueryRow(ctx, updateEmail, arg.ID, arg.Email)
+	var i PltUser
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.Enabled,
+		&i.CreatedAt,
+		&i.LastActivityAt,
+		&i.AvatarUrl,
+		&i.EmailNotificationsEnabled,
+		&i.PushNotificationsEnabled,
+		&i.Language,
+		&i.Theme,
+		&i.Layout,
+		&i.FailedLoginAttempts,
+		&i.LockedUntil,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpBackupCodes,
+		&i.FailedTotpAttempts,
+	)
+	return i, err
+}
+
 const updateLastActivity = `-- name: UpdateLastActivity :exec
 UPDATE plt_users SET last_activity_at = CURRENT_TIMESTAMP WHERE id = $1
 `

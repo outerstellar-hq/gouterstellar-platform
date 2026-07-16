@@ -1,0 +1,17 @@
+{{ define "auth_totp" }}
+<section class="auth-form-fragment">
+    <h2>{{ translate .Language "web.totp.title" }}</h2>
+    <p>{{ translate .Language "web.auth.totp.or.backup" }}</p>
+    {{ if .Error }}<div class="toast toast-error">{{ .Error }}</div>{{ end }}
+    <form method="POST" action="/auth/components/totp-verify" hx-post="/auth/components/totp-verify" hx-target="this" hx-swap="outerHTML">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <input type="hidden" name="partialToken" value="{{ .PartialToken }}">
+        <input type="hidden" name="returnTo" value="{{ .ReturnTo }}">
+        <div class="form-group">
+            <label for="auth-totp-code">{{ translate .Language "web.totp.codeLabel" }}</label>
+            <input id="auth-totp-code" name="code" autocomplete="one-time-code" inputmode="numeric" required autofocus>
+        </div>
+        <button type="submit" class="btn btn-primary">{{ translate .Language "web.totp.verifyCode" }}</button>
+    </form>
+</section>
+{{ end }}

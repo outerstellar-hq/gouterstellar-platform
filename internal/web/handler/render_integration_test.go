@@ -30,11 +30,11 @@ func TestRendererHasAllExpectedPages(t *testing.T) {
 
 	// Every page that handlers render must exist in the renderer.
 	expectedPages := []string{
-		"home", "contacts", "notifications", "settings",
-		"admin_users", "admin_audit", "error",
+		"contacts", "notifications", "settings",
+		"admin_users", "admin_audit", "admin_extensions", "error",
 		"auth_login", "auth_change_password",
 		"auth_reset_password", "auth_reset_sent",
-		"search", "dev_dashboard", "messages",
+		"search", "dev_dashboard", "messages", "message_conflict",
 	}
 
 	for _, page := range expectedPages {

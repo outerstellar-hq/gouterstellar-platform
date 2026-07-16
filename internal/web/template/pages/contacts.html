@@ -1,34 +1,38 @@
 {{ define "content" }}
 <div class="contacts-page">
     <div class="page-header">
-        <h1>Contacts</h1>
+        <h1>{{ translate .Language "web.nav.contacts" }}</h1>
         <form method="GET" action="/contacts" class="search-form">
-            <input type="text" name="q" value="{{ .BodyData.Query }}" placeholder="Search contacts...">
-            <button type="submit">Search</button>
+            <input type="text" name="q" value="{{ .BodyData.Query }}" placeholder="{{ translate .Language "web.search.placeholder" }}">
+            <button type="submit">{{ translate .Language "web.search.label" }}</button>
         </form>
     </div>
 
     <details class="contact-create">
-        <summary>Add new contact</summary>
-        <form method="POST" action="/contacts/create" class="contact-form">
+        <summary>{{ translate .Language "web.contacts.create" }}</summary>
+        <form method="POST" action="/contacts" class="contact-form">
             <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
             <div class="form-group">
-                <label for="contact-name">Name</label>
+                <label for="contact-name">{{ translate .Language "web.contacts.form.name" }}</label>
                 <input type="text" id="contact-name" name="name" required>
             </div>
             <div class="form-group">
-                <label for="contact-email">Email</label>
-                <input type="email" id="contact-email" name="emails" placeholder="one email per field">
+                <label for="contact-email">{{ translate .Language "web.contacts.form.emails" }}</label>
+                <input type="email" id="contact-email" name="emails">
             </div>
             <div class="form-group">
-                <label for="contact-phone">Phone</label>
+                <label for="contact-phone">{{ translate .Language "web.contacts.form.phones" }}</label>
                 <input type="text" id="contact-phone" name="phones">
             </div>
+			<div class="form-group">
+				<label for="contact-social">{{ translate .Language "web.contacts.form.social" }}</label>
+				<input type="text" id="contact-social" name="socialMedia">
+			</div>
             <div class="form-group">
-                <label for="contact-company">Company</label>
+                <label for="contact-company">{{ translate .Language "web.contacts.form.company" }}</label>
                 <input type="text" id="contact-company" name="company">
             </div>
-            <button type="submit" class="btn btn-primary">Create</button>
+            <button type="submit" class="btn btn-primary">{{ translate .Language "web.contacts.form.save" }}</button>
         </form>
     </details>
 
@@ -44,19 +48,19 @@
             </div>
             <div class="contact-meta">
                 <span class="contact-time">{{ .UpdatedAt }}</span>
-                {{ if .Dirty }}<span class="badge badge-warning">Unsynced</span>{{ end }}
-                {{ if .Deleted }}<span class="badge badge-error">Deleted</span>{{ end }}
+                {{ if .Dirty }}<span class="badge badge-warning">{{ translate $.Language "web.messages.local.badge" }}</span>{{ end }}
+                {{ if .Deleted }}<span class="badge badge-error">{{ translate $.Language "web.common.deleted" }}</span>{{ end }}
             </div>
             <div class="contact-actions">
-                <a href="/contacts/{{ .SyncID }}" class="btn btn-sm">Edit</a>
+                <a href="/contacts/{{ .SyncID }}/edit" class="btn btn-sm">{{ translate $.Language "web.contacts.edit" }}</a>
                 <form method="POST" action="/contacts/{{ .SyncID }}/delete" class="inline-form">
                     <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
-                    <button type="submit" class="btn btn-sm btn-danger" data-confirm="Delete contact '{{ .Name }}'?">Delete</button>
+                    <button type="submit" class="btn btn-sm btn-danger" data-confirm="{{ translate $.Language "web.contacts.delete.confirm" }}">{{ translate $.Language "web.contacts.delete" }}</button>
                 </form>
             </div>
         </div>
         {{ else }}
-        <p class="empty-state">No contacts found.</p>
+        <p class="empty-state">{{ translate .Language "web.contacts.empty" }}</p>
         {{ end }}
     </div>
 

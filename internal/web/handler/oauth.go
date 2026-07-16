@@ -3,6 +3,7 @@ package handler
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"html"
 	"log/slog"
 	"net/http"
 
@@ -47,7 +48,21 @@ func (h *OAuthHandler) ContributeRoutes(ctx *extplatform.ContributionContext) er
 	ctx.Routes.Public(http.MethodGet, "/auth/oauth/{provider}", "OAuth redirect", http.HandlerFunc(h.Redirect))
 	ctx.Routes.Public(http.MethodGet, "/auth/oauth/{provider}/callback", "OAuth callback", http.HandlerFunc(h.Callback))
 	ctx.Routes.Public(http.MethodPost, "/auth/oauth/{provider}/callback", "OAuth callback POST", http.HandlerFunc(h.CallbackPost))
+	ctx.Routes.Public(http.MethodGet, "/auth/oauth/{provider}/not-configured", "OAuth provider not configured", http.HandlerFunc(h.NotConfigured))
 	return nil
+}
+
+func (h *OAuthHandler) NotConfigured(w http.ResponseWriter, r *http.Request) {
+	providerName := chi.URLParam(r, "provider")
+	if h.resolveProvider(providerName) == nil {
+		writeError(w, http.StatusBadRequest, "Unknown OAuth provider")
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusServiceUnavailable)
+	_, _ = w.Write([]byte("<h2>Sign in with " + html.EscapeString(providerName) + " is not yet configured.</h2>" +
+		"<p>The provider is not available in this release. Please contact the administrator.</p>" +
+		"<a href='/auth'>Back to sign in</a>"))
 }
 
 func (h *OAuthHandler) Redirect(w http.ResponseWriter, r *http.Request) {
@@ -74,10 +89,10 @@ func (h *OAuthHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure:   h.sessionSecure,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   300,
+		MaxAge:   600,
 	})
 
-	http.Redirect(w, r, authURL, http.StatusSeeOther)
+	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
 func (h *OAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {

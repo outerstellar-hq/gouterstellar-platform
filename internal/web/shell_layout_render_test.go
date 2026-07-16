@@ -26,13 +26,13 @@ func TestAuthenticatedShellUsesSavedLayoutAndSemanticLandmarks(t *testing.T) {
 			})
 			req = web.WithNavItems(req, []viewmodel.NavItem{{Label: "Home", URL: "/"}})
 			recorder := httptest.NewRecorder()
-			if err := renderer.RenderPage(recorder, req, "home", map[string]any{}); err != nil {
+			if err := renderer.RenderPage(recorder, req, "messages", viewmodel.MessagesPage{}); err != nil {
 				t.Fatalf("render shell: %v", err)
 			}
 
 			body := recorder.Body.String()
 			for _, want := range []string{
-				`class="layout-` + layout + `"`,
+				`layout-` + layout + ` density-` + layout,
 				`class="app-shell"`,
 				`class="app-nav" aria-label="Primary navigation"`,
 				`class="nav-link active" aria-current="page"`,

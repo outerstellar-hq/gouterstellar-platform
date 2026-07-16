@@ -6,10 +6,10 @@
         <div class="message-content">{{ .Content }}</div>
         <div class="message-meta">
             <span class="message-time" title="{{ .UpdatedAt }}">{{ .UpdatedLabel }}</span>
-            {{ if .Dirty }}<span class="badge badge-warning">Unsynced</span>{{ end }}
-            {{ if .HasConflict }}<span class="badge badge-error">Conflict</span>{{ end }}
-            {{ if .Deleted }}<span class="badge badge-error">Deleted</span>{{ end }}
-            <span class="badge">v{{ .Version }}</span>
+            {{ if .Dirty }}<span class="badge badge-warning">{{ translate .Language "web.messages.local.badge" }}</span>{{ end }}
+            {{ if .HasConflict }}<span class="badge badge-error">{{ translate .Language "web.messages.conflict.badge" }}</span>{{ end }}
+            {{ if .Deleted }}<span class="badge badge-error">{{ translate .Language "web.common.deleted" }}</span>{{ end }}
+            <span class="badge">{{ translate .Language "web.messages.version.label" }} {{ .Version }}</span>
         </div>
     </div>
 </div>

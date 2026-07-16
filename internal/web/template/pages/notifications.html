@@ -1,12 +1,12 @@
 {{ define "content" }}
 <div class="notifications-page">
     <div class="page-header">
-        <h1>Notifications</h1>
+        <h1>{{ translate .Language "web.notifications.title" }}</h1>
         {{ if .BodyData.UnreadCount }}
         <span class="badge badge-unread">{{ .BodyData.UnreadCount }} unread</span>
         <form method="POST" action="/notifications/read-all" class="inline-form">
             <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
-            <button type="submit" class="btn btn-sm">Mark All Read</button>
+            <button type="submit" class="btn btn-sm">{{ translate .Language "web.notifications.mark.all.read" }}</button>
         </form>
         {{ end }}
     </div>
@@ -23,16 +23,16 @@
             {{ if not .Read }}
             <form method="POST" action="/notifications/{{ .ID }}/read" class="inline-form">
                 <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
-                <button type="submit" class="btn btn-sm">Mark as read</button>
+                <button type="submit" class="btn btn-sm">{{ translate $.Language "web.notifications.mark.read" }}</button>
             </form>
             {{ end }}
             <form method="POST" action="/notifications/{{ .ID }}/delete" class="inline-form">
                 <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
-                <button type="submit" class="btn btn-sm btn-danger" data-confirm="Delete this notification?">Delete</button>
+                <button type="submit" class="btn btn-sm btn-danger" data-confirm="{{ translate $.Language "web.notifications.delete.confirm" }}">{{ translate $.Language "web.notifications.delete" }}</button>
             </form>
         </div>
         {{ else }}
-        <p class="empty-state">No notifications.</p>
+        <p class="empty-state">{{ translate .Language "web.notifications.empty" }}</p>
         {{ end }}
     </div>
 </div>

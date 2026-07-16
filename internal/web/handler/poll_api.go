@@ -39,13 +39,13 @@ func NewPollAPI(service pollService) *PollAPI {
 }
 
 func (h *PollAPI) ContributeRoutes(ctx *extplatform.ContributionContext) error {
-	ctx.Routes.API(http.MethodPost, "/polls", "Create poll", http.HandlerFunc(h.Create))
-	ctx.Routes.API(http.MethodGet, "/polls", "List open polls", http.HandlerFunc(h.List))
-	ctx.Routes.API(http.MethodGet, "/polls/{syncId}", "Get poll results", http.HandlerFunc(h.Get))
-	ctx.Routes.API(http.MethodPost, "/polls/{syncId}/vote", "Cast poll vote", http.HandlerFunc(h.Vote))
-	ctx.Routes.API(http.MethodDelete, "/polls/{syncId}/vote", "Remove poll vote", http.HandlerFunc(h.RemoveVote))
-	ctx.Routes.API(http.MethodPost, "/polls/{syncId}/close", "Close poll", http.HandlerFunc(h.Close))
-	ctx.Routes.API(http.MethodDelete, "/polls/{syncId}", "Delete poll", http.HandlerFunc(h.Delete))
+	ctx.Routes.API(http.MethodPost, "/api/v1/polls", "Create poll", http.HandlerFunc(h.Create))
+	ctx.Routes.API(http.MethodGet, "/api/v1/polls", "List open polls", http.HandlerFunc(h.List))
+	ctx.Routes.API(http.MethodGet, "/api/v1/polls/{syncId}", "Get poll results", http.HandlerFunc(h.Get))
+	ctx.Routes.API(http.MethodPost, "/api/v1/polls/{syncId}/vote", "Cast poll vote", http.HandlerFunc(h.Vote))
+	ctx.Routes.API(http.MethodDelete, "/api/v1/polls/{syncId}/vote", "Remove poll vote", http.HandlerFunc(h.RemoveVote))
+	ctx.Routes.API(http.MethodPost, "/api/v1/polls/{syncId}/close", "Close poll", http.HandlerFunc(h.Close))
+	ctx.Routes.API(http.MethodDelete, "/api/v1/polls/{syncId}", "Delete poll", http.HandlerFunc(h.Delete))
 	return nil
 }
 
@@ -162,7 +162,7 @@ func (h *PollAPI) Close(w http.ResponseWriter, r *http.Request) {
 		handleServiceError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "closed"})
+	writeText(w, http.StatusOK, "Poll closed")
 }
 
 func (h *PollAPI) Delete(w http.ResponseWriter, r *http.Request) {

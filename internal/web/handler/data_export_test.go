@@ -95,6 +95,29 @@ func TestAdminUIRegistersJSONExportRoutes(t *testing.T) {
 	assert.Contains(t, patterns, "/admin/audit/export/json")
 }
 
+func TestAdminAPIRegistersJavaCompatibleRoutes(t *testing.T) {
+	ctx := extplatform.NewContributionContext("platform-core")
+	require.NoError(t, NewUserAdminAPI(nil).ContributeRoutes(ctx))
+
+	routes := make(map[string]bool)
+	for _, route := range ctx.Routes.All() {
+		routes[route.Method+" "+route.Pattern] = true
+	}
+	assert.True(t, routes[http.MethodGet+" /api/v1/admin/users"])
+	assert.True(t, routes[http.MethodPut+" /api/v1/admin/users/{id}/enabled"])
+	assert.True(t, routes[http.MethodPut+" /api/v1/admin/users/{id}/role"])
+}
+
+func TestAdminPaginationAcceptsJavaLimitOffsetContract(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/admin/users?limit=250&offset=205", nil)
+
+	limit, offset, page := adminPagination(request)
+
+	assert.Equal(t, adminMaxPageSize, limit)
+	assert.Equal(t, 205, offset)
+	assert.Equal(t, 3, page)
+}
+
 func TestMessageCSVExportPaginatesAndNeutralizesFormulas(t *testing.T) {
 	firstPage := make([]model.MessageSummary, exportPageSize)
 	firstPage[0] = model.MessageSummary{

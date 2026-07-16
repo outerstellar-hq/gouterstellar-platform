@@ -57,14 +57,14 @@ func TestAuthenticatedShellLoadsBellWithUsableFallback(t *testing.T) {
 		ID: uuid.New(), Username: "alex", Role: model.RoleUser,
 	})
 	recorder := httptest.NewRecorder()
-	if err := renderer.RenderPage(recorder, req, "home", map[string]any{}); err != nil {
+	if err := renderer.RenderPage(recorder, req, "messages", viewmodel.MessagesPage{}); err != nil {
 		t.Fatalf("render shell: %v", err)
 	}
 
 	body := recorder.Body.String()
 	for _, want := range []string{
 		`id="notification-bell"`,
-		`hx-get="/components/notification-bell"`,
+		`hx-get="/components/notification-bell?lang=en"`,
 		`hx-trigger="load, every 60s"`,
 		`class="notification-bell notification-bell-fallback">Notifications</a>`,
 	} {

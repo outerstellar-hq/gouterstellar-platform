@@ -15,9 +15,17 @@ import (
 )
 
 func main() {
-	adminUsername := flag.String("username", "admin", "Admin username")
-	adminPassword := flag.String("password", "admin123", "Admin password")
+	defaultUsername := os.Getenv("ADMIN_USERNAME")
+	if defaultUsername == "" {
+		defaultUsername = "admin"
+	}
+	adminUsername := flag.String("username", defaultUsername, "Admin username (or ADMIN_USERNAME)")
+	adminPassword := flag.String("password", os.Getenv("ADMIN_PASSWORD"), "Admin password (or ADMIN_PASSWORD)")
 	flag.Parse()
+	if *adminPassword == "" {
+		slog.Error("Admin password is required", "hint", "set ADMIN_PASSWORD or pass -password")
+		os.Exit(2)
+	}
 
 	cfg := config.Load()
 	ctx := context.Background()

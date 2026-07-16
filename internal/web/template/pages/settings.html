@@ -1,106 +1,118 @@
 {{ define "content" }}
 <div class="settings-page">
-    <h1>Settings</h1>
+    <h1>{{ translate .Language "web.settings.title" }}</h1>
 
     <nav class="settings-tabs">
-        <a href="/settings?tab=profile" {{ if eq .BodyData.ActiveTab "profile" }}class="active"{{ end }}>Profile</a>
-        <a href="/settings?tab=password" {{ if eq .BodyData.ActiveTab "password" }}class="active"{{ end }}>Password</a>
-        <a href="/settings?tab=security" {{ if eq .BodyData.ActiveTab "security" }}class="active"{{ end }}>Security</a>
-        <a href="/settings?tab=api-keys" {{ if eq .BodyData.ActiveTab "api-keys" }}class="active"{{ end }}>API Keys</a>
-        <a href="/settings?tab=notifications" {{ if eq .BodyData.ActiveTab "notifications" }}class="active"{{ end }}>Notifications</a>
-        <a href="/settings?tab=appearance" {{ if eq .BodyData.ActiveTab "appearance" }}class="active"{{ end }}>Appearance</a>
-        <a href="/settings/sessions">Active Sessions</a>
+        <a href="/settings?tab=profile" {{ if eq .BodyData.ActiveTab "profile" }}class="active"{{ end }}>{{ translate .Language "web.settings.tab.profile" }}</a>
+        <a href="/settings?tab=password" {{ if eq .BodyData.ActiveTab "password" }}class="active"{{ end }}>{{ translate .Language "web.settings.tab.password" }}</a>
+        <a href="/settings?tab=security" {{ if eq .BodyData.ActiveTab "security" }}class="active"{{ end }}>{{ translate .Language "web.settings.tab.security" }}</a>
+        <a href="/settings?tab=api-keys" {{ if eq .BodyData.ActiveTab "api-keys" }}class="active"{{ end }}>{{ translate .Language "web.settings.tab.api-keys" }}</a>
+        <a href="/settings?tab=notifications" {{ if eq .BodyData.ActiveTab "notifications" }}class="active"{{ end }}>{{ translate .Language "web.settings.tab.notifications" }}</a>
+        <a href="/settings?tab=appearance" {{ if eq .BodyData.ActiveTab "appearance" }}class="active"{{ end }}>{{ translate .Language "web.settings.tab.appearance" }}</a>
+        <a href="/settings/sessions">{{ translate .Language "web.settings.sessions" }}</a>
     </nav>
 
     {{ if eq .BodyData.ActiveTab "profile" }}
     <div class="settings-tab-content active">
-        <h2>Profile</h2>
+        <h2>{{ translate .Language "web.profile.title" }}</h2>
         <form method="POST" action="/settings/profile">
             <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
             <div class="form-group">
-                <label for="username">Username</label>
+                <label for="username">{{ translate .Language "web.profile.username" }}</label>
                 <input type="text" id="username" name="username" value="{{ .BodyData.Profile.Username }}" readonly>
             </div>
             <div class="form-group">
-                <label for="email">Email</label>
+                <label for="email">{{ translate .Language "web.profile.email" }}</label>
                 <input type="email" id="email" name="email" value="{{ .BodyData.Profile.Email }}">
             </div>
             <div class="form-group">
-                <label for="avatarUrl">Avatar URL</label>
+                <label for="avatarUrl">{{ translate .Language "web.profile.avatar" }}</label>
                 <input type="url" id="avatarUrl" name="avatarUrl" value="{{ .BodyData.Profile.AvatarURL }}">
             </div>
-            <button type="submit" class="btn btn-primary">Save Profile</button>
+            <button type="submit" class="btn btn-primary">{{ translate .Language "web.profile.submit" }}</button>
         </form>
+		<section class="danger-zone" aria-labelledby="delete-account-heading">
+			<h3 id="delete-account-heading">{{ translate .Language "web.profile.delete.account" }}</h3>
+			<p>{{ translate .Language "web.profile.delete.account.description" }}</p>
+			<form method="POST" action="/auth/account/delete">
+				<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+				<div class="form-group">
+					<label for="delete-account-password">{{ translate .Language "web.password.current" }}</label>
+					<input type="password" id="delete-account-password" name="currentPassword" required autocomplete="current-password">
+				</div>
+				<button type="submit" class="btn btn-danger" data-confirm="{{ translate .Language "web.profile.delete.confirm" }}">{{ translate .Language "web.profile.delete.account" }}</button>
+			</form>
+		</section>
     </div>
     {{ end }}
 
     {{ if eq .BodyData.ActiveTab "password" }}
     <div class="settings-tab-content active">
-        <h2>Change Password</h2>
+        <h2>{{ translate .Language "web.password.title" }}</h2>
         <form method="POST" action="/settings/password">
             <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
             <div class="form-group">
-                <label for="currentPassword">Current Password</label>
+                <label for="currentPassword">{{ translate .Language "web.password.current" }}</label>
                 <input type="password" id="currentPassword" name="currentPassword" autocomplete="current-password" required>
             </div>
             <div class="form-group">
-                <label for="newPassword">New Password</label>
+                <label for="newPassword">{{ translate .Language "web.password.new" }}</label>
                 <input type="password" id="newPassword" name="newPassword" autocomplete="new-password" minlength="8" maxlength="72" aria-describedby="settings-password-requirements" required>
-                <p id="settings-password-requirements">Use at least 8 characters with uppercase, lowercase, a number, and a special character. Passwords are limited to 72 UTF-8 bytes.</p>
+                <p id="settings-password-requirements">{{ translate .Language "web.password.requirements" }}</p>
             </div>
             <div class="form-group">
-                <label for="confirmPassword">Confirm Password</label>
+                <label for="confirmPassword">{{ translate .Language "web.password.confirm" }}</label>
                 <input type="password" id="confirmPassword" name="confirmPassword" autocomplete="new-password" minlength="8" maxlength="72" required>
             </div>
-            <button type="submit" class="btn btn-primary">Change Password</button>
+            <button type="submit" class="btn btn-primary">{{ translate .Language "web.password.submit" }}</button>
         </form>
     </div>
     {{ end }}
 
     {{ if eq .BodyData.ActiveTab "security" }}
     <div class="settings-tab-content active">
-        <h2>Two-Factor Authentication</h2>
+        <h2>{{ translate .Language "web.totp.title" }}</h2>
         {{ if .BodyData.Error }}
         <div class="alert alert-error" role="alert">{{ .BodyData.Error }}</div>
         {{ end }}
 
         {{ if .BodyData.TOTPBackupCodes }}
         <div class="alert alert-warning" role="status">
-            <strong>Two-factor authentication is enabled.</strong>
-            Save these backup codes now. Each code works once and they will not be shown again.
+            <strong>{{ translate .Language "web.totp.enabled" }}.</strong>
+            {{ translate .Language "web.totp.backupCodes.once" }}
         </div>
-        <ul class="backup-codes" aria-label="Backup codes">
+        <ul class="backup-codes" aria-label="{{ translate .Language "web.totp.backupCodes" }}">
             {{ range .BodyData.TOTPBackupCodes }}<li><code>{{ . }}</code></li>{{ end }}
         </ul>
         {{ else if .BodyData.TOTPEnabled }}
-        <p><span class="badge badge-success">Enabled</span></p>
-        <p>{{ .BodyData.TOTPRemainingBackupCodes }} backup codes remain.</p>
+        <p><span class="badge badge-success">{{ translate .Language "web.totp.enabled" }}</span></p>
+        <p>{{ translate .Language "web.totp.backupCodes.remaining" (printf "%d" .BodyData.TOTPRemainingBackupCodes) }}</p>
         <form method="POST" action="/settings/totp/disable">
             <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
             <div class="form-group">
-                <label for="totp-disable-password">Confirm your password to disable two-factor authentication</label>
+                <label for="totp-disable-password">{{ translate .Language "web.totp.passwordLabel" }}</label>
                 <input type="password" id="totp-disable-password" name="password" autocomplete="current-password" required>
             </div>
-            <button type="submit" class="btn btn-danger">Disable Two-Factor Authentication</button>
+            <button type="submit" class="btn btn-danger">{{ translate .Language "web.totp.disable" }}</button>
         </form>
         {{ else if .BodyData.TOTPSetup }}
-        <p>Scan this QR code with your authenticator app, then enter the 6-digit code it displays.</p>
-        <img src="{{ .BodyData.TOTPSetup.QRDataURI }}" alt="QR code for setting up two-factor authentication" width="200" height="200">
-        <p>Manual setup key: <code>{{ .BodyData.TOTPSetup.Secret }}</code></p>
+        <p>{{ translate .Language "web.totp.scanQr" }}</p>
+        <img src="{{ safeURL .BodyData.TOTPSetup.QRDataURI }}" alt="{{ translate .Language "web.totp.qr.alt" }}" width="200" height="200">
+        <p>{{ translate .Language "web.totp.manualKey" }} <code>{{ .BodyData.TOTPSetup.Secret }}</code></p>
         <form method="POST" action="/settings/totp/confirm">
             <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
             <input type="hidden" name="secret" value="{{ .BodyData.TOTPSetup.Secret }}">
             <div class="form-group">
-                <label for="totp-confirm-code">Authentication code</label>
+                <label for="totp-confirm-code">{{ translate .Language "web.totp.codeLabel" }}</label>
                 <input type="text" id="totp-confirm-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" required autofocus>
             </div>
-            <button type="submit" class="btn btn-primary">Enable Two-Factor Authentication</button>
+            <button type="submit" class="btn btn-primary">{{ translate .Language "web.totp.verifyAndEnable" }}</button>
         </form>
         {{ else }}
-        <p>Add an authenticator app as a second step when signing in.</p>
+        <p>{{ translate .Language "web.totp.disabled" }}</p>
         <form method="POST" action="/settings/totp/setup">
             <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
-            <button type="submit" class="btn btn-primary">Set Up Two-Factor Authentication</button>
+            <button type="submit" class="btn btn-primary">{{ translate .Language "web.totp.enable" }}</button>
         </form>
         {{ end }}
     </div>
@@ -108,21 +120,21 @@
 
     {{ if eq .BodyData.ActiveTab "api-keys" }}
     <div class="settings-tab-content active">
-        <h2>API Keys</h2>
+        <h2>{{ translate .Language "web.apikeys.title" }}</h2>
         {{ if .BodyData.NewApiKey }}
         <div class="alert alert-warning">
-            <strong>New API key created.</strong> Copy it now — it won't be shown again:<br>
+            <strong>{{ translate .Language "web.apikeys.created" }}</strong><br>
             <code>{{ .BodyData.NewApiKey }}</code>
         </div>
         {{ end }}
         <table class="data-table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Key</th>
-                    <th>Created</th>
-                    <th>Last Used</th>
-                    <th>Actions</th>
+                    <th>{{ translate .Language "web.apikeys.table.name" }}</th>
+                    <th>{{ translate .Language "web.apikeys.table.prefix" }}</th>
+                    <th>{{ translate .Language "web.apikeys.table.created" }}</th>
+                    <th>{{ translate .Language "web.apikeys.table.last.used" }}</th>
+                    <th>{{ translate .Language "web.apikeys.table.actions" }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -135,70 +147,69 @@
                     <td>
                         <form method="POST" action="/settings/api-keys/{{ .ID }}/delete">
                             <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
-                            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                            <button type="submit" class="btn btn-sm btn-danger">{{ translate $.Language "web.apikeys.delete" }}</button>
                         </form>
                     </td>
                 </tr>
                 {{ else }}
-                <tr><td colspan="5" class="empty-state">No API keys.</td></tr>
+                <tr><td colspan="5" class="empty-state">{{ translate $.Language "web.apikeys.empty" }}</td></tr>
                 {{ end }}
             </tbody>
         </table>
         <form method="POST" action="/settings/api-keys" class="inline-form">
             <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
-            <input type="text" name="name" placeholder="Key name" required>
-            <button type="submit" class="btn btn-primary">Create API Key</button>
+            <input type="text" name="name" placeholder="{{ translate .Language "web.apikeys.name.placeholder" }}" required>
+            <button type="submit" class="btn btn-primary">{{ translate .Language "web.apikeys.create" }}</button>
         </form>
     </div>
     {{ end }}
 
     {{ if eq .BodyData.ActiveTab "notifications" }}
     <div class="settings-tab-content active">
-        <h2>Notification Preferences</h2>
+        <h2>{{ translate .Language "web.profile.notif.prefs" }}</h2>
         <form method="POST" action="/settings/notifications">
             <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
             <div class="form-group">
                 <label>
                     <input type="checkbox" name="email_notifications" value="on" {{ if .BodyData.Profile.EmailNotificationsEnabled }}checked{{ end }}>
-                    Email notifications
+                    {{ translate .Language "web.profile.notif.email" }}
                 </label>
             </div>
             <div class="form-group">
                 <label>
                     <input type="checkbox" name="push_notifications" value="on" {{ if .BodyData.Profile.PushNotificationsEnabled }}checked{{ end }}>
-                    Push notifications
+                    {{ translate .Language "web.profile.notif.push" }}
                 </label>
             </div>
-            <button type="submit" class="btn btn-primary">Save Notifications</button>
+            <button type="submit" class="btn btn-primary">{{ translate .Language "web.profile.notif.save" }}</button>
         </form>
     </div>
     {{ end }}
 
     {{ if eq .BodyData.ActiveTab "appearance" }}
     <div class="settings-tab-content active">
-        <h2>Appearance</h2>
+        <h2>{{ translate .Language "web.settings.tab.appearance" }}</h2>
         <form method="POST" action="/settings/preferences">
             <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
             <div class="form-group">
-                <label for="theme">Theme</label>
+                <label for="theme">{{ translate .Language "web.sidebar.themes" }}</label>
                 <select id="theme" name="theme">
-                    <option value="light" {{ if eq .BodyData.Theme "light" }}selected{{ end }}>Light</option>
-                    <option value="dark" {{ if eq .BodyData.Theme "dark" }}selected{{ end }}>Dark</option>
-                    <option value="auto" {{ if eq .BodyData.Theme "auto" }}selected{{ end }}>Auto</option>
+					{{ range .BodyData.ThemeOptions }}<option value="{{ .Value }}"{{ if .Selected }} selected{{ end }}>{{ .Label }}</option>{{ end }}
                 </select>
             </div>
             <div class="form-group">
-                <label for="language">Language</label>
-                <input type="text" id="language" name="language" value="{{ .BodyData.Language }}">
+                <label for="language">{{ translate .Language "web.sidebar.language" }}</label>
+				<select id="language" name="language">
+					{{ range .BodyData.LanguageOptions }}<option value="{{ .Value }}"{{ if .Selected }} selected{{ end }}>{{ .Label }}</option>{{ end }}
+				</select>
             </div>
             <div class="form-group">
-                <label for="layout">Layout</label>
+                <label for="layout">{{ translate .Language "web.sidebar.layout" }}</label>
                 <select id="layout" name="layout">
-                    <option value="sidebar" {{ if eq .BodyData.Layout "sidebar" }}selected{{ end }}>Sidebar</option>
-                    <option value="topbar" {{ if eq .BodyData.Layout "topbar" }}selected{{ end }}>Topbar</option>
+					{{ range .BodyData.LayoutOptions }}<option value="{{ .Value }}"{{ if .Selected }} selected{{ end }}>{{ .Label }}</option>{{ end }}
                 </select>
             </div>
-            <button type="submit" class="btn btn-primary">Save Preferences</button>
+            <button type="submit" class="btn btn-primary">{{ translate .Language "web.profile.notif.save" }}</button>
         </form>
     </div>
     {{ end }}

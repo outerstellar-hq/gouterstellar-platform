@@ -1,0 +1,34 @@
+{{ define "contact_form" }}
+<form method="POST" action="{{ if .Editing }}/contacts/{{ .Contact.SyncID }}/update{{ else }}/contacts{{ end }}" class="contact-form">
+    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+    <div class="form-group">
+        <label for="contact-form-name">{{ translate .Language "web.contacts.form.name" }}</label>
+        <input type="text" id="contact-form-name" name="name" value="{{ .Contact.Name }}" required>
+    </div>
+    <div class="form-group">
+        <label for="contact-form-emails">{{ translate .Language "web.contacts.form.emails" }}</label>
+        <input type="text" id="contact-form-emails" name="emails" value="{{ range $i, $v := .Contact.Emails }}{{ if $i }}, {{ end }}{{ $v }}{{ end }}">
+    </div>
+    <div class="form-group">
+        <label for="contact-form-phones">{{ translate .Language "web.contacts.form.phones" }}</label>
+        <input type="text" id="contact-form-phones" name="phones" value="{{ range $i, $v := .Contact.Phones }}{{ if $i }}, {{ end }}{{ $v }}{{ end }}">
+    </div>
+    <div class="form-group">
+        <label for="contact-form-social">{{ translate .Language "web.contacts.form.social" }}</label>
+        <input type="text" id="contact-form-social" name="socialMedia" value="{{ range $i, $v := .Contact.Social }}{{ if $i }}, {{ end }}{{ $v }}{{ end }}">
+    </div>
+    <div class="form-group">
+        <label for="contact-form-company">{{ translate .Language "web.contacts.form.company" }}</label>
+        <input type="text" id="contact-form-company" name="company" value="{{ .Contact.Company }}">
+    </div>
+    <div class="form-group">
+        <label for="contact-form-address">{{ translate .Language "web.contacts.form.address" }}</label>
+        <input type="text" id="contact-form-address" name="companyAddress" value="{{ .Contact.CompanyAddress }}">
+    </div>
+    <div class="form-group">
+        <label for="contact-form-department">{{ translate .Language "web.contacts.form.department" }}</label>
+        <input type="text" id="contact-form-department" name="department" value="{{ .Contact.Department }}">
+    </div>
+    <button type="submit" class="btn btn-primary">{{ translate .Language "web.contacts.form.save" }}</button>
+</form>
+{{ end }}

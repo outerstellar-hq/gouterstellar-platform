@@ -1,12 +1,12 @@
 {{ define "pagination" }}
 {{ if or .HasPrevious .HasNext }}
-<nav class="pagination" aria-label="Pagination">
+<nav class="pagination" aria-label="{{ translate .Language "web.pagination.label" }}">
     {{ if .HasPrevious }}
-    <a href="?page={{ sub .CurrentPage 1 }}" class="btn btn-sm">&laquo; Previous</a>
+    <a href="{{ if .PreviousURL }}{{ .PreviousURL }}{{ else }}?page={{ sub .CurrentPage 1 }}{{ end }}" class="btn btn-sm">&laquo; {{ translate .Language "web.admin.pagination.previous" }}</a>
     {{ end }}
-    <span class="pagination-info">Page {{ .CurrentPage }} of {{ .TotalPages }}</span>
+    <span class="pagination-info">{{ translate .Language "web.pagination.page" }} {{ .CurrentPage }} {{ translate .Language "web.messages.of" }} {{ .TotalPages }}</span>
     {{ if .HasNext }}
-    <a href="?page={{ add .CurrentPage 1 }}" class="btn btn-sm">Next &raquo;</a>
+    <a href="{{ if .NextURL }}{{ .NextURL }}{{ else }}?page={{ add .CurrentPage 1 }}{{ end }}" class="btn btn-sm">{{ translate .Language "web.admin.pagination.next" }} &raquo;</a>
     {{ end }}
 </nav>
 {{ end }}
