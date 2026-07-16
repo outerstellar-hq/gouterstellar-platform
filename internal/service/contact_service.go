@@ -16,10 +16,10 @@ import (
 )
 
 type ContactService struct {
-	repo               persistence.ContactRepository
-	outbox             persistence.OutboxRepository
-	txMgr              TransactionRunner
-	eventPub           EventPublisher
+	repo                persistence.ContactRepository
+	outbox              persistence.OutboxRepository
+	txMgr               TransactionRunner
+	eventPub            EventPublisher
 	notificationService *NotificationService
 }
 
@@ -31,10 +31,10 @@ func NewContactService(
 	notificationService *NotificationService,
 ) *ContactService {
 	return &ContactService{
-		repo:               repo,
-		outbox:             outbox,
-		txMgr:              txMgr,
-		eventPub:           eventPub,
+		repo:                repo,
+		outbox:              outbox,
+		txMgr:               txMgr,
+		eventPub:            eventPub,
 		notificationService: notificationService,
 	}
 }
@@ -59,6 +59,29 @@ func (s *ContactService) ListContacts(ctx context.Context, limit, offset int32) 
 
 func (s *ContactService) CountContacts(ctx context.Context) (int64, error) {
 	return s.repo.CountContacts(ctx)
+}
+
+func (s *ContactService) ListDeletedContacts(ctx context.Context, limit, offset int32) ([]model.ContactSummary, int64, error) {
+	total, err := s.repo.CountDeletedContacts(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count deleted contacts: %w", err)
+	}
+
+	contacts, err := s.repo.ListDeletedContacts(ctx, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list deleted contacts: %w", err)
+	}
+
+	subs, err := loadContactSubs(ctx, s.repo, contacts)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	summaries := make([]model.ContactSummary, len(contacts))
+	for i, c := range contacts {
+		summaries[i] = pltContactToSummary(c, subs.Emails[c.ID], subs.Phones[c.ID], subs.Socials[c.ID])
+	}
+	return summaries, total, nil
 }
 
 // SearchContacts returns one page of non-deleted contacts whose name or company
@@ -175,14 +198,28 @@ func (s *ContactService) UpdateContact(ctx context.Context, contact *model.Store
 func (s *ContactService) DeleteContact(ctx context.Context, syncID string) error {
 	err := s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
 		txRepo := s.repo.WithTx(tx)
-		contact, err := txRepo.FindBySyncID(ctx, syncID)
+		deleted, err := txRepo.SoftDeleteContact(ctx, syncID)
 		if err != nil {
-			return fmt.Errorf("find contact for delete: %w", err)
-		}
-		if _, err := txRepo.SoftDeleteContact(ctx, syncID); err != nil {
 			return fmt.Errorf("delete contact: %w", err)
 		}
-		return s.saveContactOutboxEntryTx(ctx, tx, txRepo, contact)
+		return s.saveContactOutboxEntryTx(ctx, tx, txRepo, deleted)
+	})
+	if err != nil {
+		return err
+	}
+
+	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "contacts")
+	return nil
+}
+
+func (s *ContactService) RestoreContact(ctx context.Context, syncID string) error {
+	err := s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
+		txRepo := s.repo.WithTx(tx)
+		restored, err := txRepo.RestoreContact(ctx, syncID)
+		if err != nil {
+			return fmt.Errorf("restore contact: %w", err)
+		}
+		return s.saveContactOutboxEntryTx(ctx, tx, txRepo, restored)
 	})
 	if err != nil {
 		return err

@@ -52,9 +52,56 @@ func buildOpenAPISpec() map[string]interface{} {
 			{"url": "/api/v1", "description": "Current server"},
 		},
 		"paths": map[string]interface{}{
+			"/polls": map[string]interface{}{
+				"get": op("List open polls", false, ok("Open poll list")),
+				"post": op("Create a poll", true, map[string]interface{}{
+					"201": map[string]interface{}{"description": "Poll created"},
+					"400": map[string]interface{}{"description": "Invalid poll"},
+				}),
+			},
+			"/polls/{syncId}": map[string]interface{}{
+				"get": op("Get poll results", false, map[string]interface{}{
+					"200": map[string]interface{}{"description": "Poll results"},
+					"404": map[string]interface{}{"description": "Poll not found"},
+				}),
+				"delete": op("Delete a poll as its creator", true, map[string]interface{}{
+					"204": map[string]interface{}{"description": "Poll deleted"},
+					"403": map[string]interface{}{"description": "Only the creator may delete the poll"},
+					"404": map[string]interface{}{"description": "Poll not found"},
+				}),
+			},
+			"/polls/{syncId}/vote": map[string]interface{}{
+				"post": op("Cast a poll vote", true, map[string]interface{}{
+					"200": map[string]interface{}{"description": "Updated poll results"},
+					"400": map[string]interface{}{"description": "Invalid option"},
+					"404": map[string]interface{}{"description": "Poll not found"},
+					"409": map[string]interface{}{"description": "Poll is closed or single-choice vote conflicts"},
+				}),
+				"delete": op("Remove a poll vote", true, map[string]interface{}{
+					"204": map[string]interface{}{"description": "Vote removed"},
+				}),
+			},
+			"/polls/{syncId}/close": map[string]interface{}{
+				"post": op("Close a poll as its creator", true, map[string]interface{}{
+					"200": map[string]interface{}{"description": "Poll closed"},
+					"403": map[string]interface{}{"description": "Only the creator may close the poll"},
+					"404": map[string]interface{}{"description": "Poll not found"},
+				}),
+			},
+			"/messages/{syncId}/vote": map[string]interface{}{
+				"get": op("Get a message's vote score", false, ok("Vote score")),
+				"post": op("Create, toggle, or flip the current user's message vote", true, map[string]interface{}{
+					"200": map[string]interface{}{"description": "Updated vote score"},
+					"400": map[string]interface{}{"description": "Direction must be 1 or -1"},
+					"404": map[string]interface{}{"description": "Message not found"},
+				}),
+				"delete": op("Remove the current user's message vote", true, map[string]interface{}{
+					"204": map[string]interface{}{"description": "Vote removed"},
+				}),
+			},
 			// Sync
 			"/sync": map[string]interface{}{
-				"get": op("Pull message changes since timestamp", true, ok("Sync pull response")),
+				"get":  op("Pull message changes since timestamp", true, ok("Sync pull response")),
 				"post": op("Push message changes", true, ok("Sync push response")),
 			},
 			"/sync/contacts": map[string]interface{}{
@@ -68,9 +115,32 @@ func buildOpenAPISpec() map[string]interface{} {
 					"401": map[string]interface{}{"description": "Invalid credentials"},
 				}),
 			},
+			"/auth/totp/verify": map[string]interface{}{
+				"post": op("Verify a TOTP or backup code and create a session", false, map[string]interface{}{
+					"200": map[string]interface{}{"description": "TOTP verified"},
+					"401": map[string]interface{}{"description": "Invalid, expired, or locked challenge"},
+				}),
+			},
+			"/auth/totp/setup": map[string]interface{}{
+				"post": op("Create an authenticator enrollment secret", true, ok("TOTP setup")),
+			},
+			"/auth/totp/confirm": map[string]interface{}{
+				"post": op("Verify and enable authenticator enrollment", true, map[string]interface{}{
+					"201": map[string]interface{}{"description": "TOTP enabled with one-time backup codes"},
+					"400": map[string]interface{}{"description": "Invalid code"},
+				}),
+			},
+			"/auth/totp/disable": map[string]interface{}{
+				"post": op("Disable TOTP after password confirmation", true, map[string]interface{}{
+					"200": map[string]interface{}{"description": "TOTP disabled"},
+					"401": map[string]interface{}{"description": "Invalid password"},
+				}),
+			},
 			"/auth/register": map[string]interface{}{
 				"post": op("Register a new user account", false, map[string]interface{}{
 					"201": map[string]interface{}{"description": "Account created"},
+					"400": map[string]interface{}{"description": "Invalid username or password"},
+					"403": map[string]interface{}{"description": "Registration disabled"},
 					"409": map[string]interface{}{"description": "Username taken"},
 				}),
 			},
@@ -148,6 +218,30 @@ func buildOpenAPISpec() map[string]interface{} {
 			"/admin/audit/export": map[string]interface{}{
 				"get": op("Export audit log as CSV (admin only)", true, map[string]interface{}{
 					"200": map[string]interface{}{"description": "CSV download"},
+					"403": map[string]interface{}{"description": "Forbidden"},
+				}),
+			},
+			"/admin/export/message/csv": map[string]interface{}{
+				"get": op("Export messages as CSV (admin only)", true, map[string]interface{}{
+					"200": map[string]interface{}{"description": "CSV download"},
+					"403": map[string]interface{}{"description": "Forbidden"},
+				}),
+			},
+			"/admin/export/message/json": map[string]interface{}{
+				"get": op("Export messages as JSON (admin only)", true, map[string]interface{}{
+					"200": map[string]interface{}{"description": "JSON download"},
+					"403": map[string]interface{}{"description": "Forbidden"},
+				}),
+			},
+			"/admin/export/contact/csv": map[string]interface{}{
+				"get": op("Export contacts as CSV (admin only)", true, map[string]interface{}{
+					"200": map[string]interface{}{"description": "CSV download"},
+					"403": map[string]interface{}{"description": "Forbidden"},
+				}),
+			},
+			"/admin/export/contact/json": map[string]interface{}{
+				"get": op("Export contacts as JSON (admin only)", true, map[string]interface{}{
+					"200": map[string]interface{}{"description": "JSON download"},
 					"403": map[string]interface{}{"description": "Forbidden"},
 				}),
 			},

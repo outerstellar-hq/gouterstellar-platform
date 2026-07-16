@@ -8,6 +8,14 @@ type MessagesPage struct {
 	Years      []int
 }
 
+type TrashPage struct {
+	Messages     []MessageItem
+	Contacts     []ContactItem
+	MessageTotal int64
+	ContactTotal int64
+	DeletedTotal int64
+}
+
 type MessageItem struct {
 	SyncID       string
 	Author       string
@@ -18,6 +26,49 @@ type MessageItem struct {
 	Version      int64
 	HasConflict  bool
 	Deleted      bool
+	Upvotes      int32
+	Downvotes    int32
+	NetScore     int32
+	HasUpvoted   bool
+	HasDownvoted bool
+	CSRFToken    string
+}
+
+type MessageEditPage struct {
+	SyncID  string
+	Author  string
+	Content string
+	Error   string
+}
+
+type VoteControls struct {
+	SyncID       string
+	Upvotes      int32
+	Downvotes    int32
+	NetScore     int32
+	HasUpvoted   bool
+	HasDownvoted bool
+	CSRFToken    string
+}
+
+type PollCard struct {
+	SyncID        string
+	Question      string
+	MultiChoice   bool
+	Closed        bool
+	DeadlineLabel string
+	TotalVotes    int32
+	Options       []PollOption
+	CSRFToken     string
+}
+
+type PollOption struct {
+	ID        int64
+	Text      string
+	VoteCount int32
+	Percent   int32
+	Selected  bool
+	CanVote   bool
 }
 
 type ContactsPage struct {
@@ -46,10 +97,15 @@ type ContactItem struct {
 }
 
 type AuthPage struct {
-	ReturnTo           string
-	Error              string
-	CSRFToken          string
-	GoogleLoginEnabled bool
+	ReturnTo            string
+	Username            string
+	Error               string
+	CSRFToken           string
+	GoogleLoginEnabled  bool
+	RegistrationEnabled bool
+	RegisterMode        bool
+	TOTPRequired        bool
+	PartialToken        string
 }
 
 type AdminUsersPage struct {
@@ -58,11 +114,13 @@ type AdminUsersPage struct {
 }
 
 type UserItem struct {
-	ID       string
-	Username string
-	Email    string
-	Role     string
-	Enabled  bool
+	ID                  string
+	Username            string
+	Email               string
+	Role                string
+	Enabled             bool
+	FailedLoginAttempts int32
+	IsLocked            bool
 }
 
 type AdminAuditPage struct {
@@ -84,6 +142,10 @@ type NotificationsPage struct {
 	UnreadCount   int
 }
 
+type NotificationBell struct {
+	UnreadCount int64
+}
+
 type NotificationItem struct {
 	ID        string
 	Title     string
@@ -94,13 +156,23 @@ type NotificationItem struct {
 }
 
 type SettingsPage struct {
-	ActiveTab string
-	Profile   ProfileData
-	ApiKeys   []ApiKeyItem
-	Theme     string
-	Language  string
-	Layout    string
-	NewApiKey string
+	ActiveTab                string
+	Profile                  ProfileData
+	ApiKeys                  []ApiKeyItem
+	Theme                    string
+	Language                 string
+	Layout                   string
+	NewApiKey                string
+	TOTPEnabled              bool
+	TOTPRemainingBackupCodes int
+	TOTPSetup                *TOTPSetupData
+	TOTPBackupCodes          []string
+	Error                    string
+}
+
+type TOTPSetupData struct {
+	Secret    string
+	QRDataURI string
 }
 
 // SettingsSessionsPage is the view model for the active-sessions management page.
@@ -112,10 +184,10 @@ type SettingsSessionsPage struct {
 // is a short prefix of the stored token hash, safe to render; TokenHash carries
 // the full hash so the revoke form can address the session.
 type SessionItem struct {
-	TokenHash        string
-	MaskedTokenHash  string
-	CreatedAt        string
-	ExpiresAt        string
+	TokenHash       string
+	MaskedTokenHash string
+	CreatedAt       string
+	ExpiresAt       string
 }
 
 type ProfileData struct {

@@ -19,6 +19,8 @@ type MessageRepository interface {
 	SearchMessages(ctx context.Context, query string, limit, offset int32) ([]db.PltMessage, error)
 	CountSearchMessages(ctx context.Context, query string) (int64, error)
 	CountMessages(ctx context.Context) (int64, error)
+	ListDeletedMessages(ctx context.Context, limit, offset int32) ([]db.PltMessage, error)
+	CountDeletedMessages(ctx context.Context) (int64, error)
 	FindBySyncID(ctx context.Context, syncID string) (db.PltMessage, error)
 	CreateServerMessage(ctx context.Context, syncID, author, content string, updatedAtEpochMs int64) (db.PltMessage, error)
 	CreateLocalMessage(ctx context.Context, syncID, author, content string, updatedAtEpochMs int64) (db.PltMessage, error)
@@ -38,11 +40,40 @@ type MessageRepository interface {
 	WithTx(tx pgx.Tx) MessageRepository
 }
 
+type VoteRepository interface {
+	LockMessage(ctx context.Context, syncID string) error
+	FindVote(ctx context.Context, userID uuid.UUID, syncID string) (db.PltMessageVote, error)
+	CreateVote(ctx context.Context, userID uuid.UUID, syncID string, direction int16) error
+	UpdateVote(ctx context.Context, userID uuid.UUID, syncID string, direction int16) error
+	DeleteVote(ctx context.Context, userID uuid.UUID, syncID string) error
+	ListScores(ctx context.Context, syncIDs []string, userID *uuid.UUID) (map[string]model.VoteScore, error)
+	WithTx(tx pgx.Tx) VoteRepository
+}
+
+type PollRepository interface {
+	CreatePoll(ctx context.Context, syncID string, creatorID uuid.UUID, question string, multiChoice bool, deadline *time.Time) (db.PltPoll, error)
+	CreateOption(ctx context.Context, pollID int64, position int16, optionText string) (db.PltPollOption, error)
+	FindBySyncID(ctx context.Context, syncID string) (db.PltPoll, error)
+	LockBySyncID(ctx context.Context, syncID string) (db.PltPoll, error)
+	ListOptions(ctx context.Context, pollID int64) ([]db.PltPollOption, error)
+	FindOption(ctx context.Context, pollID, optionID int64) (db.PltPollOption, error)
+	CastVote(ctx context.Context, pollID, optionID int64, userID uuid.UUID) error
+	RemoveVote(ctx context.Context, pollID, optionID int64, userID uuid.UUID) error
+	ListUserVotes(ctx context.Context, pollID int64, userID uuid.UUID) ([]int64, error)
+	ListVoteCounts(ctx context.Context, pollID int64) (map[int64]int32, error)
+	Close(ctx context.Context, pollID int64) error
+	Delete(ctx context.Context, pollID int64) error
+	ListOpen(ctx context.Context, limit, offset int32) ([]db.ListOpenPollsRow, error)
+	WithTx(tx pgx.Tx) PollRepository
+}
+
 type ContactRepository interface {
 	ListContacts(ctx context.Context, limit, offset int32) ([]db.PltContact, error)
 	SearchContacts(ctx context.Context, query string, limit, offset int32) ([]db.PltContact, error)
 	CountSearchContacts(ctx context.Context, query string) (int64, error)
 	CountContacts(ctx context.Context) (int64, error)
+	ListDeletedContacts(ctx context.Context, limit, offset int32) ([]db.PltContact, error)
+	CountDeletedContacts(ctx context.Context) (int64, error)
 	ListDirtyContacts(ctx context.Context) ([]db.PltContact, error)
 	FindBySyncID(ctx context.Context, syncID string) (db.PltContact, error)
 	FindChangesSince(ctx context.Context, since int64) ([]db.PltContact, error)
@@ -99,6 +130,9 @@ type UserRepository interface {
 	UpdateNotificationPreferences(ctx context.Context, id uuid.UUID, emailEnabled, pushEnabled bool) (db.PltUser, error)
 	UpdatePreferences(ctx context.Context, id uuid.UUID, language, theme, layout *string) (db.PltUser, error)
 	SeedAdminUser(ctx context.Context, id uuid.UUID, username, email, passwordHash string) (db.PltUser, error)
+	IncrementFailedLoginAttempts(ctx context.Context, id uuid.UUID) (int32, error)
+	ResetLoginFailures(ctx context.Context, id uuid.UUID) error
+	LockUserUntil(ctx context.Context, id uuid.UUID, until time.Time) error
 }
 
 type SessionRepository interface {
@@ -110,6 +144,18 @@ type SessionRepository interface {
 	DeleteByUserID(ctx context.Context, userID uuid.UUID) error
 	DeleteExpired(ctx context.Context) (int64, error)
 	ListForUser(ctx context.Context, userID uuid.UUID) ([]db.ListSessionsForUserRow, error)
+}
+
+type TOTPRepository interface {
+	CreateChallenge(ctx context.Context, tokenHash string, userID uuid.UUID, expiresAt time.Time) error
+	TakeChallengeAttempt(ctx context.Context, tokenHash string, maxAttempts int32) (db.PltTotpChallenge, error)
+	DeleteChallenge(ctx context.Context, tokenHash string) (bool, error)
+	DeleteExpiredChallenges(ctx context.Context) (int64, error)
+	Enable(ctx context.Context, userID uuid.UUID, secret, backupCodes string) error
+	Disable(ctx context.Context, userID uuid.UUID) error
+	IncrementFailedAttempts(ctx context.Context, userID uuid.UUID) (int32, error)
+	ResetFailedAttempts(ctx context.Context, userID uuid.UUID) error
+	ReplaceBackupCodes(ctx context.Context, userID uuid.UUID, expected string, replacement *string) (bool, error)
 }
 
 type ApiKeyRepository interface {

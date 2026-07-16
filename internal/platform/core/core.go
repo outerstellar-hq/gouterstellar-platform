@@ -101,6 +101,7 @@ func (e *Extension) Contribute(ctx *extplatform.ContributionContext) error {
 	// --- Navigation ---
 	ctx.Navigation.Add("Home", "/", "house")
 	ctx.Navigation.Add("Messages", "/messages", "message-square")
+	ctx.Navigation.Add("Trash", "/messages/trash", "trash")
 	ctx.Navigation.Add("Contacts", "/contacts", "users")
 	ctx.Navigation.Add("Search", "/search", "search")
 	ctx.Navigation.Add("Settings", "/settings", "gear")

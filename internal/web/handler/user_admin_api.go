@@ -25,12 +25,12 @@ func NewUserAdminAPI(secSvc *service.SecurityService) *UserAdminAPI {
 
 // ContributeRoutes registers the user admin API routes (bearer auth applied by builder).
 func (h *UserAdminAPI) ContributeRoutes(ctx *extplatform.ContributionContext) error {
-	ctx.Routes.API(http.MethodGet, "/api/v1/users", "List users", http.HandlerFunc(h.ListUsers))
-	ctx.Routes.API(http.MethodGet, "/api/v1/users/count", "Count users", http.HandlerFunc(h.CountUsers))
-	ctx.Routes.API(http.MethodPut, "/api/v1/users/{id}/enabled", "Set user enabled", http.HandlerFunc(h.SetEnabled))
-	ctx.Routes.API(http.MethodPut, "/api/v1/users/{id}/role", "Set user role", http.HandlerFunc(h.SetRole))
-	ctx.Routes.API(http.MethodGet, "/api/v1/admin/users/export", "Export users CSV", http.HandlerFunc(h.ExportUsersCSV))
-	ctx.Routes.API(http.MethodGet, "/api/v1/admin/audit/export", "Export audit CSV", http.HandlerFunc(h.ExportAuditCSV))
+	ctx.Routes.API(http.MethodGet, "/api/v1/users", "List users", requireAdminAPI(http.HandlerFunc(h.ListUsers)))
+	ctx.Routes.API(http.MethodGet, "/api/v1/users/count", "Count users", requireAdminAPI(http.HandlerFunc(h.CountUsers)))
+	ctx.Routes.API(http.MethodPut, "/api/v1/users/{id}/enabled", "Set user enabled", requireAdminAPI(http.HandlerFunc(h.SetEnabled)))
+	ctx.Routes.API(http.MethodPut, "/api/v1/users/{id}/role", "Set user role", requireAdminAPI(http.HandlerFunc(h.SetRole)))
+	ctx.Routes.API(http.MethodGet, "/api/v1/admin/users/export", "Export users CSV", requireAdminAPI(http.HandlerFunc(h.ExportUsersCSV)))
+	ctx.Routes.API(http.MethodGet, "/api/v1/admin/audit/export", "Export audit CSV", requireAdminAPI(http.HandlerFunc(h.ExportAuditCSV)))
 	return nil
 }
 
@@ -129,7 +129,9 @@ func (h *UserAdminAPI) ExportUsersCSV(w http.ResponseWriter, r *http.Request) {
 		rows[i] = []string{u.Username, u.Email, string(u.Role), strconv.FormatBool(u.Enabled)}
 	}
 
-	writeCSV(w, "users.csv", headers, rows)
+	if err := writeCSV(w, "users.csv", headers, rows); err != nil {
+		handleServiceError(w, err)
+	}
 }
 
 func (h *UserAdminAPI) ExportAuditCSV(w http.ResponseWriter, r *http.Request) {
@@ -157,5 +159,7 @@ func (h *UserAdminAPI) ExportAuditCSV(w http.ResponseWriter, r *http.Request) {
 		rows[i] = []string{actor, target, e.Action, detail, e.CreatedAt.Format("2006-01-02 15:04:05")}
 	}
 
-	writeCSV(w, "audit_log.csv", headers, rows)
+	if err := writeCSV(w, "audit_log.csv", headers, rows); err != nil {
+		handleServiceError(w, err)
+	}
 }

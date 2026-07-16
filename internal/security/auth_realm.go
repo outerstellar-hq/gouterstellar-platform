@@ -2,8 +2,6 @@ package security
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 
 	"github.com/google/uuid"
 
@@ -46,10 +44,7 @@ func NewSessionRealm(lookup SessionLookupFunc) AuthRealm {
 func (r *sessionRealm) Name() string { return "session" }
 
 func (r *sessionRealm) Authenticate(ctx context.Context, token string) AuthResult {
-	hash := sha256.Sum256([]byte(token))
-	tokenHash := hex.EncodeToString(hash[:])
-
-	result := r.lookup(ctx, tokenHash)
+	result := r.lookup(ctx, token)
 
 	switch v := result.(type) {
 	case model.SessionActive:

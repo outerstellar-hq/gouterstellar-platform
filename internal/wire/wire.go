@@ -28,6 +28,8 @@ import (
 // value rather than eleven loose parameters.
 type repos struct {
 	messageRepo       persistence.MessageRepository
+	voteRepo          persistence.VoteRepository
+	pollRepo          persistence.PollRepository
 	userRepo          persistence.UserRepository
 	sessionRepo       persistence.SessionRepository
 	contactRepo       persistence.ContactRepository
@@ -38,6 +40,7 @@ type repos struct {
 	deviceTokenRepo   persistence.DeviceTokenRepository
 	passwordResetRepo persistence.PasswordResetRepository
 	oauthRepo         persistence.OAuthRepository
+	totpRepo          persistence.TOTPRepository
 }
 
 // buildRepos constructs all repository implementations from the pool. The sync
@@ -46,6 +49,8 @@ type repos struct {
 func buildRepos(pool *pgxpool.Pool) repos {
 	return repos{
 		messageRepo:       persistence.NewMessageRepository(pool),
+		voteRepo:          persistence.NewVoteRepository(pool),
+		pollRepo:          persistence.NewPollRepository(pool),
 		userRepo:          persistence.NewUserRepository(pool),
 		sessionRepo:       persistence.NewSessionRepository(pool),
 		contactRepo:       persistence.NewContactRepository(pool),
@@ -56,6 +61,7 @@ func buildRepos(pool *pgxpool.Pool) repos {
 		deviceTokenRepo:   persistence.NewDeviceTokenRepository(pool),
 		passwordResetRepo: persistence.NewPasswordResetRepository(pool),
 		oauthRepo:         persistence.NewOAuthRepository(pool),
+		totpRepo:          persistence.NewTOTPRepository(pool),
 	}
 }
 
@@ -63,21 +69,24 @@ func buildRepos(pool *pgxpool.Pool) repos {
 // the config and repos. Handler construction (buildApp) reads from this struct
 // so the handler layer never re-derives services itself.
 type services struct {
-	messageSvc        *service.MessageService
-	contactSvc        *service.ContactService
-	securitySvc       *service.SecurityService
-	notificationSvc   *service.NotificationService
-	outboxProcessor   *service.OutboxProcessor
-	passwordResetSvc  *service.PasswordResetService
-	apiKeySvc         *security.ApiKeyService
-	oauthSvc          *security.OAuthService
-	googleProvider    *security.GoogleOAuthProvider
-	realms            []security.AuthRealm
-	emailSvc          service.EmailService
-	analytics         service.AnalyticsService
-	jwtSvc            *security.JwtService
+	messageSvc         *service.MessageService
+	voteSvc            *service.VoteService
+	pollSvc            *service.PollService
+	contactSvc         *service.ContactService
+	securitySvc        *service.SecurityService
+	totpSvc            *service.TOTPService
+	notificationSvc    *service.NotificationService
+	outboxProcessor    *service.OutboxProcessor
+	passwordResetSvc   *service.PasswordResetService
+	apiKeySvc          *security.ApiKeyService
+	oauthSvc           *security.OAuthService
+	googleProvider     *security.GoogleOAuthProvider
+	realms             []security.AuthRealm
+	emailSvc           service.EmailService
+	analytics          service.AnalyticsService
+	jwtSvc             *security.JwtService
 	permissionResolver security.PermissionResolver
-	wsPublisher       *service.WsEventPublisher
+	wsPublisher        *service.WsEventPublisher
 }
 
 // buildServices constructs the service layer plus the shared cross-cutting
@@ -101,14 +110,25 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 		return nil, err
 	}
 
+	securityConfig := service.SecurityConfig{
+		SessionTimeout:         time.Duration(cfg.SessionTimeoutMinutes) * time.Minute,
+		SessionAbsoluteTimeout: time.Duration(cfg.SessionAbsoluteMinutes) * time.Minute,
+		MaxFailedLoginAttempts: cfg.MaxFailedLoginAttempts,
+		LockoutDuration:        time.Duration(cfg.LockoutDurationSeconds) * time.Second,
+		RegistrationEnabled:    cfg.RegistrationEnabled,
+	}
+	totpSvc := service.NewTOTPService(r.totpRepo, r.userRepo, passwordEncoder, service.NewAuditService(r.auditRepo), securityConfig)
 	securitySvc := service.NewSecurityService(
-		r.userRepo,
-		passwordEncoder,
-		r.sessionRepo,
-		r.auditRepo,
-		notificationSvc,
-		emailSvc,
-		int64(cfg.SessionTimeoutMinutes)*60,
+		service.SecurityDependencies{
+			UserRepository:      r.userRepo,
+			PasswordEncoder:     passwordEncoder,
+			SessionRepository:   r.sessionRepo,
+			AuditRepository:     r.auditRepo,
+			NotificationService: notificationSvc,
+			EmailService:        emailSvc,
+			TOTPService:         totpSvc,
+		},
+		securityConfig,
 	)
 
 	apiKeySvc := security.NewApiKeyService(r.apiKeyRepo, r.userRepo)
@@ -125,7 +145,7 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 		)
 	}
 
-	realms := buildRealms(r, jwtSvc, apiKeySvc)
+	realms := buildRealms(r, securitySvc, jwtSvc, apiKeySvc)
 
 	var analytics service.AnalyticsService
 	if cfg.Segment.Enabled && cfg.Segment.WriteKey != "" {
@@ -135,26 +155,31 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 	}
 
 	messageSvc := service.NewMessageService(r.messageRepo, r.outboxRepo, txMgr, messageCache, wsPublisher, notificationSvc, emailSvc)
+	voteSvc := service.NewVoteService(r.voteRepo, txMgr)
+	pollSvc := service.NewPollService(r.pollRepo, txMgr)
 	contactSvc := service.NewContactService(r.contactRepo, r.outboxRepo, txMgr, wsPublisher, notificationSvc)
 	outboxProcessor := service.NewOutboxProcessor(r.outboxRepo, txMgr, wsPublisher)
 	passwordResetSvc := service.NewPasswordResetService(r.userRepo, passwordEncoder, r.passwordResetRepo, emailSvc, service.NewAuditService(r.auditRepo), cfg.AppBaseURL)
 
 	return &services{
-		messageSvc:        messageSvc,
-		contactSvc:        contactSvc,
-		securitySvc:       securitySvc,
-		notificationSvc:   notificationSvc,
-		outboxProcessor:   outboxProcessor,
-		passwordResetSvc:  passwordResetSvc,
-		apiKeySvc:         apiKeySvc,
-		oauthSvc:          oauthSvc,
-		googleProvider:    googleProvider,
-		realms:            realms,
-		emailSvc:          emailSvc,
-		analytics:         analytics,
-		jwtSvc:            jwtSvc,
+		messageSvc:         messageSvc,
+		voteSvc:            voteSvc,
+		pollSvc:            pollSvc,
+		contactSvc:         contactSvc,
+		securitySvc:        securitySvc,
+		totpSvc:            totpSvc,
+		notificationSvc:    notificationSvc,
+		outboxProcessor:    outboxProcessor,
+		passwordResetSvc:   passwordResetSvc,
+		apiKeySvc:          apiKeySvc,
+		oauthSvc:           oauthSvc,
+		googleProvider:     googleProvider,
+		realms:             realms,
+		emailSvc:           emailSvc,
+		analytics:          analytics,
+		jwtSvc:             jwtSvc,
 		permissionResolver: permissionResolver,
-		wsPublisher:       wsPublisher,
+		wsPublisher:        wsPublisher,
 	}, nil
 }
 
@@ -178,28 +203,15 @@ func buildEmailService(cfg *config.Config) (service.EmailService, error) {
 	return &service.NoOpEmailService{}, nil
 }
 
-// buildRealms assembles the three authentication realms (session cookie, API
-// key, JWT) from the repositories and helper services. Each realm closes over
-// its repo so callers only need the realm interface.
-func buildRealms(r repos, jwtSvc *security.JwtService, apiKeySvc *security.ApiKeyService) []security.AuthRealm {
-	sessionRealm := security.NewSessionRealm(func(ctx context.Context, tokenHash string) model.SessionLookup {
-		session, err := r.sessionRepo.FindByTokenHash(ctx, tokenHash)
-		if err != nil {
-			return model.SessionNotFound{}
-		}
-		if session.ExpiresAt.Time.Before(time.Now()) {
-			return model.SessionExpired{}
-		}
-		pltUser, err := r.userRepo.FindByID(ctx, session.UserID)
-		if err != nil {
-			return model.SessionNotFound{}
-		}
-		user := security.PltUserToModel(pltUser)
-		if !user.Enabled {
-			return model.SessionNotFound{}
-		}
-		return model.SessionActive{User: user}
-	})
+// buildRealms assembles session, API-key, and JWT authentication. Session
+// tokens use the same service policy as cookie authentication.
+func buildRealms(
+	r repos,
+	securitySvc *service.SecurityService,
+	jwtSvc *security.JwtService,
+	apiKeySvc *security.ApiKeyService,
+) []security.AuthRealm {
+	sessionRealm := security.NewSessionRealm(securitySvc.LookupSession)
 
 	apiKeyRealm := security.NewApiKeyRealm(func(ctx context.Context, rawKey string) *model.User {
 		user, err := apiKeySvc.AuthenticateApiKey(ctx, rawKey)
@@ -228,18 +240,24 @@ type App struct {
 	Config                *config.Config
 	Renderer              *web.Renderer
 	MessageService        *service.MessageService
+	VoteService           *service.VoteService
+	PollService           *service.PollService
 	ContactService        *service.ContactService
 	SecurityService       *service.SecurityService
 	NotificationService   *service.NotificationService
 	OutboxProcessor       *service.OutboxProcessor
 	SyncAPI               *handler.SyncAPI
+	VoteAPI               *handler.VoteAPI
+	PollAPI               *handler.PollAPI
 	AuthAPI               *handler.AuthAPI
 	AuthHandler           *handler.AuthHandler
 	HomeHandler           *handler.HomeHandler
 	MessagesHandler       *handler.MessagesHandler
 	ContactsHandler       *handler.ContactsHandler
+	TrashHandler          *handler.TrashHandler
 	UserAdminHandler      *handler.UserAdminHandler
 	UserAdminAPI          *handler.UserAdminAPI
+	DataExportHandler     *handler.DataExportHandler
 	NotificationsHandler  *handler.NotificationsHandler
 	NotificationAPI       *handler.NotificationAPI
 	DeviceRegistrationAPI *handler.DeviceRegistrationAPI
@@ -291,13 +309,17 @@ func buildApp(cfg *config.Config, r repos, svcs *services, templateFS fs.FS, reg
 	}
 
 	syncAPI := handler.NewSyncAPI(svcs.messageSvc, svcs.contactSvc, svcs.analytics)
-	authAPI := handler.NewAuthAPI(svcs.securitySvc, svcs.apiKeySvc, svcs.passwordResetSvc, cfg.SessionCookieSecure, svcs.analytics, svcs.jwtSvc)
-	authHandler := handler.NewAuthHandler(svcs.securitySvc, svcs.passwordResetSvc, renderer, cfg.SessionCookieSecure, svcs.analytics, svcs.googleProvider != nil)
+	voteAPI := handler.NewVoteAPI(svcs.voteSvc)
+	pollAPI := handler.NewPollAPI(svcs.pollSvc)
+	authAPI := handler.NewAuthAPI(svcs.securitySvc, svcs.totpSvc, svcs.apiKeySvc, svcs.passwordResetSvc, cfg.SessionCookieSecure, svcs.analytics, svcs.jwtSvc)
+	authHandler := handler.NewAuthHandler(svcs.securitySvc, svcs.totpSvc, svcs.passwordResetSvc, renderer, cfg.SessionCookieSecure, svcs.analytics, svcs.googleProvider != nil)
 	homeHandler := handler.NewHomeHandler(svcs.messageSvc, svcs.contactSvc, svcs.securitySvc, renderer, cfg.Version)
-	messagesHandler := handler.NewMessagesHandler(svcs.messageSvc, renderer)
+	messagesHandler := handler.NewMessagesHandler(svcs.messageSvc, svcs.voteSvc, renderer)
 	contactsHandler := handler.NewContactsHandler(svcs.contactSvc, renderer)
+	trashHandler := handler.NewTrashHandler(svcs.messageSvc, svcs.contactSvc, renderer)
 	userAdminHandler := handler.NewUserAdminHandler(svcs.securitySvc, renderer)
 	userAdminAPI := handler.NewUserAdminAPI(svcs.securitySvc)
+	dataExportHandler := handler.NewDataExportHandler(svcs.messageSvc, svcs.contactSvc)
 	notificationsHandler := handler.NewNotificationsHandler(svcs.notificationSvc, renderer)
 	notificationAPI := handler.NewNotificationAPI(svcs.notificationSvc)
 	deviceRegistrationAPI := handler.NewDeviceRegistrationAPI(r.deviceTokenRepo)
@@ -315,10 +337,10 @@ func buildApp(cfg *config.Config, r repos, svcs *services, templateFS fs.FS, reg
 	// flow that fails at code exchange.
 	oauthHandler := handler.NewOAuthHandler(svcs.securitySvc, svcs.oauthSvc, cfg.SessionCookieSecure, nil, googleProviderIfc, cfg.AppBaseURL)
 	searchHandler := handler.NewSearchHandler(svcs.messageSvc, svcs.contactSvc, renderer)
-	settingsHandler := handler.NewSettingsHandler(svcs.securitySvc, svcs.apiKeySvc, renderer)
+	settingsHandler := handler.NewSettingsHandler(svcs.securitySvc, svcs.totpSvc, svcs.apiKeySvc, renderer)
 	errorHandler := handler.NewErrorHandler(renderer, cfg.Version)
 	devDashboardHandler := handler.NewDevDashboardHandler(svcs.outboxProcessor, svcs.securitySvc, svcs.messageSvc, renderer, cfg.DevDashboardEnabled)
-	componentsHandler := handler.NewComponentsHandler(svcs.messageSvc, svcs.contactSvc, renderer)
+	componentsHandler := handler.NewComponentsHandler(svcs.messageSvc, svcs.contactSvc, svcs.voteSvc, svcs.pollSvc, renderer)
 	openAPIHandler := handler.NewOpenAPIHandler()
 	syncWebSocket := handler.NewSyncWebSocket(svcs.wsPublisher, r.sessionRepo, r.userRepo, cfg.SessionCookieSecure)
 
@@ -330,18 +352,24 @@ func buildApp(cfg *config.Config, r repos, svcs *services, templateFS fs.FS, reg
 		Config:                cfg,
 		Renderer:              renderer,
 		MessageService:        svcs.messageSvc,
+		VoteService:           svcs.voteSvc,
+		PollService:           svcs.pollSvc,
 		ContactService:        svcs.contactSvc,
 		SecurityService:       svcs.securitySvc,
 		NotificationService:   svcs.notificationSvc,
 		OutboxProcessor:       svcs.outboxProcessor,
 		SyncAPI:               syncAPI,
+		VoteAPI:               voteAPI,
+		PollAPI:               pollAPI,
 		AuthAPI:               authAPI,
 		AuthHandler:           authHandler,
 		HomeHandler:           homeHandler,
 		MessagesHandler:       messagesHandler,
 		ContactsHandler:       contactsHandler,
+		TrashHandler:          trashHandler,
 		UserAdminHandler:      userAdminHandler,
 		UserAdminAPI:          userAdminAPI,
+		DataExportHandler:     dataExportHandler,
 		NotificationsHandler:  notificationsHandler,
 		NotificationAPI:       notificationAPI,
 		DeviceRegistrationAPI: deviceRegistrationAPI,
@@ -378,12 +406,16 @@ func BuildCoreExtension(app *App) *core.Extension {
 		app.OAuthHandler,
 		app.AuthAPI,
 		app.SyncAPI,
+		app.VoteAPI,
+		app.PollAPI,
 		app.NotificationAPI,
 		app.UserAdminAPI,
+		app.DataExportHandler,
 		app.DeviceRegistrationAPI,
 		app.HomeHandler,
 		app.MessagesHandler,
 		app.ContactsHandler,
+		app.TrashHandler,
 		app.SearchHandler,
 		app.SettingsHandler,
 		app.NotificationsHandler,

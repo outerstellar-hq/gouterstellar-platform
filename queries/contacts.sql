@@ -24,6 +24,16 @@ AND (name ILIKE '%' || $1::text || '%' OR COALESCE(company, '') ILIKE '%' || $1:
 -- name: CountContacts :one
 SELECT COUNT(*) FROM plt_contacts WHERE deleted = false;
 
+-- name: ListDeletedContacts :many
+SELECT id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict
+FROM plt_contacts
+WHERE deleted = true
+ORDER BY updated_at_epoch_ms DESC
+LIMIT $1 OFFSET $2;
+
+-- name: CountDeletedContacts :one
+SELECT COUNT(*) FROM plt_contacts WHERE deleted = true;
+
 -- name: ListDirtyContacts :many
 SELECT id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict
 FROM plt_contacts

@@ -11,10 +11,14 @@ import (
 )
 
 type Querier interface {
+	CastPollVote(ctx context.Context, arg CastPollVoteParams) (int64, error)
 	ClaimPendingOutbox(ctx context.Context, limit int32) ([]ClaimPendingOutboxRow, error)
+	ClosePoll(ctx context.Context, id int64) (int64, error)
 	CountAllAudit(ctx context.Context) (int64, error)
 	CountAllUsers(ctx context.Context) (int64, error)
 	CountContacts(ctx context.Context) (int64, error)
+	CountDeletedContacts(ctx context.Context) (int64, error)
+	CountDeletedMessages(ctx context.Context) (int64, error)
 	CountDirtyMessages(ctx context.Context) (int64, error)
 	CountMessages(ctx context.Context) (int64, error)
 	CountMessagesByYear(ctx context.Context, updatedAtEpochMs int64) (int64, error)
@@ -25,19 +29,29 @@ type Querier interface {
 	CreateApiKey(ctx context.Context, arg CreateApiKeyParams) (PltApiKey, error)
 	CreateLocalContact(ctx context.Context, arg CreateLocalContactParams) (PltContact, error)
 	CreateLocalMessage(ctx context.Context, arg CreateLocalMessageParams) (PltMessage, error)
+	CreateMessageVote(ctx context.Context, arg CreateMessageVoteParams) (PltMessageVote, error)
+	CreatePoll(ctx context.Context, arg CreatePollParams) (PltPoll, error)
+	CreatePollOption(ctx context.Context, arg CreatePollOptionParams) (PltPollOption, error)
 	CreateServerContact(ctx context.Context, arg CreateServerContactParams) (PltContact, error)
 	CreateServerMessage(ctx context.Context, arg CreateServerMessageParams) (PltMessage, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (PltSession, error)
+	CreateTOTPChallenge(ctx context.Context, arg CreateTOTPChallengeParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (PltUser, error)
 	DeleteAllDeviceTokensForUser(ctx context.Context, userID uuid.UUID) (int64, error)
 	DeleteApiKey(ctx context.Context, arg DeleteApiKeyParams) (int64, error)
 	DeleteDeviceToken(ctx context.Context, arg DeleteDeviceTokenParams) (int64, error)
 	DeleteExpiredSessions(ctx context.Context) (int64, error)
+	DeleteExpiredTOTPChallenges(ctx context.Context) (int64, error)
+	DeleteMessageVote(ctx context.Context, arg DeleteMessageVoteParams) (int64, error)
 	DeleteNotification(ctx context.Context, arg DeleteNotificationParams) (int64, error)
 	DeleteOAuthConnection(ctx context.Context, arg DeleteOAuthConnectionParams) (int64, error)
+	DeletePoll(ctx context.Context, id int64) (int64, error)
 	DeleteSessionByTokenHash(ctx context.Context, tokenHash string) error
 	DeleteSessionsByUserID(ctx context.Context, userID uuid.UUID) error
+	DeleteTOTPChallenge(ctx context.Context, tokenHash string) (int64, error)
 	DeleteUserByID(ctx context.Context, id uuid.UUID) error
+	DisableUserTOTP(ctx context.Context, id uuid.UUID) error
+	EnableUserTOTP(ctx context.Context, arg EnableUserTOTPParams) error
 	FindAllUsers(ctx context.Context) ([]PltUser, error)
 	FindApiKeyByHash(ctx context.Context, keyHash string) (PltApiKey, error)
 	FindApiKeysByUserID(ctx context.Context, userID uuid.UUID) ([]PltApiKey, error)
@@ -47,10 +61,13 @@ type Querier interface {
 	FindContactBySyncID(ctx context.Context, syncID string) (PltContact, error)
 	FindContactChangesSince(ctx context.Context, updatedAtEpochMs int64) ([]PltContact, error)
 	FindDeviceTokensByUserID(ctx context.Context, userID uuid.UUID) ([]PltDeviceToken, error)
+	FindMessageVote(ctx context.Context, arg FindMessageVoteParams) (PltMessageVote, error)
 	FindNotificationsByUserID(ctx context.Context, arg FindNotificationsByUserIDParams) ([]PltNotification, error)
 	FindOAuthByProviderSubject(ctx context.Context, arg FindOAuthByProviderSubjectParams) (PltOauthConnection, error)
 	FindOAuthByUserID(ctx context.Context, userID uuid.UUID) ([]PltOauthConnection, error)
 	FindPasswordResetByToken(ctx context.Context, token string) (PltPasswordResetToken, error)
+	FindPollBySyncID(ctx context.Context, syncID string) (PltPoll, error)
+	FindPollOption(ctx context.Context, arg FindPollOptionParams) (PltPollOption, error)
 	FindRecentAudit(ctx context.Context, limit int32) ([]PltAuditLog, error)
 	FindSessionByTokenHash(ctx context.Context, tokenHash string) (PltSession, error)
 	FindSessionByTokenHashIncludingExpired(ctx context.Context, tokenHash string) (PltSession, error)
@@ -60,6 +77,8 @@ type Querier interface {
 	FindUserPage(ctx context.Context, arg FindUserPageParams) ([]PltUser, error)
 	GetOutboxStats(ctx context.Context) (GetOutboxStatsRow, error)
 	GetSyncState(ctx context.Context, stateKey string) (PltSyncState, error)
+	IncrementFailedLoginAttempts(ctx context.Context, id uuid.UUID) (int32, error)
+	IncrementFailedTOTPAttempts(ctx context.Context, id uuid.UUID) (int32, error)
 	InsertContactEmail(ctx context.Context, arg InsertContactEmailParams) error
 	InsertContactPhone(ctx context.Context, arg InsertContactPhoneParams) error
 	InsertContactSocial(ctx context.Context, arg InsertContactSocialParams) error
@@ -71,9 +90,12 @@ type Querier interface {
 	ListContactSocialsBatch(ctx context.Context, dollar_1 []int64) ([]PltContactSocial, error)
 	ListContacts(ctx context.Context, arg ListContactsParams) ([]PltContact, error)
 	ListDeadLetterOutbox(ctx context.Context, limit int32) ([]ListDeadLetterOutboxRow, error)
+	ListDeletedContacts(ctx context.Context, arg ListDeletedContactsParams) ([]PltContact, error)
+	ListDeletedMessages(ctx context.Context, arg ListDeletedMessagesParams) ([]PltMessage, error)
 	ListDirtyContacts(ctx context.Context) ([]PltContact, error)
 	ListDirtyMessages(ctx context.Context) ([]PltMessage, error)
 	ListFailedOutbox(ctx context.Context, limit int32) ([]ListFailedOutboxRow, error)
+	ListMessageVoteCounts(ctx context.Context, messageSyncIds []string) ([]ListMessageVoteCountsRow, error)
 	// Distinct calendar years (descending) for which non-deleted messages exist.
 	// Used to populate the year filter on the messages page.
 	ListMessageYears(ctx context.Context) ([]int32, error)
@@ -83,8 +105,16 @@ type Querier interface {
 	// stored as epoch milliseconds, so it is converted to a timestamp with
 	// TO_TIMESTAMP(epoch / 1000.0) before EXTRACT.
 	ListMessagesByYear(ctx context.Context, arg ListMessagesByYearParams) ([]PltMessage, error)
+	ListOpenPolls(ctx context.Context, arg ListOpenPollsParams) ([]ListOpenPollsRow, error)
 	ListPendingOutbox(ctx context.Context, limit int32) ([]ListPendingOutboxRow, error)
+	ListPollOptions(ctx context.Context, pollID int64) ([]PltPollOption, error)
+	ListPollVoteCounts(ctx context.Context, pollID int64) ([]ListPollVoteCountsRow, error)
 	ListSessionsForUser(ctx context.Context, userID uuid.UUID) ([]ListSessionsForUserRow, error)
+	ListUserMessageVotes(ctx context.Context, arg ListUserMessageVotesParams) ([]ListUserMessageVotesRow, error)
+	ListUserPollVotes(ctx context.Context, arg ListUserPollVotesParams) ([]int64, error)
+	LockMessageForVote(ctx context.Context, syncID string) (int64, error)
+	LockPollBySyncID(ctx context.Context, syncID string) (PltPoll, error)
+	LockUserUntil(ctx context.Context, arg LockUserUntilParams) error
 	LogAudit(ctx context.Context, arg LogAuditParams) (PltAuditLog, error)
 	MarkAllNotificationsRead(ctx context.Context, userID uuid.UUID) (int64, error)
 	MarkCleanContacts(ctx context.Context) error
@@ -95,6 +125,10 @@ type Querier interface {
 	MarkOutboxFailed(ctx context.Context, arg MarkOutboxFailedParams) (MarkOutboxFailedRow, error)
 	MarkOutboxProcessed(ctx context.Context, id uuid.UUID) (MarkOutboxProcessedRow, error)
 	MarkPasswordResetUsed(ctx context.Context, token string) (PltPasswordResetToken, error)
+	RemovePollVote(ctx context.Context, arg RemovePollVoteParams) (int64, error)
+	ReplaceTOTPBackupCodes(ctx context.Context, arg ReplaceTOTPBackupCodesParams) (int64, error)
+	ResetFailedTOTPAttempts(ctx context.Context, id uuid.UUID) error
+	ResetLoginFailures(ctx context.Context, id uuid.UUID) error
 	ResolveConflictContact(ctx context.Context, syncID string) (PltContact, error)
 	ResolveConflictMessage(ctx context.Context, syncID string) (PltMessage, error)
 	RestoreContact(ctx context.Context, syncID string) (PltContact, error)
@@ -115,11 +149,13 @@ type Querier interface {
 	SetSyncState(ctx context.Context, arg SetSyncStateParams) error
 	SoftDeleteContact(ctx context.Context, syncID string) (PltContact, error)
 	SoftDeleteMessage(ctx context.Context, syncID string) (PltMessage, error)
+	TakeTOTPChallengeAttempt(ctx context.Context, arg TakeTOTPChallengeAttemptParams) (PltTotpChallenge, error)
 	UpdateApiKeyLastUsed(ctx context.Context, id int64) error
 	UpdateAvatarURL(ctx context.Context, arg UpdateAvatarURLParams) (PltUser, error)
 	UpdateContact(ctx context.Context, arg UpdateContactParams) (PltContact, error)
 	UpdateLastActivity(ctx context.Context, id uuid.UUID) error
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) (PltMessage, error)
+	UpdateMessageVote(ctx context.Context, arg UpdateMessageVoteParams) (int64, error)
 	UpdateNotificationPreferences(ctx context.Context, arg UpdateNotificationPreferencesParams) (PltUser, error)
 	UpdateOutboxStatus(ctx context.Context, arg UpdateOutboxStatusParams) (UpdateOutboxStatusRow, error)
 	UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error

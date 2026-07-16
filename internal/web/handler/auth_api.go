@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -19,6 +20,7 @@ import (
 
 type AuthAPI struct {
 	securityService  *service.SecurityService
+	totpService      *service.TOTPService
 	apiKeyService    *security.ApiKeyService
 	passwordResetSvc *service.PasswordResetService
 	sessionSecure    bool
@@ -28,6 +30,7 @@ type AuthAPI struct {
 
 func NewAuthAPI(
 	secSvc *service.SecurityService,
+	totpSvc *service.TOTPService,
 	apiKeySvc *security.ApiKeyService,
 	passwordResetSvc *service.PasswordResetService,
 	sessionSecure bool,
@@ -36,6 +39,7 @@ func NewAuthAPI(
 ) *AuthAPI {
 	return &AuthAPI{
 		securityService:  secSvc,
+		totpService:      totpSvc,
 		apiKeyService:    apiKeySvc,
 		passwordResetSvc: passwordResetSvc,
 		sessionSecure:    sessionSecure,
@@ -47,6 +51,10 @@ func NewAuthAPI(
 // ContributeRoutes registers the auth API routes (bearer auth applied by builder).
 func (h *AuthAPI) ContributeRoutes(ctx *extplatform.ContributionContext) error {
 	ctx.Routes.API(http.MethodPost, "/api/v1/auth/login", "API login", http.HandlerFunc(h.Login))
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/totp/verify", "Verify TOTP challenge", http.HandlerFunc(h.VerifyTOTP))
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/totp/setup", "Create TOTP setup", http.HandlerFunc(h.SetupTOTP))
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/totp/confirm", "Confirm TOTP setup", http.HandlerFunc(h.ConfirmTOTP))
+	ctx.Routes.API(http.MethodPost, "/api/v1/auth/totp/disable", "Disable TOTP", http.HandlerFunc(h.DisableTOTP))
 	ctx.Routes.API(http.MethodPost, "/api/v1/auth/token", "Issue token", http.HandlerFunc(h.IssueToken))
 	ctx.Routes.API(http.MethodPost, "/api/v1/auth/register", "API register", http.HandlerFunc(h.Register))
 	ctx.Routes.API(http.MethodPost, "/api/v1/auth/change-password", "API change password", http.HandlerFunc(h.ChangePassword))
@@ -70,12 +78,22 @@ func (h *AuthAPI) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.securityService.Authenticate(r.Context(), req.Username, req.Password)
+	result, err := h.securityService.Authenticate(r.Context(), req.Username, req.Password)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
 
+	if required, ok := result.(model.TOTPRequired); ok {
+		writeJSON(w, http.StatusUnauthorized, model.AuthTokenResponse{Status: "totp_required", PartialToken: required.PartialToken})
+		return
+	}
+	authenticated, ok := result.(model.Authenticated)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Invalid credentials")
+		return
+	}
+	user := authenticated.User
 	token, err := h.securityService.CreateSession(r.Context(), user.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to create session")
@@ -89,10 +107,113 @@ func (h *AuthAPI) Login(w http.ResponseWriter, r *http.Request) {
 	})
 
 	writeJSON(w, http.StatusOK, model.AuthTokenResponse{
+		Status:   "success",
 		Token:    token,
 		Username: user.Username,
 		Role:     string(user.Role),
 	})
+}
+
+func (h *AuthAPI) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
+	var req model.TOTPVerifyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	user, err := h.totpService.VerifyChallenge(r.Context(), req.PartialToken, req.Code)
+	if err != nil {
+		status := "invalid_code"
+		if errors.Is(err, service.ErrTOTPChallengeExpired) {
+			status = "expired"
+		} else if errors.Is(err, service.ErrTOTPAccountLocked) {
+			status = "locked"
+		}
+		writeJSON(w, http.StatusUnauthorized, model.TOTPVerifyResponse{Status: status})
+		return
+	}
+	token, err := h.securityService.CreateSession(r.Context(), user.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to create session")
+		return
+	}
+	http.SetCookie(w, web.CreateSessionCookie(token, h.sessionSecure))
+	writeJSON(w, http.StatusOK, model.TOTPVerifyResponse{
+		Status:   "success",
+		Token:    token,
+		Username: user.Username,
+		Role:     string(user.Role),
+	})
+}
+
+func (h *AuthAPI) SetupTOTP(w http.ResponseWriter, r *http.Request) {
+	user := web.UserFromRequest(r)
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Not authenticated")
+		return
+	}
+	if user.TOTPEnabled {
+		writeError(w, http.StatusConflict, "Two-factor authentication is already enabled")
+		return
+	}
+	accountName := user.Email
+	if accountName == "" {
+		accountName = user.Username
+	}
+	setup, err := h.totpService.GenerateSetup(accountName)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to create TOTP setup")
+		return
+	}
+	writeJSON(w, http.StatusOK, model.TOTPSetupResponse{Secret: setup.Secret, QRDataURI: setup.QRDataURI})
+}
+
+func (h *AuthAPI) ConfirmTOTP(w http.ResponseWriter, r *http.Request) {
+	user := web.UserFromRequest(r)
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Not authenticated")
+		return
+	}
+	if user.TOTPEnabled {
+		writeError(w, http.StatusConflict, "Two-factor authentication is already enabled")
+		return
+	}
+	var req model.TOTPConfirmRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	backupCodes, err := h.totpService.ConfirmEnrollment(r.Context(), user.ID, req.Secret, req.Code)
+	if errors.Is(err, service.ErrTOTPInvalidCode) {
+		writeJSON(w, http.StatusOK, model.TOTPConfirmResponse{Status: "invalid_code"})
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to enable two-factor authentication")
+		return
+	}
+	writeJSON(w, http.StatusCreated, model.TOTPConfirmResponse{Status: "success", BackupCodes: backupCodes})
+}
+
+func (h *AuthAPI) DisableTOTP(w http.ResponseWriter, r *http.Request) {
+	user := web.UserFromRequest(r)
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Not authenticated")
+		return
+	}
+	var req model.TOTPDisableRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if err := h.totpService.Disable(r.Context(), user.ID, req.Password); err != nil {
+		if errors.Is(err, service.ErrInvalidPassword) {
+			writeError(w, http.StatusUnauthorized, "Invalid password")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "Failed to disable two-factor authentication")
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *AuthAPI) IssueToken(w http.ResponseWriter, r *http.Request) {
@@ -107,12 +228,18 @@ func (h *AuthAPI) IssueToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.securityService.Authenticate(r.Context(), req.Username, req.Password)
+	result, err := h.securityService.Authenticate(r.Context(), req.Username, req.Password)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
 
+	authenticated, ok := result.(model.Authenticated)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "TOTP verification is required before issuing a token")
+		return
+	}
+	user := authenticated.User
 	token, err := h.jwtService.GenerateToken(user)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to generate token")
@@ -254,6 +381,7 @@ func (h *AuthAPI) GetProfile(w http.ResponseWriter, r *http.Request) {
 		AvatarURL:                 avatarURL,
 		EmailNotificationsEnabled: user.EmailNotificationsEnabled,
 		PushNotificationsEnabled:  user.PushNotificationsEnabled,
+		TOTPEnabled:               user.TOTPEnabled,
 	})
 }
 

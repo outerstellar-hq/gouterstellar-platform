@@ -1,0 +1,46 @@
+{{ define "poll_card" }}
+<article class="poll-card" aria-labelledby="poll-question-{{ .SyncID }}">
+    <header class="poll-header">
+        <h3 id="poll-question-{{ .SyncID }}">{{ .Question }}</h3>
+        <div class="poll-state">
+            {{ if .Closed }}<span class="badge badge-error">Closed</span>{{ end }}
+            {{ if .MultiChoice }}<span class="badge">Choose multiple</span>{{ end }}
+        </div>
+    </header>
+    <ol class="poll-options">
+        {{ range .Options }}
+        <li class="poll-option{{ if .Selected }} selected{{ end }}">
+            <div class="poll-option-heading">
+                <span class="poll-option-text">{{ .Text }}</span>
+                <span class="poll-option-count">{{ .VoteCount }}</span>
+            </div>
+            <progress class="poll-progress" value="{{ .Percent }}" max="100"
+                      aria-label="{{ .Text }}: {{ .Percent }} percent, {{ .VoteCount }} votes">{{ .Percent }}%</progress>
+            {{ if not $.Closed }}
+                {{ if .Selected }}
+                <form method="POST" action="/components/polls/{{ $.SyncID }}/remove-vote" class="poll-vote-form"
+                      hx-post="/components/polls/{{ $.SyncID }}/remove-vote" hx-target="closest .poll-card" hx-swap="outerHTML">
+                    <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                    <input type="hidden" name="optionId" value="{{ .ID }}">
+                    <button type="submit" class="btn btn-sm poll-vote-button selected" aria-pressed="true">Remove vote</button>
+                </form>
+                {{ else if .CanVote }}
+                <form method="POST" action="/components/polls/{{ $.SyncID }}/vote" class="poll-vote-form"
+                      hx-post="/components/polls/{{ $.SyncID }}/vote" hx-target="closest .poll-card" hx-swap="outerHTML">
+                    <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                    <input type="hidden" name="optionId" value="{{ .ID }}">
+                    <button type="submit" class="btn btn-sm poll-vote-button" aria-pressed="false">Vote</button>
+                </form>
+                {{ else }}
+                <span class="poll-option-note">Remove your current vote to choose another option.</span>
+                {{ end }}
+            {{ end }}
+        </li>
+        {{ end }}
+    </ol>
+    <footer class="poll-footer">
+        <span>{{ .TotalVotes }} total vote{{ if ne .TotalVotes 1 }}s{{ end }}</span>
+        {{ if .DeadlineLabel }}<span>Closes {{ .DeadlineLabel }}</span>{{ end }}
+    </footer>
+</article>
+{{ end }}

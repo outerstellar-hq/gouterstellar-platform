@@ -37,39 +37,43 @@
     <div class="message-list">
         {{ range .BodyData.Messages }}
         <div class="message-row{{ if .Deleted }} deleted{{ end }}{{ if .HasConflict }} conflict{{ end }}{{ if .Dirty }} dirty{{ end }}">
-            <div class="message-author">{{ .Author }}</div>
-            <div class="message-content">{{ .Content }}</div>
-            <div class="message-meta">
-                <span class="message-time" title="{{ .UpdatedAt }}">{{ .UpdatedLabel }}</span>
-                {{ if .Dirty }}<span class="badge badge-warning">Unsynced</span>{{ end }}
-                {{ if .HasConflict }}<span class="badge badge-error">Conflict</span>{{ end }}
-                {{ if .Deleted }}<span class="badge badge-error">Deleted</span>{{ end }}
-                <span class="badge">v{{ .Version }}</span>
-            </div>
-            <div class="message-actions">
+            {{ template "vote_controls" . }}
+            <div class="message-body">
+                <div class="message-author">{{ .Author }}</div>
+                <div class="message-content">{{ .Content }}</div>
+                <div class="message-meta">
+                    <span class="message-time" title="{{ .UpdatedAt }}">{{ .UpdatedLabel }}</span>
+                    {{ if .Dirty }}<span class="badge badge-warning">Unsynced</span>{{ end }}
+                    {{ if .HasConflict }}<span class="badge badge-error">Conflict</span>{{ end }}
+                    {{ if .Deleted }}<span class="badge badge-error">Deleted</span>{{ end }}
+                    <span class="badge">v{{ .Version }}</span>
+                </div>
+                <div class="message-actions">
+                <a href="/messages/{{ .SyncID }}/edit" class="btn btn-sm btn-secondary">Edit</a>
                 {{ if .HasConflict }}
                 <form method="POST" action="/messages/{{ .SyncID }}/resolve" class="inline-form">
-                    <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
                     <input type="hidden" name="strategy" value="mine">
                     <button type="submit" class="btn btn-sm">Keep mine</button>
                 </form>
                 <form method="POST" action="/messages/{{ .SyncID }}/resolve" class="inline-form">
-                    <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
                     <input type="hidden" name="strategy" value="server">
                     <button type="submit" class="btn btn-sm">Keep server</button>
                 </form>
                 {{ end }}
                 {{ if .Deleted }}
                 <form method="POST" action="/messages/{{ .SyncID }}/restore" class="inline-form">
-                    <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
                     <button type="submit" class="btn btn-sm">Restore</button>
                 </form>
                 {{ else }}
                 <form method="POST" action="/messages/{{ .SyncID }}/delete" class="inline-form">
-                    <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
                     <button type="submit" class="btn btn-sm btn-danger" data-confirm="Delete this message?">Delete</button>
                 </form>
                 {{ end }}
+                </div>
             </div>
         </div>
         {{ else }}

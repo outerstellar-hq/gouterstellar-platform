@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const countAllUsers = `-- name: CountAllUsers :one
@@ -38,7 +39,8 @@ INSERT INTO plt_users (id, username, email, password_hash, role, enabled)
 VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id, username, email, password_hash, role, enabled, created_at, last_activity_at,
        avatar_url, email_notifications_enabled, push_notifications_enabled,
-       language, theme, layout
+       language, theme, layout, failed_login_attempts, locked_until,
+       totp_secret, totp_enabled, totp_backup_codes, failed_totp_attempts
 `
 
 type CreateUserParams struct {
@@ -75,6 +77,12 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (PltUser
 		&i.Language,
 		&i.Theme,
 		&i.Layout,
+		&i.FailedLoginAttempts,
+		&i.LockedUntil,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpBackupCodes,
+		&i.FailedTotpAttempts,
 	)
 	return i, err
 }
@@ -91,7 +99,8 @@ func (q *Queries) DeleteUserByID(ctx context.Context, id uuid.UUID) error {
 const findAllUsers = `-- name: FindAllUsers :many
 SELECT id, username, email, password_hash, role, enabled, created_at, last_activity_at,
        avatar_url, email_notifications_enabled, push_notifications_enabled,
-       language, theme, layout
+       language, theme, layout, failed_login_attempts, locked_until,
+       totp_secret, totp_enabled, totp_backup_codes, failed_totp_attempts
 FROM plt_users
 ORDER BY username ASC
 `
@@ -120,6 +129,12 @@ func (q *Queries) FindAllUsers(ctx context.Context) ([]PltUser, error) {
 			&i.Language,
 			&i.Theme,
 			&i.Layout,
+			&i.FailedLoginAttempts,
+			&i.LockedUntil,
+			&i.TotpSecret,
+			&i.TotpEnabled,
+			&i.TotpBackupCodes,
+			&i.FailedTotpAttempts,
 		); err != nil {
 			return nil, err
 		}
@@ -134,7 +149,8 @@ func (q *Queries) FindAllUsers(ctx context.Context) ([]PltUser, error) {
 const findUserByEmail = `-- name: FindUserByEmail :one
 SELECT id, username, email, password_hash, role, enabled, created_at, last_activity_at,
        avatar_url, email_notifications_enabled, push_notifications_enabled,
-       language, theme, layout
+       language, theme, layout, failed_login_attempts, locked_until,
+       totp_secret, totp_enabled, totp_backup_codes, failed_totp_attempts
 FROM plt_users
 WHERE email = $1
 `
@@ -157,6 +173,12 @@ func (q *Queries) FindUserByEmail(ctx context.Context, email string) (PltUser, e
 		&i.Language,
 		&i.Theme,
 		&i.Layout,
+		&i.FailedLoginAttempts,
+		&i.LockedUntil,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpBackupCodes,
+		&i.FailedTotpAttempts,
 	)
 	return i, err
 }
@@ -164,7 +186,8 @@ func (q *Queries) FindUserByEmail(ctx context.Context, email string) (PltUser, e
 const findUserByID = `-- name: FindUserByID :one
 SELECT id, username, email, password_hash, role, enabled, created_at, last_activity_at,
        avatar_url, email_notifications_enabled, push_notifications_enabled,
-       language, theme, layout
+       language, theme, layout, failed_login_attempts, locked_until,
+       totp_secret, totp_enabled, totp_backup_codes, failed_totp_attempts
 FROM plt_users
 WHERE id = $1
 `
@@ -187,6 +210,12 @@ func (q *Queries) FindUserByID(ctx context.Context, id uuid.UUID) (PltUser, erro
 		&i.Language,
 		&i.Theme,
 		&i.Layout,
+		&i.FailedLoginAttempts,
+		&i.LockedUntil,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpBackupCodes,
+		&i.FailedTotpAttempts,
 	)
 	return i, err
 }
@@ -194,7 +223,8 @@ func (q *Queries) FindUserByID(ctx context.Context, id uuid.UUID) (PltUser, erro
 const findUserByUsername = `-- name: FindUserByUsername :one
 SELECT id, username, email, password_hash, role, enabled, created_at, last_activity_at,
        avatar_url, email_notifications_enabled, push_notifications_enabled,
-       language, theme, layout
+       language, theme, layout, failed_login_attempts, locked_until,
+       totp_secret, totp_enabled, totp_backup_codes, failed_totp_attempts
 FROM plt_users
 WHERE username = $1
 `
@@ -217,6 +247,12 @@ func (q *Queries) FindUserByUsername(ctx context.Context, username string) (PltU
 		&i.Language,
 		&i.Theme,
 		&i.Layout,
+		&i.FailedLoginAttempts,
+		&i.LockedUntil,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpBackupCodes,
+		&i.FailedTotpAttempts,
 	)
 	return i, err
 }
@@ -224,7 +260,8 @@ func (q *Queries) FindUserByUsername(ctx context.Context, username string) (PltU
 const findUserPage = `-- name: FindUserPage :many
 SELECT id, username, email, password_hash, role, enabled, created_at, last_activity_at,
        avatar_url, email_notifications_enabled, push_notifications_enabled,
-       language, theme, layout
+       language, theme, layout, failed_login_attempts, locked_until,
+       totp_secret, totp_enabled, totp_backup_codes, failed_totp_attempts
 FROM plt_users
 ORDER BY username ASC
 LIMIT $1 OFFSET $2
@@ -259,6 +296,12 @@ func (q *Queries) FindUserPage(ctx context.Context, arg FindUserPageParams) ([]P
 			&i.Language,
 			&i.Theme,
 			&i.Layout,
+			&i.FailedLoginAttempts,
+			&i.LockedUntil,
+			&i.TotpSecret,
+			&i.TotpEnabled,
+			&i.TotpBackupCodes,
+			&i.FailedTotpAttempts,
 		); err != nil {
 			return nil, err
 		}
@@ -270,13 +313,51 @@ func (q *Queries) FindUserPage(ctx context.Context, arg FindUserPageParams) ([]P
 	return items, nil
 }
 
+const incrementFailedLoginAttempts = `-- name: IncrementFailedLoginAttempts :one
+UPDATE plt_users
+SET failed_login_attempts = failed_login_attempts + 1
+WHERE id = $1
+RETURNING failed_login_attempts
+`
+
+func (q *Queries) IncrementFailedLoginAttempts(ctx context.Context, id uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, incrementFailedLoginAttempts, id)
+	var failed_login_attempts int32
+	err := row.Scan(&failed_login_attempts)
+	return failed_login_attempts, err
+}
+
+const lockUserUntil = `-- name: LockUserUntil :exec
+UPDATE plt_users SET locked_until = $2 WHERE id = $1
+`
+
+type LockUserUntilParams struct {
+	ID          uuid.UUID          `json:"id"`
+	LockedUntil pgtype.Timestamptz `json:"locked_until"`
+}
+
+func (q *Queries) LockUserUntil(ctx context.Context, arg LockUserUntilParams) error {
+	_, err := q.db.Exec(ctx, lockUserUntil, arg.ID, arg.LockedUntil)
+	return err
+}
+
+const resetLoginFailures = `-- name: ResetLoginFailures :exec
+UPDATE plt_users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1
+`
+
+func (q *Queries) ResetLoginFailures(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, resetLoginFailures, id)
+	return err
+}
+
 const seedAdminUser = `-- name: SeedAdminUser :one
 INSERT INTO plt_users (id, username, email, password_hash, role, enabled)
 VALUES ($1, $2, $3, $4, 'ADMIN', true)
 ON CONFLICT (username) DO NOTHING
 RETURNING id, username, email, password_hash, role, enabled, created_at, last_activity_at,
        avatar_url, email_notifications_enabled, push_notifications_enabled,
-       language, theme, layout
+       language, theme, layout, failed_login_attempts, locked_until,
+       totp_secret, totp_enabled, totp_backup_codes, failed_totp_attempts
 `
 
 type SeedAdminUserParams struct {
@@ -309,6 +390,12 @@ func (q *Queries) SeedAdminUser(ctx context.Context, arg SeedAdminUserParams) (P
 		&i.Language,
 		&i.Theme,
 		&i.Layout,
+		&i.FailedLoginAttempts,
+		&i.LockedUntil,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpBackupCodes,
+		&i.FailedTotpAttempts,
 	)
 	return i, err
 }
@@ -317,7 +404,8 @@ const updateAvatarURL = `-- name: UpdateAvatarURL :one
 UPDATE plt_users SET avatar_url = $2 WHERE id = $1
 RETURNING id, username, email, password_hash, role, enabled, created_at, last_activity_at,
        avatar_url, email_notifications_enabled, push_notifications_enabled,
-       language, theme, layout
+       language, theme, layout, failed_login_attempts, locked_until,
+       totp_secret, totp_enabled, totp_backup_codes, failed_totp_attempts
 `
 
 type UpdateAvatarURLParams struct {
@@ -343,6 +431,12 @@ func (q *Queries) UpdateAvatarURL(ctx context.Context, arg UpdateAvatarURLParams
 		&i.Language,
 		&i.Theme,
 		&i.Layout,
+		&i.FailedLoginAttempts,
+		&i.LockedUntil,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpBackupCodes,
+		&i.FailedTotpAttempts,
 	)
 	return i, err
 }
@@ -362,7 +456,8 @@ SET email_notifications_enabled = $2, push_notifications_enabled = $3
 WHERE id = $1
 RETURNING id, username, email, password_hash, role, enabled, created_at, last_activity_at,
        avatar_url, email_notifications_enabled, push_notifications_enabled,
-       language, theme, layout
+       language, theme, layout, failed_login_attempts, locked_until,
+       totp_secret, totp_enabled, totp_backup_codes, failed_totp_attempts
 `
 
 type UpdateNotificationPreferencesParams struct {
@@ -389,12 +484,20 @@ func (q *Queries) UpdateNotificationPreferences(ctx context.Context, arg UpdateN
 		&i.Language,
 		&i.Theme,
 		&i.Layout,
+		&i.FailedLoginAttempts,
+		&i.LockedUntil,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpBackupCodes,
+		&i.FailedTotpAttempts,
 	)
 	return i, err
 }
 
 const updatePasswordHash = `-- name: UpdatePasswordHash :exec
-UPDATE plt_users SET password_hash = $2 WHERE id = $1
+UPDATE plt_users
+SET password_hash = $2, failed_login_attempts = 0, locked_until = NULL
+WHERE id = $1
 `
 
 type UpdatePasswordHashParams struct {
@@ -413,7 +516,8 @@ SET language = $2, theme = $3, layout = $4
 WHERE id = $1
 RETURNING id, username, email, password_hash, role, enabled, created_at, last_activity_at,
        avatar_url, email_notifications_enabled, push_notifications_enabled,
-       language, theme, layout
+       language, theme, layout, failed_login_attempts, locked_until,
+       totp_secret, totp_enabled, totp_backup_codes, failed_totp_attempts
 `
 
 type UpdatePreferencesParams struct {
@@ -446,6 +550,12 @@ func (q *Queries) UpdatePreferences(ctx context.Context, arg UpdatePreferencesPa
 		&i.Language,
 		&i.Theme,
 		&i.Layout,
+		&i.FailedLoginAttempts,
+		&i.LockedUntil,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpBackupCodes,
+		&i.FailedTotpAttempts,
 	)
 	return i, err
 }
@@ -454,7 +564,8 @@ const updateUserEnabled = `-- name: UpdateUserEnabled :one
 UPDATE plt_users SET enabled = $2 WHERE id = $1
 RETURNING id, username, email, password_hash, role, enabled, created_at, last_activity_at,
        avatar_url, email_notifications_enabled, push_notifications_enabled,
-       language, theme, layout
+       language, theme, layout, failed_login_attempts, locked_until,
+       totp_secret, totp_enabled, totp_backup_codes, failed_totp_attempts
 `
 
 type UpdateUserEnabledParams struct {
@@ -480,6 +591,12 @@ func (q *Queries) UpdateUserEnabled(ctx context.Context, arg UpdateUserEnabledPa
 		&i.Language,
 		&i.Theme,
 		&i.Layout,
+		&i.FailedLoginAttempts,
+		&i.LockedUntil,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpBackupCodes,
+		&i.FailedTotpAttempts,
 	)
 	return i, err
 }
@@ -488,7 +605,8 @@ const updateUserRole = `-- name: UpdateUserRole :one
 UPDATE plt_users SET role = $2 WHERE id = $1
 RETURNING id, username, email, password_hash, role, enabled, created_at, last_activity_at,
        avatar_url, email_notifications_enabled, push_notifications_enabled,
-       language, theme, layout
+       language, theme, layout, failed_login_attempts, locked_until,
+       totp_secret, totp_enabled, totp_backup_codes, failed_totp_attempts
 `
 
 type UpdateUserRoleParams struct {
@@ -514,6 +632,12 @@ func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) 
 		&i.Language,
 		&i.Theme,
 		&i.Layout,
+		&i.FailedLoginAttempts,
+		&i.LockedUntil,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpBackupCodes,
+		&i.FailedTotpAttempts,
 	)
 	return i, err
 }
@@ -522,7 +646,8 @@ const updateUsername = `-- name: UpdateUsername :one
 UPDATE plt_users SET username = $2 WHERE id = $1
 RETURNING id, username, email, password_hash, role, enabled, created_at, last_activity_at,
        avatar_url, email_notifications_enabled, push_notifications_enabled,
-       language, theme, layout
+       language, theme, layout, failed_login_attempts, locked_until,
+       totp_secret, totp_enabled, totp_backup_codes, failed_totp_attempts
 `
 
 type UpdateUsernameParams struct {
@@ -548,6 +673,12 @@ func (q *Queries) UpdateUsername(ctx context.Context, arg UpdateUsernameParams) 
 		&i.Language,
 		&i.Theme,
 		&i.Layout,
+		&i.FailedLoginAttempts,
+		&i.LockedUntil,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpBackupCodes,
+		&i.FailedTotpAttempts,
 	)
 	return i, err
 }

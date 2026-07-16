@@ -5,6 +5,8 @@
 package db
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -85,6 +87,14 @@ type PltMessage struct {
 	SyncConflict     *string          `json:"sync_conflict"`
 }
 
+type PltMessageVote struct {
+	ID            int64     `json:"id"`
+	MessageSyncID string    `json:"message_sync_id"`
+	UserID        uuid.UUID `json:"user_id"`
+	Direction     int16     `json:"direction"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
 type PltNotification struct {
 	ID        uuid.UUID        `json:"id"`
 	UserID    uuid.UUID        `json:"user_id"`
@@ -125,6 +135,33 @@ type PltPasswordResetToken struct {
 	CreatedAt pgtype.Timestamp `json:"created_at"`
 }
 
+type PltPoll struct {
+	ID          int64              `json:"id"`
+	SyncID      string             `json:"sync_id"`
+	CreatorID   uuid.UUID          `json:"creator_id"`
+	Question    string             `json:"question"`
+	MultiChoice bool               `json:"multi_choice"`
+	ClosedAt    pgtype.Timestamptz `json:"closed_at"`
+	Deadline    pgtype.Timestamptz `json:"deadline"`
+	CreatedAt   time.Time          `json:"created_at"`
+	UpdatedAt   time.Time          `json:"updated_at"`
+}
+
+type PltPollOption struct {
+	ID         int64  `json:"id"`
+	PollID     int64  `json:"poll_id"`
+	Position   int16  `json:"position"`
+	OptionText string `json:"option_text"`
+}
+
+type PltPollVote struct {
+	ID        int64     `json:"id"`
+	PollID    int64     `json:"poll_id"`
+	OptionID  int64     `json:"option_id"`
+	UserID    uuid.UUID `json:"user_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type PltSession struct {
 	ID        int64            `json:"id"`
 	TokenHash string           `json:"token_hash"`
@@ -136,6 +173,14 @@ type PltSession struct {
 type PltSyncState struct {
 	StateKey   string `json:"state_key"`
 	StateValue int64  `json:"state_value"`
+}
+
+type PltTotpChallenge struct {
+	TokenHash    string    `json:"token_hash"`
+	UserID       uuid.UUID `json:"user_id"`
+	AttemptCount int32     `json:"attempt_count"`
+	ExpiresAt    time.Time `json:"expires_at"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 type PltUser struct {
@@ -153,4 +198,10 @@ type PltUser struct {
 	Language                  *string            `json:"language"`
 	Theme                     *string            `json:"theme"`
 	Layout                    *string            `json:"layout"`
+	FailedLoginAttempts       int32              `json:"failed_login_attempts"`
+	LockedUntil               pgtype.Timestamptz `json:"locked_until"`
+	TotpSecret                *string            `json:"totp_secret"`
+	TotpEnabled               bool               `json:"totp_enabled"`
+	TotpBackupCodes           *string            `json:"totp_backup_codes"`
+	FailedTotpAttempts        int32              `json:"failed_totp_attempts"`
 }

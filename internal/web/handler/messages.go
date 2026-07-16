@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -16,12 +17,14 @@ import (
 
 type MessagesHandler struct {
 	messageService *service.MessageService
+	voteService    messageVoteService
 	renderer       *web.Renderer
 }
 
-func NewMessagesHandler(msgSvc *service.MessageService, renderer *web.Renderer) *MessagesHandler {
+func NewMessagesHandler(msgSvc *service.MessageService, voteSvc messageVoteService, renderer *web.Renderer) *MessagesHandler {
 	return &MessagesHandler{
 		messageService: msgSvc,
+		voteService:    voteSvc,
 		renderer:       renderer,
 	}
 }
@@ -30,10 +33,63 @@ func NewMessagesHandler(msgSvc *service.MessageService, renderer *web.Renderer) 
 func (h *MessagesHandler) ContributeRoutes(ctx *extplatform.ContributionContext) error {
 	ctx.Routes.Protected(http.MethodGet, "/messages", "Messages", http.HandlerFunc(h.Show))
 	ctx.Routes.Protected(http.MethodPost, "/messages/create", "Create message", http.HandlerFunc(h.Create))
+	ctx.Routes.Protected(http.MethodGet, "/messages/{syncId}/edit", "Edit message", http.HandlerFunc(h.Edit))
+	ctx.Routes.Protected(http.MethodPost, "/messages/{syncId}/update", "Update message", http.HandlerFunc(h.Update))
 	ctx.Routes.Protected(http.MethodPost, "/messages/{syncId}/delete", "Delete message", http.HandlerFunc(h.Delete))
 	ctx.Routes.Protected(http.MethodPost, "/messages/{syncId}/restore", "Restore message", http.HandlerFunc(h.Restore))
 	ctx.Routes.Protected(http.MethodPost, "/messages/{syncId}/resolve", "Resolve conflict", http.HandlerFunc(h.ResolveConflict))
 	return nil
+}
+
+func (h *MessagesHandler) Edit(w http.ResponseWriter, r *http.Request) {
+	syncID := chi.URLParam(r, "syncId")
+	message, err := h.messageService.FindBySyncID(r.Context(), syncID)
+	if err != nil {
+		handleServiceError(w, err)
+		return
+	}
+	if message.Deleted {
+		handleServiceError(w, &model.MessageNotFoundError{SyncID: syncID})
+		return
+	}
+
+	h.renderEdit(w, r, viewmodel.MessageEditPage{SyncID: syncID, Author: message.Author, Content: message.Content}, http.StatusOK)
+}
+
+func (h *MessagesHandler) Update(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid form submission")
+		return
+	}
+
+	syncID := chi.URLParam(r, "syncId")
+	author := r.FormValue("author")
+	content := r.FormValue("content")
+	if _, err := h.messageService.UpdateMessage(r.Context(), syncID, author, content); err != nil {
+		var validationErr *model.ValidationError
+		if errors.As(err, &validationErr) {
+			h.renderEdit(w, r, viewmodel.MessageEditPage{
+				SyncID: syncID, Author: author, Content: content, Error: "Author and content are required.",
+			}, http.StatusBadRequest)
+			return
+		}
+		handleServiceError(w, err)
+		return
+	}
+
+	http.Redirect(w, r, "/messages", http.StatusSeeOther)
+}
+
+func (h *MessagesHandler) renderEdit(w http.ResponseWriter, r *http.Request, page viewmodel.MessageEditPage, status int) {
+	var err error
+	if status == http.StatusOK {
+		err = h.renderer.RenderPage(w, r, "message_edit", page)
+	} else {
+		err = h.renderer.RenderWithStatus(w, r, "message_edit", page, status)
+	}
+	if err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
 }
 
 func (h *MessagesHandler) Show(w http.ResponseWriter, r *http.Request) {
@@ -72,18 +128,14 @@ func (h *MessagesHandler) Show(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messageItems := make([]viewmodel.MessageItem, len(result.Items))
-	for i, m := range result.Items {
-		messageItems[i] = viewmodel.MessageItem{
-			SyncID:       m.SyncID,
-			Author:       m.Author,
-			Content:      m.Content,
-			UpdatedAt:    m.UpdatedAtLabel(),
-			UpdatedLabel: m.UpdatedAtLabel(),
-			Dirty:        m.Dirty,
-			Version:      m.Version,
-			HasConflict:  m.HasConflict,
-		}
+	messageItems, err := buildMessageItems(r.Context(), result.Items, h.voteService, user.ID, web.CSRFTokenFromRequest(r))
+	if err != nil {
+		_ = h.renderer.RenderWithStatus(w, r, "error", viewmodel.ErrorPage{
+			StatusCode: http.StatusInternalServerError,
+			Title:      "Error",
+			Message:    "Failed to load message votes",
+		}, http.StatusInternalServerError)
+		return
 	}
 
 	pagination := viewmodel.PaginationInfo{
@@ -155,7 +207,7 @@ func (h *MessagesHandler) Restore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/messages", http.StatusSeeOther)
+	http.Redirect(w, r, "/messages/trash", http.StatusSeeOther)
 }
 
 // ResolveConflict resolves a sync conflict on the message identified by the

@@ -170,8 +170,16 @@ func (r *Renderer) buildShell(req *http.Request) *viewmodel.ShellViewModel {
 	if items := NavItemsFromContext(req.Context()); len(items) > 0 {
 		path := req.URL.Path
 		resolved := make([]viewmodel.NavItem, len(items))
+		activeIndex := -1
+		activeLength := -1
 		for i, item := range items {
-			item.Active = navIsActive(item.URL, path)
+			if navIsActive(item.URL, path) && len(item.URL) > activeLength {
+				activeIndex = i
+				activeLength = len(item.URL)
+			}
+		}
+		for i, item := range items {
+			item.Active = i == activeIndex
 			resolved[i] = item
 		}
 		shell.NavItems = resolved
@@ -213,6 +221,10 @@ func pageTitle(page string) string {
 		return "Contact"
 	case "messages":
 		return "Messages"
+	case "message_edit":
+		return "Edit Message"
+	case "trash":
+		return "Trash"
 	case "search":
 		return "Search"
 	case "settings":
@@ -230,6 +242,9 @@ func pageTitle(page string) string {
 	case "error":
 		return "Error"
 	default:
-		return strings.Title(page)
+		if page == "" {
+			return ""
+		}
+		return strings.ToUpper(page[:1]) + page[1:]
 	}
 }

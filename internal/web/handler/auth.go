@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	extplatform "github.com/rygel/gouterstellar-platform/platform"
 
+	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/service"
 	"github.com/rygel/gouterstellar-platform/internal/web"
 	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
@@ -15,6 +17,7 @@ import (
 
 type AuthHandler struct {
 	securityService    *service.SecurityService
+	totpService        *service.TOTPService
 	passwordResetSvc   *service.PasswordResetService
 	renderer           *web.Renderer
 	sessionSecure      bool
@@ -24,6 +27,7 @@ type AuthHandler struct {
 
 func NewAuthHandler(
 	secSvc *service.SecurityService,
+	totpSvc *service.TOTPService,
 	passwordResetSvc *service.PasswordResetService,
 	renderer *web.Renderer,
 	sessionSecure bool,
@@ -32,6 +36,7 @@ func NewAuthHandler(
 ) *AuthHandler {
 	return &AuthHandler{
 		securityService:    secSvc,
+		totpService:        totpSvc,
 		passwordResetSvc:   passwordResetSvc,
 		renderer:           renderer,
 		sessionSecure:      sessionSecure,
@@ -44,6 +49,7 @@ func NewAuthHandler(
 func (h *AuthHandler) ContributeRoutes(ctx *extplatform.ContributionContext) error {
 	ctx.Routes.Public(http.MethodGet, "/auth", "Login page", http.HandlerFunc(h.ShowLogin))
 	ctx.Routes.Public(http.MethodPost, "/auth/login", "Handle login", http.HandlerFunc(h.HandleLogin))
+	ctx.Routes.Public(http.MethodPost, "/auth/totp/verify", "Verify TOTP challenge", http.HandlerFunc(h.HandleTOTPVerify))
 	ctx.Routes.Public(http.MethodPost, "/auth/register", "Handle registration", http.HandlerFunc(h.HandleRegister))
 	ctx.Routes.Public(http.MethodPost, "/auth/logout", "Handle logout", http.HandlerFunc(h.HandleLogout))
 	ctx.Routes.Public(http.MethodGet, "/auth/change-password", "Change password page", http.HandlerFunc(h.ShowChangePassword))
@@ -57,10 +63,17 @@ func (h *AuthHandler) ContributeRoutes(ctx *extplatform.ContributionContext) err
 
 func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 	returnTo := r.URL.Query().Get("returnTo")
+	registrationEnabled := h.securityService.RegistrationEnabled()
+	registerRequested := r.URL.Query().Get("mode") == "register"
 	page := viewmodel.AuthPage{
-		ReturnTo:           returnTo,
-		CSRFToken:          web.CSRFTokenFromRequest(r),
-		GoogleLoginEnabled: h.googleLoginEnabled,
+		ReturnTo:            returnTo,
+		CSRFToken:           web.CSRFTokenFromRequest(r),
+		GoogleLoginEnabled:  h.googleLoginEnabled,
+		RegistrationEnabled: registrationEnabled,
+		RegisterMode:        registerRequested && registrationEnabled,
+	}
+	if registerRequested && !registrationEnabled {
+		page.Error = "Registration is currently disabled"
 	}
 	if err := h.renderer.RenderPage(w, r, "auth_login", page); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
@@ -76,25 +89,54 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 
-	user, err := h.securityService.Authenticate(r.Context(), username, password)
+	result, err := h.securityService.Authenticate(r.Context(), username, password)
 	if err != nil {
 		h.renderAuthError(w, r, "Invalid username or password")
 		return
 	}
+	returnTo := r.FormValue("returnTo")
+	switch authenticated := result.(type) {
+	case model.Authenticated:
+		h.completeLogin(w, r, authenticated.User, returnTo)
+	case model.TOTPRequired:
+		_ = h.renderer.RenderPage(w, r, "auth_login", viewmodel.AuthPage{
+			ReturnTo:     returnTo,
+			CSRFToken:    web.CSRFTokenFromRequest(r),
+			TOTPRequired: true,
+			PartialToken: authenticated.PartialToken,
+		})
+	default:
+		h.renderAuthError(w, r, "Invalid username or password")
+	}
+}
 
+func (h *AuthHandler) HandleTOTPVerify(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		h.renderTOTPError(w, r, "Invalid form submission")
+		return
+	}
+	user, err := h.totpService.VerifyChallenge(r.Context(), r.FormValue("partialToken"), r.FormValue("code"))
+	if err != nil {
+		message := "Invalid authentication code"
+		if errors.Is(err, service.ErrTOTPChallengeExpired) {
+			message = "Your sign-in challenge expired. Enter your password again."
+		} else if errors.Is(err, service.ErrTOTPAccountLocked) {
+			message = "Your account is temporarily locked after too many failed attempts."
+		}
+		h.renderTOTPError(w, r, message)
+		return
+	}
+	h.completeLogin(w, r, user, r.FormValue("returnTo"))
+}
+
+func (h *AuthHandler) completeLogin(w http.ResponseWriter, r *http.Request, user *model.User, returnTo string) {
 	token, err := h.securityService.CreateSession(r.Context(), user.ID)
 	if err != nil {
 		h.renderAuthError(w, r, "Failed to create session")
 		return
 	}
-
 	http.SetCookie(w, web.CreateSessionCookie(token, h.sessionSecure))
-
-	h.analytics.Track(r.Context(), "user_login", map[string]interface{}{
-		"username": user.Username,
-	})
-
-	returnTo := r.FormValue("returnTo")
+	h.analytics.Track(r.Context(), "user_login", map[string]interface{}{"username": user.Username})
 	if returnTo == "" || !isSafeRedirect(returnTo) {
 		returnTo = "/"
 	}
@@ -109,10 +151,14 @@ func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 
 	username := r.FormValue("username")
 	password := r.FormValue("password")
+	if password != r.FormValue("confirmPassword") {
+		h.renderAuthError(w, r, "Password and confirmation do not match")
+		return
+	}
 
 	user, err := h.securityService.Register(r.Context(), username, password)
 	if err != nil {
-		h.renderAuthError(w, r, err.Error())
+		h.renderAuthError(w, r, registrationErrorMessage(err))
 		return
 	}
 
@@ -129,6 +175,22 @@ func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	})
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func registrationErrorMessage(err error) string {
+	var disabled *model.RegistrationDisabledError
+	var weak *model.WeakPasswordError
+	var duplicate *model.UsernameAlreadyExistsError
+	var validation *model.ValidationError
+	switch {
+	case errors.As(err, &disabled), errors.As(err, &weak), errors.As(err, &duplicate):
+		return err.Error()
+	case errors.As(err, &validation):
+		return strings.Join(validation.Errors, ". ")
+	default:
+		slog.Error("Registration failed", "error", err)
+		return "Registration failed. Please try again."
+	}
 }
 
 func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
@@ -277,12 +339,25 @@ func (h *AuthHandler) renderAuthError(w http.ResponseWriter, r *http.Request, er
 		returnTo = r.FormValue("returnTo")
 	}
 	page := viewmodel.AuthPage{
-		ReturnTo:           returnTo,
-		Error:              errMsg,
-		CSRFToken:          web.CSRFTokenFromRequest(r),
-		GoogleLoginEnabled: h.googleLoginEnabled,
+		ReturnTo:            returnTo,
+		Username:            r.FormValue("username"),
+		Error:               errMsg,
+		CSRFToken:           web.CSRFTokenFromRequest(r),
+		GoogleLoginEnabled:  h.googleLoginEnabled,
+		RegistrationEnabled: h.securityService.RegistrationEnabled(),
 	}
+	page.RegisterMode = r.URL.Path == "/auth/register" && page.RegistrationEnabled
 	_ = h.renderer.RenderWithStatus(w, r, "auth_login", page, http.StatusBadRequest)
+}
+
+func (h *AuthHandler) renderTOTPError(w http.ResponseWriter, r *http.Request, errMsg string) {
+	_ = h.renderer.RenderWithStatus(w, r, "auth_login", viewmodel.AuthPage{
+		ReturnTo:     r.FormValue("returnTo"),
+		Error:        errMsg,
+		CSRFToken:    web.CSRFTokenFromRequest(r),
+		TOTPRequired: true,
+		PartialToken: r.FormValue("partialToken"),
+	}, http.StatusUnauthorized)
 }
 
 func (h *AuthHandler) renderChangePasswordError(w http.ResponseWriter, r *http.Request, errMsg string) {

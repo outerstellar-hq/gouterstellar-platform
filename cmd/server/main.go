@@ -112,7 +112,7 @@ func main() {
 		}, app.SecurityService, cfg.DevMode),
 		filter.RateLimiter(10, 20),
 		filter.AuthRateLimiter(3, 5),
-		filter.CSRF(cfg.CSRFEnabled),
+		filter.CSRF(cfg.CSRFEnabled, cfg.SessionCookieSecure),
 		filter.Session(app.SecurityService, cfg.SessionCookieSecure),
 		filter.Logging(),
 	}

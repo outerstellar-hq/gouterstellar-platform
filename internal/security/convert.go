@@ -24,7 +24,20 @@ func PltUserToModel(u db.PltUser) *model.User {
 		Language:                  u.Language,
 		Theme:                     u.Theme,
 		Layout:                    u.Layout,
+		FailedLoginAttempts:       u.FailedLoginAttempts,
+		LockedUntil:               pgtypeTimestamptzToTimePtr(u.LockedUntil),
+		TOTPSecret:                u.TotpSecret,
+		TOTPEnabled:               u.TotpEnabled,
+		TOTPBackupCodes:           u.TotpBackupCodes,
+		FailedTOTPAttempts:        u.FailedTotpAttempts,
 	}
+}
+
+func pgtypeTimestamptzToTimePtr(t pgtype.Timestamptz) *time.Time {
+	if !t.Valid {
+		return nil
+	}
+	return &t.Time
 }
 
 func pgtypeTimestampToTimePtr(t pgtype.Timestamp) *time.Time {

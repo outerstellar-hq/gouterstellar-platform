@@ -14,6 +14,8 @@ make dev            # run with dev profile (CSRF off, dev dashboard on)
 
 The server listens on `http://localhost:8080` by default.
 
+Authentication includes BCrypt password hashing, durable account lockout, optional authenticator-app TOTP, one-time backup codes, sessions, API keys, JWT, and Google OAuth.
+
 ## Configuration
 
 Config is loaded from `config/application.yaml` with optional profile overrides (`config/application-dev.yaml`). All values can be overridden with environment variables.
@@ -33,7 +35,11 @@ Key settings:
 | `dev_mode` | `false` | Enable development mode |
 | `csrf_enabled` | `true` | Enable CSRF protection |
 | `session_cookie_secure` | `false` | Set Secure flag on session cookies |
-| `session_timeout_minutes` | `30` | Session timeout |
+| `session_timeout_minutes` | `30` | Sliding session timeout |
+| `session_absolute_timeout_minutes` | `1440` | Maximum session lifetime, regardless of activity |
+| `registration_enabled` | `true` | Allow public account registration |
+| `max_failed_login_attempts` | `10` | Failed logins before a timed account lockout |
+| `lockout_duration_seconds` | `900` | Account lockout duration |
 | `jwt.enabled` | `false` | Enable JWT token auth |
 | `email.enabled` | `false` | Enable email sending |
 
@@ -48,13 +54,13 @@ gouterstellar-platform/
 ├── config/
 │   ├── application.yaml        # Base configuration
 │   └── application-dev.yaml    # Dev profile overrides
-├── migrations/                 # Flyway-compatible SQL migrations
-├── queries/                    # sqlc query definitions (95 queries)
+├── queries/                    # sqlc query definitions
 ├── internal/
 │   ├── model/                  # Domain models
-│   ├── config/                 # Viper configuration loading
+│   ├── config/                 # YAML and environment configuration loading
 │   ├── persistence/            # Repository implementations + sqlc generated code
-│   ├── security/               # Auth, bcrypt, JWT, permissions, API keys, OAuth
+│   ├── security/               # Auth, bcrypt, TOTP, JWT, permissions, API keys, OAuth
+│   ├── platform/core/          # Core extension and versioned SQL migrations
 │   ├── service/                # Business logic (message, contact, security, email, outbox)
 │   ├── web/
 │   │   ├── filter/             # Chi middleware (CORS, CSRF, auth, rate limiting, metrics)

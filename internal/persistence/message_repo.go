@@ -67,6 +67,14 @@ func (r *messageRepo) CountMessages(ctx context.Context) (int64, error) {
 	return r.q.CountMessages(ctx)
 }
 
+func (r *messageRepo) ListDeletedMessages(ctx context.Context, limit, offset int32) ([]db.PltMessage, error) {
+	return r.q.ListDeletedMessages(ctx, db.ListDeletedMessagesParams{Limit: limit, Offset: offset})
+}
+
+func (r *messageRepo) CountDeletedMessages(ctx context.Context) (int64, error) {
+	return r.q.CountDeletedMessages(ctx)
+}
+
 func (r *messageRepo) FindBySyncID(ctx context.Context, syncID string) (db.PltMessage, error) {
 	return r.q.FindBySyncID(ctx, syncID)
 }

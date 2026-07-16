@@ -46,6 +46,16 @@ AND (content ILIKE '%' || $1::text || '%' OR author ILIKE '%' || $1::text || '%'
 -- name: CountMessages :one
 SELECT COUNT(*) FROM plt_messages WHERE deleted = false;
 
+-- name: ListDeletedMessages :many
+SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
+FROM plt_messages
+WHERE deleted = true
+ORDER BY updated_at_epoch_ms DESC
+LIMIT $1 OFFSET $2;
+
+-- name: CountDeletedMessages :one
+SELECT COUNT(*) FROM plt_messages WHERE deleted = true;
+
 -- name: FindBySyncID :one
 SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
 FROM plt_messages

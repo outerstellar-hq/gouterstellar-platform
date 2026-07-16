@@ -29,6 +29,20 @@ type MessageNotFoundError struct {
 	SyncID string
 }
 
+type PollNotFoundError struct {
+	SyncID string
+}
+
+func (e *PollNotFoundError) Error() string {
+	return fmt.Sprintf("Poll with sync ID %s was not found.", e.SyncID)
+}
+
+type PollConflictError struct {
+	Message string
+}
+
+func (e *PollConflictError) Error() string { return e.Message }
+
 func (e *MessageNotFoundError) Error() string {
 	return fmt.Sprintf("Message with sync ID %s was not found.", e.SyncID)
 }
@@ -95,6 +109,14 @@ type WeakPasswordError struct {
 }
 
 func (e *WeakPasswordError) Error() string { return e.Message }
+
+type RegistrationDisabledError struct{}
+
+func (e *RegistrationDisabledError) Error() string { return "Registration is currently disabled" }
+
+type InvalidPasswordError struct{}
+
+func (e *InvalidPasswordError) Error() string { return "Current password is incorrect" }
 
 type UserNotFoundError struct {
 	UserID string

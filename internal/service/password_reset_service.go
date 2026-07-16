@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
 	"github.com/rygel/gouterstellar-platform/internal/persistence"
 	"github.com/rygel/gouterstellar-platform/internal/security"
 )
@@ -83,8 +82,8 @@ func (s *PasswordResetService) ResetPassword(ctx context.Context, token, newPass
 		return fmt.Errorf("reset token has expired")
 	}
 
-	if len(newPassword) < MinPasswordLength {
-		return &model.WeakPasswordError{Message: fmt.Sprintf("Password must be at least %d characters", MinPasswordLength)}
+	if err := validatePassword(newPassword); err != nil {
+		return err
 	}
 
 	pltUser, err := s.userRepo.FindByID(ctx, resetToken.UserID)

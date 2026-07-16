@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -49,6 +50,16 @@ func (m *mockMessageRepo) CountSearchMessages(ctx context.Context, query string)
 }
 
 func (m *mockMessageRepo) CountMessages(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *mockMessageRepo) ListDeletedMessages(ctx context.Context, limit, offset int32) ([]db.PltMessage, error) {
+	args := m.Called(ctx, limit, offset)
+	return args.Get(0).([]db.PltMessage), args.Error(1)
+}
+
+func (m *mockMessageRepo) CountDeletedMessages(ctx context.Context) (int64, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(int64), args.Error(1)
 }
@@ -216,6 +227,29 @@ func TestCreateServerMessage_BlankValidation(t *testing.T) {
 	_, err := svc.CreateServerMessage(context.Background(), "", "hello")
 	assert.Error(t, err)
 	assert.IsType(t, &model.ValidationError{}, err)
+}
+
+func TestUpdateMessage_BlankValidation(t *testing.T) {
+	svc := NewMessageService(nil, nil, nil, nil, nil, nil, nil)
+
+	_, err := svc.UpdateMessage(context.Background(), "srv_test", "alice", " ")
+
+	assert.Error(t, err)
+	assert.IsType(t, &model.ValidationError{}, err)
+}
+
+func TestListMessagesReturnsRepositoryErrors(t *testing.T) {
+	repo := new(mockMessageRepo)
+	cache := persistence.NewMessageCache(60)
+	defer cache.Close()
+	svc := NewMessageService(repo, new(mockOutboxRepo), &FakeTxRunner{}, cache, &NoOpEventPublisher{}, nil, nil)
+	repo.On("CountMessages", mock.Anything).Return(int64(1), nil)
+	repo.On("ListMessages", mock.Anything, int32(20), int32(0)).Return([]db.PltMessage{}, errors.New("database unavailable"))
+
+	result, err := svc.ListMessages(context.Background(), 20, 0)
+
+	assert.Nil(t, result)
+	assert.ErrorContains(t, err, "list messages: database unavailable")
 }
 
 func TestCreateServerMessage_Success(t *testing.T) {

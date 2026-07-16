@@ -27,8 +27,8 @@ func AuthRateLimiter(rps float64, burst int) func(http.Handler) http.Handler {
 
 func isAuthRoute(path string) bool {
 	authPrefixes := []string{
-		"/auth/login", "/auth/register", "/auth/reset",
-		"/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/token",
+		"/auth/login", "/auth/register", "/auth/reset", "/auth/totp/verify",
+		"/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/token", "/api/v1/auth/totp/verify",
 	}
 	for _, prefix := range authPrefixes {
 		if strings.HasPrefix(path, prefix) {

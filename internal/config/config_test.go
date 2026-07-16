@@ -13,6 +13,10 @@ func TestLoadConfig(t *testing.T) {
 	assert.Contains(t, cfg.DatabaseURL, "postgres://")
 	assert.False(t, cfg.SessionCookieSecure)
 	assert.Equal(t, 30, cfg.SessionTimeoutMinutes)
+	assert.Equal(t, 1440, cfg.SessionAbsoluteMinutes)
+	assert.True(t, cfg.RegistrationEnabled)
+	assert.Equal(t, int32(10), cfg.MaxFailedLoginAttempts)
+	assert.Equal(t, int64(900), cfg.LockoutDurationSeconds)
 	assert.True(t, cfg.CSRFEnabled)
 	assert.False(t, cfg.JWT.Enabled)
 	assert.False(t, cfg.Email.Enabled)
@@ -22,12 +26,18 @@ func TestLoadConfig(t *testing.T) {
 func TestLoadConfigFromEnv(t *testing.T) {
 	os.Setenv("PORT", "9090")
 	os.Setenv("SESSION_TIMEOUT_MINUTES", "60")
+	os.Setenv("SESSION_ABSOLUTE_TIMEOUT_MINUTES", "720")
+	os.Setenv("REGISTRATION_ENABLED", "false")
 	defer os.Unsetenv("PORT")
 	defer os.Unsetenv("SESSION_TIMEOUT_MINUTES")
+	defer os.Unsetenv("SESSION_ABSOLUTE_TIMEOUT_MINUTES")
+	defer os.Unsetenv("REGISTRATION_ENABLED")
 
 	cfg := Load()
 	assert.Equal(t, 9090, cfg.Port)
 	assert.Equal(t, 60, cfg.SessionTimeoutMinutes)
+	assert.Equal(t, 720, cfg.SessionAbsoluteMinutes)
+	assert.False(t, cfg.RegistrationEnabled)
 }
 
 func TestJwtConfigDefaults(t *testing.T) {
@@ -49,15 +59,18 @@ func TestConfigValidation(t *testing.T) {
 		cfg     Config
 		wantErr bool
 	}{
-		{"valid", Config{Port: 8080, DatabaseURL: "postgres://localhost/db", SessionTimeoutMinutes: 30}, false},
-		{"invalid port", Config{Port: 0, DatabaseURL: "x", SessionTimeoutMinutes: 30}, true},
-		{"empty database url", Config{Port: 8080, DatabaseURL: "", SessionTimeoutMinutes: 30}, true},
-		{"jwt enabled no secret", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, JWT: JwtConfig{Enabled: true}}, true},
-		{"email enabled no host", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, Email: EmailConfig{Enabled: true}}, true},
-		{"valid platform_mode full", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, PlatformMode: "full"}, false},
-		{"valid platform_mode extension-host", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, PlatformMode: "extension-host"}, false},
-		{"valid platform_mode headless", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, PlatformMode: "headless"}, false},
-		{"invalid platform_mode", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, PlatformMode: "bogus"}, true},
+		{"valid", Config{Port: 8080, DatabaseURL: "postgres://localhost/db", SessionTimeoutMinutes: 30, SessionAbsoluteMinutes: 1440, MaxFailedLoginAttempts: 10, LockoutDurationSeconds: 900}, false},
+		{"invalid port", Config{Port: 0, DatabaseURL: "x", SessionTimeoutMinutes: 30, SessionAbsoluteMinutes: 1440, MaxFailedLoginAttempts: 10, LockoutDurationSeconds: 900}, true},
+		{"empty database url", Config{Port: 8080, DatabaseURL: "", SessionTimeoutMinutes: 30, SessionAbsoluteMinutes: 1440, MaxFailedLoginAttempts: 10, LockoutDurationSeconds: 900}, true},
+		{"invalid absolute timeout", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, MaxFailedLoginAttempts: 10, LockoutDurationSeconds: 900}, true},
+		{"jwt enabled no secret", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, SessionAbsoluteMinutes: 1440, MaxFailedLoginAttempts: 10, LockoutDurationSeconds: 900, JWT: JwtConfig{Enabled: true}}, true},
+		{"email enabled no host", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, SessionAbsoluteMinutes: 1440, MaxFailedLoginAttempts: 10, LockoutDurationSeconds: 900, Email: EmailConfig{Enabled: true}}, true},
+		{"valid platform_mode full", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, SessionAbsoluteMinutes: 1440, MaxFailedLoginAttempts: 10, LockoutDurationSeconds: 900, PlatformMode: "full"}, false},
+		{"valid platform_mode extension-host", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, SessionAbsoluteMinutes: 1440, MaxFailedLoginAttempts: 10, LockoutDurationSeconds: 900, PlatformMode: "extension-host"}, false},
+		{"valid platform_mode headless", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, SessionAbsoluteMinutes: 1440, MaxFailedLoginAttempts: 10, LockoutDurationSeconds: 900, PlatformMode: "headless"}, false},
+		{"invalid platform_mode", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, SessionAbsoluteMinutes: 1440, MaxFailedLoginAttempts: 10, LockoutDurationSeconds: 900, PlatformMode: "bogus"}, true},
+		{"invalid max failed attempts", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, SessionAbsoluteMinutes: 1440, LockoutDurationSeconds: 900}, true},
+		{"invalid lockout duration", Config{Port: 8080, DatabaseURL: "x", SessionTimeoutMinutes: 30, SessionAbsoluteMinutes: 1440, MaxFailedLoginAttempts: 10}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

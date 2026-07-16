@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"math"
 	"net/http"
@@ -19,6 +20,19 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
+}
+
+func decodeJSONBody(w http.ResponseWriter, r *http.Request, maxBytes int64, destination interface{}) error {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(destination); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return errors.New("request body must contain one JSON value")
+	}
+	return nil
 }
 
 func getIntParam(r *http.Request, name string, defaultVal int) int {
@@ -61,8 +75,13 @@ func handleServiceError(w http.ResponseWriter, err error) {
 	var usernameExists *model.UsernameAlreadyExistsError
 	var insufficientPerm *model.InsufficientPermissionError
 	var validationErr *model.ValidationError
+	var registrationDisabled *model.RegistrationDisabledError
+	var invalidPassword *model.InvalidPasswordError
 	var messageNotFound *model.MessageNotFoundError
 	var contactNotFound *model.ContactNotFoundError
+	var pollNotFound *model.PollNotFoundError
+	var pollConflict *model.PollConflictError
+	var optimisticLock *model.OptimisticLockError
 
 	switch {
 	case errors.As(err, &userNotFound):
@@ -75,10 +94,20 @@ func handleServiceError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusForbidden, err.Error())
 	case errors.As(err, &validationErr):
 		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.As(err, &registrationDisabled):
+		writeError(w, http.StatusForbidden, err.Error())
+	case errors.As(err, &invalidPassword):
+		writeError(w, http.StatusUnauthorized, err.Error())
 	case errors.As(err, &messageNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
 	case errors.As(err, &contactNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
+	case errors.As(err, &pollNotFound):
+		writeError(w, http.StatusNotFound, err.Error())
+	case errors.As(err, &pollConflict):
+		writeError(w, http.StatusConflict, err.Error())
+	case errors.As(err, &optimisticLock):
+		writeError(w, http.StatusConflict, err.Error())
 	default:
 		slog.Error("Unhandled service error", "error", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
