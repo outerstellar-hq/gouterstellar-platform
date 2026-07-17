@@ -66,6 +66,7 @@ func NewHandler(opts Options) (http.Handler, error) {
 	var allNav []NavigationItem
 	var allBanners []bannerRegistration
 	var allReadiness []ReadinessStatus
+	includedCorePages := make(map[PlatformPageSet]struct{})
 	for _, ext := range opts.Extensions {
 		ctx := newContributionContext(ext.Manifest().ID, opts.Services, assetHostOptions{
 			staticDir:       opts.StaticDir,
@@ -78,6 +79,13 @@ func NewHandler(opts Options) (http.Handler, error) {
 		allNav = append(allNav, ctx.Navigation.Items()...)
 		allBanners = append(allBanners, ctx.Banners.all()...)
 		allReadiness = append(allReadiness, ctx.Readiness.All()...)
+		for page := range ctx.PlatformPages.All() {
+			includedCorePages[page] = struct{}{}
+		}
+	}
+	if opts.Mode == ExtensionHost {
+		allRoutes = filterExtensionHostCoreRoutes(allRoutes, includedCorePages)
+		allNav = filterExtensionHostCoreNav(allNav, includedCorePages)
 	}
 
 	// 3. Validate all routes against ownership + conflicts.
@@ -97,6 +105,7 @@ func NewHandler(opts Options) (http.Handler, error) {
 	// through the handler layer. The items are static after assembly, so we
 	// convert once here and reuse the slice for every request.
 	navVM := convertNavItems(allNav)
+	chrome := shellChromeFromNav(navVM)
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			requestContext := RequestContextFrom(req)
@@ -121,7 +130,8 @@ func NewHandler(opts Options) (http.Handler, error) {
 					return resolveBanners(ctx, user, allBanners)
 				})
 			}
-			next.ServeHTTP(w, web.WithNavItems(req, navVM))
+			req = web.WithNavItems(req, navVM)
+			next.ServeHTTP(w, web.WithShellChrome(req, chrome))
 		})
 	})
 
@@ -259,12 +269,22 @@ func convertNavItems(items []NavigationItem) []viewmodel.NavItem {
 	out := make([]viewmodel.NavItem, len(items))
 	for i, item := range items {
 		out[i] = viewmodel.NavItem{
-			Label: item.Label,
-			URL:   item.URL,
-			Icon:  item.Icon,
+			Label:     item.Label,
+			URL:       item.URL,
+			Icon:      item.Icon,
+			AdminOnly: item.AdminOnly,
 		}
 	}
 	return out
+}
+
+func shellChromeFromNav(items []viewmodel.NavItem) web.ShellChrome {
+	var chrome web.ShellChrome
+	for _, item := range items {
+		chrome.ShowSearchForm = chrome.ShowSearchForm || item.URL == "/search"
+		chrome.ShowNotificationBell = chrome.ShowNotificationBell || item.URL == "/notifications"
+	}
+	return chrome
 }
 
 // TestOptions configures a test application.

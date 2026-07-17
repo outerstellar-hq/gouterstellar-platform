@@ -350,6 +350,12 @@ func (r *Renderer) buildShell(req *http.Request) (*viewmodel.ShellViewModel, err
 		}
 		shell.NavItems = resolved
 	}
+	if chrome, ok := ShellChromeFromContext(req.Context()); ok {
+		shell.ShowSearchForm = chrome.ShowSearchForm
+		shell.ShowNotificationBell = chrome.ShowNotificationBell
+	} else {
+		shell.ShowNotificationBell = shell.User != nil
+	}
 
 	if shell.User != nil {
 		if loader := BannerLoaderFromContext(req.Context()); loader != nil {
@@ -392,6 +398,12 @@ func navTranslationKey(url string) string {
 		return "web.nav.settings"
 	case "/notifications":
 		return "web.nav.notifications"
+	case "/admin/extensions":
+		return "web.nav.extensions"
+	case "/admin/users":
+		return "web.nav.users"
+	case "/admin/audit":
+		return "web.nav.audit"
 	default:
 		return ""
 	}

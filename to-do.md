@@ -24,7 +24,7 @@ Work GitHub issues in dependency order before continuing discretionary parity im
 - [x] Review and commit the complete issue/parity change set on `codex/web-replacement`.
 - [x] Push the commit, then verify the canonical module path with a remote `go get`.
 - [x] Link [draft PR #10](https://github.com/outerstellar-hq/gouterstellar-platform/pull/10) to issues #4–#9 with automatic closing references.
-- [ ] Merge PR #10 after CI and review; issues #4–#9 will close automatically on merge.
+- [x] Merge PR #10 after CI and review; issues #4–#9 closed automatically on merge.
 
 ## Confirmed remaining parity gaps
 
@@ -38,7 +38,7 @@ Work GitHub issues in dependency order before continuing discretionary parity im
 - [x] Echo or generate `X-Request-Id` on every response and expose it together with `X-Session-Expired` through CORS.
 - [x] Keep common security headers on every response while omitting browser-only CSP from `/api/` routes.
 - [x] Carry the per-request CSP nonce into shared-shell script tags and remove the unnecessary `unsafe-inline` script allowance from the default policy.
-- [ ] Continue comparing Java integration-test behavior against the packaged Go runtime after each completed slice.
+- [x] Continue comparing Java integration-test behavior against the packaged Go runtime after each completed slice.
 
 ## Next parity audit queue
 
@@ -52,7 +52,9 @@ Work GitHub issues in dependency order before continuing discretionary parity im
 - [x] Continue the Java integration-test matrix through audit-log, notifications, and user-management workflows.
 - [x] Continue the Java integration-test matrix through message restore, profile API, and CSRF-protected change-password workflows.
 - [x] Continue the Java integration-test matrix through message search, diagnostics, and developer-dashboard workflows.
-- [ ] Continue the Java integration-test matrix through extension dashboard, extension host UI, and component fragment workflows.
+- [x] Continue the Java integration-test matrix through extension dashboard, extension host UI, and component fragment workflows.
+- [x] Continue the Java integration-test matrix through extension-host default page-set behavior and packaged navigation visibility.
+- [x] Continue the Java integration-test matrix through packaged extension-host end-to-end runtime and release artifact behavior.
 
 ## Completed in the current parity slice
 
@@ -79,4 +81,7 @@ Work GitHub issues in dependency order before continuing discretionary parity im
 - [x] Matched Java audit actor/target/action recording, admin lifecycle and password changes, notification ownership/no-op semantics, unread state, and browser bell/admin workflows through real PostgreSQL routes and the packaged Podman runtime.
 - [x] Matched Java message restore no-op/redirect behavior, persisted profile/account API lifecycle, and CSRF-protected browser password-change fragments through real PostgreSQL routes and the packaged Podman runtime.
 - [x] Matched Java diagnostics route metadata, extension readiness reporting, message-search/sync pull behavior, and developer-dashboard access/disabled-route behavior through real route tests and Podman-backed PostgreSQL coverage.
+- [x] Matched Java extension dashboard diagnostics for route ownership, admin sections, mounted asset routes, and readiness while confirming component fragment behavior through Podman-backed handler coverage.
+- [x] Matched Java extension-host page-set behavior so core pages and chrome are hidden by default, selected core pages can be opted in, and extensions can own root without conflicting with the core home route.
+- [x] Added a packaged Podman end-to-end gate that builds the release image, migrates and seeds PostgreSQL, logs in with CSRF, verifies extension-host page filtering, checks extension asset ETags, and rejects Node/Tailwind runtime artifacts.
 - [x] Passed module verification, tidy check, vet, full Podman-backed tests, golangci-lint, gosec, actionlint, and compose validation.
