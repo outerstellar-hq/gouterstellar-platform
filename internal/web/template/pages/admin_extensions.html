@@ -19,6 +19,38 @@
                 <dt>{{ translate $.Language "web.extensions.routes" }}</dt><dd>{{ .RouteCount }}</dd>
                 <dt>{{ translate $.Language "web.extensions.migrations" }}</dt><dd>{{ .MigrationCount }}</dd>
             </dl>
+            <section class="extension-diagnostics" aria-label="Extension diagnostics">
+                <h3>Extension diagnostics</h3>
+                <div class="extension-diagnostics-group">
+                    <h4>Route ownership</h4>
+                    <dl>
+                        <dt>UI</dt><dd>{{ range .UIOwnership }}<code>{{ . }}</code> {{ else }}<span>none</span>{{ end }}</dd>
+                        <dt>API</dt><dd>{{ range .APIOwnership }}<code>{{ . }}</code> {{ else }}<span>none</span>{{ end }}</dd>
+                        <dt>Admin sections</dt><dd>{{ range .AdminOwnership }}<code>{{ . }}</code> {{ else }}<span>none</span>{{ end }}</dd>
+                        <dt>Assets</dt><dd>{{ range .AssetOwnership }}<code>{{ . }}</code> {{ else }}<span>none</span>{{ end }}</dd>
+                    </dl>
+                </div>
+                <div class="extension-diagnostics-group">
+                    <h4>Routes and assets</h4>
+                    <ul>
+                        {{ range .Routes }}
+                        <li><code>{{ .Method }} {{ .PathPattern }}</code> <span>{{ .Group }}</span>{{ if .Description }} — {{ .Description }}{{ end }}{{ if .HandlerKind }} <span>({{ .HandlerKind }})</span>{{ end }}</li>
+                        {{ else }}
+                        <li>No registered routes.</li>
+                        {{ end }}
+                    </ul>
+                </div>
+                {{ if .Readiness }}
+                <div class="extension-diagnostics-group">
+                    <h4>Readiness</h4>
+                    <ul>
+                        {{ range .Readiness }}
+                        <li><strong>{{ .Status }}</strong> {{ .Name }}{{ if .Message }} — {{ .Message }}{{ end }}</li>
+                        {{ end }}
+                    </ul>
+                </div>
+                {{ end }}
+            </section>
         </article>
         {{ else }}
         <p class="empty-state">{{ translate $.Language "web.extensions.empty" }}</p>

@@ -8,9 +8,10 @@ import (
 
 // NavigationItem is a single nav entry contributed by an extension.
 type NavigationItem struct {
-	Label string
-	URL   string
-	Icon  string
+	Label     string
+	URL       string
+	Icon      string
+	AdminOnly bool
 }
 
 // NavigationRegistry collects navigation items during contribution.
@@ -26,8 +27,46 @@ func (n *NavigationRegistry) Add(label, url, icon string) {
 	n.items = append(n.items, NavigationItem{Label: label, URL: url, Icon: icon})
 }
 
+func (n *NavigationRegistry) AddAdmin(label, url, icon string) {
+	n.items = append(n.items, NavigationItem{Label: label, URL: url, Icon: icon, AdminOnly: true})
+}
+
 func (n *NavigationRegistry) Items() []NavigationItem {
 	return n.items
+}
+
+type PlatformPageSet string
+
+const (
+	PlatformPageHome          PlatformPageSet = "home"
+	PlatformPageContacts      PlatformPageSet = "contacts"
+	PlatformPageSearch        PlatformPageSet = "search"
+	PlatformPageSettings      PlatformPageSet = "settings"
+	PlatformPageNotifications PlatformPageSet = "notifications"
+	PlatformPageProfile       PlatformPageSet = "profile"
+	PlatformPageAdmin         PlatformPageSet = "admin"
+)
+
+type PlatformPageRegistry struct {
+	included map[PlatformPageSet]struct{}
+}
+
+func NewPlatformPageRegistry() *PlatformPageRegistry {
+	return &PlatformPageRegistry{included: make(map[PlatformPageSet]struct{})}
+}
+
+func (p *PlatformPageRegistry) Include(pages ...PlatformPageSet) {
+	for _, page := range pages {
+		p.included[page] = struct{}{}
+	}
+}
+
+func (p *PlatformPageRegistry) All() map[PlatformPageSet]struct{} {
+	result := make(map[PlatformPageSet]struct{}, len(p.included))
+	for page := range p.included {
+		result[page] = struct{}{}
+	}
+	return result
 }
 
 // ReadinessStatus is a diagnostic status contributed by an extension.
@@ -66,12 +105,13 @@ func (r *ReadinessRegistry) All() []ReadinessStatus {
 // Each instance is constructed per-extension and stamps the owner ID onto
 // every route registration.
 type ContributionContext struct {
-	Routes     *RouteRegistry
-	Navigation *NavigationRegistry
-	Readiness  *ReadinessRegistry
-	Pages      *PageRegistry
-	Operations *OperationsRegistry
-	Banners    *BannerRegistry
+	Routes        *RouteRegistry
+	Navigation    *NavigationRegistry
+	Readiness     *ReadinessRegistry
+	Pages         *PageRegistry
+	Operations    *OperationsRegistry
+	Banners       *BannerRegistry
+	PlatformPages *PlatformPageRegistry
 }
 
 // NewContributionContext builds a context for a specific extension owner.
@@ -82,12 +122,13 @@ func NewContributionContext(owner string) *ContributionContext {
 func newContributionContext(owner string, services ServiceBag, assets assetHostOptions) *ContributionContext {
 	routes := newRouteRegistry(owner, assets)
 	return &ContributionContext{
-		Routes:     routes,
-		Navigation: NewNavigationRegistry(),
-		Readiness:  newReadinessRegistry(owner),
-		Pages:      &PageRegistry{owner: owner, renderer: services.Pages},
-		Operations: newOperationsRegistry(owner, routes, services.Pages, services.OperationsAudit),
-		Banners:    &BannerRegistry{owner: owner},
+		Routes:        routes,
+		Navigation:    NewNavigationRegistry(),
+		Readiness:     newReadinessRegistry(owner),
+		Pages:         &PageRegistry{owner: owner, renderer: services.Pages},
+		Operations:    newOperationsRegistry(owner, routes, services.Pages, services.OperationsAudit),
+		Banners:       &BannerRegistry{owner: owner},
+		PlatformPages: NewPlatformPageRegistry(),
 	}
 }
 

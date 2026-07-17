@@ -141,6 +141,10 @@ func (e *Extension) Contribute(ctx *extplatform.ContributionContext) error {
 	ctx.Navigation.Add("Search", "/search", "search")
 	ctx.Navigation.Add("Settings", "/settings", "gear")
 	ctx.Navigation.Add("Notifications", "/notifications", "bell")
+	ctx.Navigation.Add("Profile", "/auth/profile", "user")
+	ctx.Navigation.AddAdmin("Extensions", "/admin/extensions", "puzzle")
+	ctx.Navigation.AddAdmin("Users", "/admin/users", "users")
+	ctx.Navigation.AddAdmin("Audit", "/admin/audit", "clipboard")
 
 	return nil
 }

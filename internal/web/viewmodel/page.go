@@ -199,6 +199,26 @@ type ExtensionCard struct {
 	Mode           string
 	RouteCount     int
 	MigrationCount int
+	UIOwnership    []string
+	APIOwnership   []string
+	AdminOwnership []string
+	AssetOwnership []string
+	Routes         []ExtensionRoute
+	Readiness      []ExtensionReadiness
+}
+
+type ExtensionRoute struct {
+	Method      string
+	PathPattern string
+	Group       string
+	Description string
+	HandlerKind string
+}
+
+type ExtensionReadiness struct {
+	Name    string
+	Status  string
+	Message string
 }
 
 type UserItem struct {

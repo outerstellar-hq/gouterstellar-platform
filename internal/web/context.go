@@ -17,9 +17,15 @@ const (
 	userContextKey     ContextKey = "user"
 	csrfContextKey     ContextKey = "csrfToken"
 	navItemsContextKey ContextKey = "navItems"
+	shellChromeKey     ContextKey = "shellChrome"
 	bannerLoaderKey    ContextKey = "bannerLoader"
 	cspNonceKey        ContextKey = "cspNonce"
 )
+
+type ShellChrome struct {
+	ShowSearchForm       bool
+	ShowNotificationBell bool
+}
 
 // BannerLoader resolves extension-contributed notices only when a shared shell
 // is rendered, avoiding remote provider work on JSON and asset requests.
@@ -67,6 +73,15 @@ func WithNavItems(r *http.Request, items []viewmodel.NavItem) *http.Request {
 func NavItemsFromContext(ctx context.Context) []viewmodel.NavItem {
 	items, _ := ctx.Value(navItemsContextKey).([]viewmodel.NavItem)
 	return items
+}
+
+func WithShellChrome(r *http.Request, chrome ShellChrome) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), shellChromeKey, chrome))
+}
+
+func ShellChromeFromContext(ctx context.Context) (ShellChrome, bool) {
+	chrome, ok := ctx.Value(shellChromeKey).(ShellChrome)
+	return chrome, ok
 }
 
 func WithBannerLoader(r *http.Request, loader BannerLoader) *http.Request {
