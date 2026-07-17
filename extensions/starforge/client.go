@@ -44,6 +44,46 @@ type Worker struct {
 	Heartbeat     Heartbeat  `json:"heartbeat"`
 }
 
+type SleepCatalog struct {
+	Stories []SleepStory `json:"stories"`
+}
+
+type SleepStory struct {
+	ID       string         `json:"id"`
+	Title    string         `json:"title"`
+	Order    int            `json:"order"`
+	Episodes []SleepEpisode `json:"episodes"`
+}
+
+type SleepEpisode struct {
+	ID                  string              `json:"id"`
+	Title               string              `json:"title"`
+	Order               int                 `json:"order"`
+	Status              string              `json:"status"`
+	LastUpdatedAt       *time.Time          `json:"lastUpdatedAt"`
+	PublicationMetadata PublicationMetadata `json:"publicationMetadata"`
+	Stages              []SleepStage        `json:"stages"`
+	Artifacts           []SleepArtifact     `json:"artifacts"`
+}
+
+type PublicationMetadata struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
+type SleepStage struct {
+	Name          string     `json:"name"`
+	Status        string     `json:"status"`
+	LastUpdatedAt *time.Time `json:"lastUpdatedAt"`
+}
+
+type SleepArtifact struct {
+	Label     string     `json:"label"`
+	URL       string     `json:"url"`
+	State     string     `json:"state"`
+	ExpiresAt *time.Time `json:"expiresAt"`
+}
+
 // upstreamWorker is the wire contract exposed by StarlineZero's control plane.
 // Keep this separate from Worker: the latter is the stable view model returned
 // by this extension's BFF, while the control-plane API uses snake_case fields
@@ -63,8 +103,48 @@ type upstreamWorker struct {
 	LastHeartbeatAt  *time.Time `json:"last_heartbeat_at"`
 }
 
+type upstreamSleepCatalog struct {
+	Stories []upstreamSleepStory `json:"stories"`
+}
+
+type upstreamSleepStory struct {
+	ID       string                 `json:"id"`
+	Title    string                 `json:"title"`
+	Order    int                    `json:"order"`
+	Episodes []upstreamSleepEpisode `json:"episodes"`
+}
+
+type upstreamSleepEpisode struct {
+	ID                  string                        `json:"id"`
+	Title               string                        `json:"title"`
+	Order               int                           `json:"order"`
+	Status              string                        `json:"status"`
+	LastUpdatedAt       *time.Time                    `json:"last_updated_at"`
+	PublicationMetadata upstreamPublicationMetadata   `json:"publication_metadata"`
+	Stages              map[string]upstreamSleepStage `json:"stages"`
+	Artifacts           []upstreamSleepArtifact       `json:"artifacts"`
+}
+
+type upstreamPublicationMetadata struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
+type upstreamSleepStage struct {
+	Status        string     `json:"status"`
+	LastUpdatedAt *time.Time `json:"last_updated_at"`
+}
+
+type upstreamSleepArtifact struct {
+	Label     string     `json:"label"`
+	URL       string     `json:"url"`
+	State     string     `json:"state"`
+	ExpiresAt *time.Time `json:"expires_at"`
+}
+
 type Client interface {
 	ListWorkers(context.Context) ([]Worker, error)
+	SleepCatalog(context.Context) (SleepCatalog, error)
 	UpdateWorkerLabel(context.Context, string, string) error
 }
 
@@ -146,6 +226,31 @@ func (c *HTTPClient) ListWorkers(ctx context.Context) ([]Worker, error) {
 		})
 	}
 	return workers, nil
+}
+
+func (c *HTTPClient) SleepCatalog(ctx context.Context) (SleepCatalog, error) {
+	request, err := c.request(ctx, http.MethodGet, "/api/sleep/catalog", nil)
+	if err != nil {
+		return SleepCatalog{}, err
+	}
+	response, err := c.httpClient.Do(request) // #nosec G704 -- destination is validated startup configuration; redirects are disabled
+	if err != nil {
+		return SleepCatalog{}, ErrUnavailable
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return SleepCatalog{}, ErrUnavailable
+	}
+
+	var payload upstreamSleepCatalog
+	decoder := json.NewDecoder(io.LimitReader(response.Body, maxUpstreamResponseBytes+1))
+	if err := decoder.Decode(&payload); err != nil {
+		return SleepCatalog{}, ErrMalformedResponse
+	}
+	if err := ensureJSONEOF(decoder); err != nil || payload.Stories == nil {
+		return SleepCatalog{}, ErrMalformedResponse
+	}
+	return normalizeSleepCatalog(payload)
 }
 
 func (c *HTTPClient) UpdateWorkerLabel(ctx context.Context, workerID, label string) error {

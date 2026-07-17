@@ -22,7 +22,9 @@ import (
 
 type fakeClient struct {
 	workers       []Worker
+	sleepCatalog  SleepCatalog
 	listErr       error
+	sleepErr      error
 	updateErr     error
 	updatedID     string
 	updatedLabels []string
@@ -30,6 +32,10 @@ type fakeClient struct {
 
 func (f *fakeClient) ListWorkers(context.Context) ([]Worker, error) {
 	return f.workers, f.listErr
+}
+
+func (f *fakeClient) SleepCatalog(context.Context) (SleepCatalog, error) {
+	return f.sleepCatalog, f.sleepErr
 }
 
 func (f *fakeClient) UpdateWorkerLabel(_ context.Context, workerID, label string) error {
@@ -42,15 +48,33 @@ type fakeRenderer struct{}
 
 func (fakeRenderer) RegisterTemplates(string, fs.FS, string, string) error { return nil }
 func (fakeRenderer) RenderPage(w http.ResponseWriter, _ *http.Request, page string, data any) error {
-	view := data.(workerPage)
 	_, _ = w.Write([]byte(page))
-	if view.Unavailable {
-		_, _ = w.Write([]byte(" Starforge is temporarily unavailable"))
+	switch view := data.(type) {
+	case workerPage:
+		if view.Unavailable {
+			_, _ = w.Write([]byte(" Starforge is temporarily unavailable"))
+		}
+		for _, worker := range view.Workers {
+			_, _ = w.Write([]byte(" " + worker.DisplayName + " " + worker.OperatorLabel))
+		}
+		_, _ = w.Write([]byte(fmt.Sprintf(" total=%d online=%d sessions=%d", view.Summary.Total, view.Summary.Online, view.Summary.ActiveSessions)))
+	case sleepSeriesPage:
+		if view.Unavailable {
+			_, _ = w.Write([]byte(" Sleep catalog is temporarily unavailable"))
+		}
+		for _, story := range view.Stories {
+			_, _ = w.Write([]byte(" " + story.Title))
+			for _, episode := range story.Episodes {
+				_, _ = w.Write([]byte(" " + episode.Title + " " + episode.PublicationTitle + " " + episode.PublicationDescription))
+				for _, artifact := range episode.Artifacts {
+					_, _ = w.Write([]byte(" " + artifact.Label + " " + artifact.StateClass))
+					if !artifact.HasLink {
+						_, _ = w.Write([]byte(" No active link"))
+					}
+				}
+			}
+		}
 	}
-	for _, worker := range view.Workers {
-		_, _ = w.Write([]byte(" " + worker.DisplayName + " " + worker.OperatorLabel))
-	}
-	_, _ = w.Write([]byte(fmt.Sprintf(" total=%d online=%d sessions=%d", view.Summary.Total, view.Summary.Online, view.Summary.ActiveSessions)))
 	return nil
 }
 
@@ -63,10 +87,27 @@ func TestStarforgeContract(t *testing.T) {
 	assert.Equal(t, "starforge", extension.Manifest().ID)
 	assert.Equal(t, []string{
 		"GET /starforge",
+		"GET /starforge/pipelines/sleep-series",
 		"GET /api/starforge/workers",
 		"PUT /api/starforge/workers/{uuid}/label",
 	}, diagnostics.RoutePatterns())
 	assert.Contains(t, diagnostics.NavigationLabels(), "Starforge")
+}
+
+func TestPipelineTemplateRegistryFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	registry := newPipelineTemplateRegistry()
+	template, err := registry.selectTemplate(pipelineKindSleepSeries, sleepSeriesSchema)
+	require.NoError(t, err)
+	assert.Equal(t, "starforge_sleep_series", template.Page)
+
+	_, err = registry.selectTemplate("bounty-broadcast", sleepSeriesSchema)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported Starforge pipeline template")
+
+	_, err = registry.selectTemplate(pipelineKindSleepSeries, sleepSeriesSchema+1)
+	require.Error(t, err)
 }
 
 func TestPageRendersWorkersAndExplicitUnavailableState(t *testing.T) {
@@ -134,6 +175,83 @@ func TestStarforgeTemplateRendersFleetSummaryAndHonestMissingData(t *testing.T) 
 	assert.Contains(t, html, "No active session")
 	assert.Contains(t, html, `value="test-csrf"`)
 	assert.NotContains(t, html, "0001-01-01")
+}
+
+func TestSleepSeriesPageRendersTypedCatalogAndUnavailableState(t *testing.T) {
+	t.Parallel()
+
+	app := newStarforgeTestApp(t, &fakeClient{sleepCatalog: SleepCatalog{Stories: []SleepStory{{
+		ID:    "story-1",
+		Title: "Rain over Europa",
+		Order: 1,
+		Episodes: []SleepEpisode{{
+			ID:            "episode-1",
+			Title:         "Harbor lights",
+			Order:         1,
+			Status:        "running",
+			LastUpdatedAt: ptrTime(time.Date(2026, time.July, 17, 8, 0, 0, 0, time.UTC)),
+			PublicationMetadata: PublicationMetadata{
+				Title:       "Sleep story title",
+				Description: "Publication-ready description",
+			},
+			Stages: []SleepStage{
+				{Name: "text", Status: "complete"},
+				{Name: "voice", Status: "running"},
+			},
+			Artifacts: []SleepArtifact{
+				{Label: "720p preview", URL: "https://starline.invalid/preview.mp4", State: "preview"},
+				{Label: "4K master", URL: "https://starline.invalid/master.mp4", State: "durable"},
+				{Label: "expired preview", URL: "https://starline.invalid/old.mp4", State: "expired"},
+				{Label: "missing subtitles", State: "missing"},
+			},
+		}},
+	}}}})
+	response := httptest.NewRecorder()
+	app.Handler.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/starforge/pipelines/sleep-series", nil))
+	assert.Equal(t, http.StatusOK, response.Code)
+	body := response.Body.String()
+	assert.Contains(t, body, "Rain over Europa")
+	assert.Contains(t, body, "Harbor lights")
+	assert.Contains(t, body, "Sleep story title")
+	assert.Contains(t, body, "Publication-ready description")
+	assert.Contains(t, body, "720p preview")
+	assert.Contains(t, body, "artifact-durable")
+	assert.Contains(t, body, "artifact-expired")
+	assert.Contains(t, body, "No active link")
+
+	app = newStarforgeTestApp(t, &fakeClient{sleepErr: ErrUnavailable})
+	response = httptest.NewRecorder()
+	app.Handler.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/starforge/pipelines/sleep-series", nil))
+	assert.Equal(t, http.StatusOK, response.Code)
+	assert.Contains(t, response.Body.String(), "Sleep catalog is temporarily unavailable")
+}
+
+func TestSleepSeriesTemplateRendersKeyboardAndNarrowScreenLandmarks(t *testing.T) {
+	t.Parallel()
+
+	page := struct{ BodyData sleepSeriesPage }{BodyData: buildSleepSeriesPage(SleepCatalog{Stories: []SleepStory{{
+		ID:    "story-1",
+		Title: "Story",
+		Episodes: []SleepEpisode{{
+			ID:     "episode-1",
+			Title:  "Episode",
+			Status: "complete",
+			Stages: []SleepStage{{Name: "text", Status: "complete"}},
+			Artifacts: []SleepArtifact{
+				{Label: "Durable master", URL: "https://starline.invalid/master.mp4", State: "durable"},
+			},
+		}},
+	}}})}
+	parsed, err := template.ParseFS(templatesFS, "templates/pages/starforge_sleep_series.html")
+	require.NoError(t, err)
+	var output bytes.Buffer
+	require.NoError(t, parsed.ExecuteTemplate(&output, "content", page))
+
+	html := output.String()
+	assert.Contains(t, html, `aria-label="Fixed production stages"`)
+	assert.Contains(t, html, `aria-label="Preview and durable artifacts"`)
+	assert.Contains(t, html, `<a class="btn btn-secondary" href="https://starline.invalid/master.mp4">Open artifact</a>`)
+	assert.NotContains(t, html, "<script")
 }
 
 func TestProtectedPageAndBFFRejectAnonymousRequests(t *testing.T) {
@@ -241,4 +359,8 @@ func authenticatedRequest(method, target string, body *strings.Reader) *http.Req
 		User:      &extplatform.RequestUser{ID: uuid.NewString(), Username: "operator", Role: "USER"},
 		CSRFToken: "csrf-token",
 	})
+}
+
+func ptrTime(value time.Time) *time.Time {
+	return &value
 }

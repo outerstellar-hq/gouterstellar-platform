@@ -18,12 +18,13 @@ import (
 var templatesFS embed.FS
 
 type Extension struct {
-	client Client
-	pages  *extplatform.PageRegistry
+	client            Client
+	pages             *extplatform.PageRegistry
+	pipelineTemplates pipelineTemplateRegistry
 }
 
 func New(client Client) *Extension {
-	return &Extension{client: client}
+	return &Extension{client: client, pipelineTemplates: newPipelineTemplateRegistry()}
 }
 
 func (e *Extension) Manifest() extplatform.Manifest {
@@ -47,6 +48,7 @@ func (e *Extension) Contribute(ctx *extplatform.ContributionContext) error {
 	}
 	e.pages = ctx.Pages
 	ctx.Routes.Protected(http.MethodGet, "/starforge", "Starforge worker inventory", http.HandlerFunc(e.home))
+	ctx.Routes.Protected(http.MethodGet, "/starforge/pipelines/sleep-series", "Sleep Series production ledger", http.HandlerFunc(e.sleepSeries))
 	ctx.Routes.API(http.MethodGet, "/api/starforge/workers", "List Starforge workers", http.HandlerFunc(e.listWorkers))
 	ctx.Routes.API(http.MethodPut, "/api/starforge/workers/{uuid}/label", "Update Starforge worker label", http.HandlerFunc(e.updateWorkerLabel))
 	ctx.Navigation.Add("Starforge", "/starforge", "server")
