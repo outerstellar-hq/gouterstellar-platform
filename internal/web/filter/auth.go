@@ -6,8 +6,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/rygel/gouterstellar-platform/internal/security"
-	"github.com/rygel/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/security"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
 )
 
 // AuthMetrics holds the Prometheus counters that observe bearer-token

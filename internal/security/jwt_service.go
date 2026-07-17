@@ -9,8 +9,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
-	"github.com/rygel/gouterstellar-platform/internal/config"
-	"github.com/rygel/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/config"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
 )
 
 // jwtCacheTTL bounds how long a parsed token's claims stay cached so a

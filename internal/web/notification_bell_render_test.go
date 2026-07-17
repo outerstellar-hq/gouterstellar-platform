@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
 )
 
 func TestNotificationBellRendersUnreadStateAndCapsVisualCount(t *testing.T) {
@@ -57,16 +57,20 @@ func TestAuthenticatedShellLoadsBellWithUsableFallback(t *testing.T) {
 		ID: uuid.New(), Username: "alex", Role: model.RoleUser,
 	})
 	recorder := httptest.NewRecorder()
-	if err := renderer.RenderPage(recorder, req, "home", map[string]any{}); err != nil {
+	if err := renderer.RenderPage(recorder, req, "messages", viewmodel.MessagesPage{}); err != nil {
 		t.Fatalf("render shell: %v", err)
 	}
 
 	body := recorder.Body.String()
 	for _, want := range []string{
+		`hx-boost="true" hx-ext="ws" ws-connect="/ws/sync"`,
+		`id="ws-updates" ws-subscribe aria-live="polite"`,
 		`id="notification-bell"`,
-		`hx-get="/components/notification-bell"`,
+		`hx-get="/components/notification-bell?lang=en"`,
 		`hx-trigger="load, every 60s"`,
 		`class="notification-bell notification-bell-fallback">Notifications</a>`,
+		`src="/static/js/htmx-ext-ws.js"`,
+		`action="/logout" hx-boost="false"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("rendered shell missing %q", want)

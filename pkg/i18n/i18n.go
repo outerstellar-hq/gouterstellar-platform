@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -19,6 +20,7 @@ type I18nService struct {
 }
 
 var placeholderRe = regexp.MustCompile(`\{(\d+)\}`)
+var javaFormatRe = regexp.MustCompile(`%[sd]`)
 
 func NewI18nService(fsys embed.FS, basePath string) *I18nService {
 	svc := &I18nService{
@@ -98,7 +100,7 @@ func (s *I18nService) TranslateOrDefault(key, defaultVal string, params ...inter
 // and never mutates the service-wide locale. If the requested locale's
 // bundle is not loaded, it falls back to the default locale ("en"); if the
 // key is absent from the locale's bundle, it also falls back to "en".
-func (s *I18nService) TranslateForLocale(locale, key string) string {
+func (s *I18nService) TranslateForLocale(locale, key string, params ...interface{}) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -107,24 +109,24 @@ func (s *I18nService) TranslateForLocale(locale, key string) string {
 		// Fall back to default locale ("en").
 		bundle, ok = s.translations["en"]
 		if !ok {
-			return key
+			return injectParams(key, params)
 		}
 	}
 
 	if val, found := bundle[key]; found {
-		return val
+		return injectParams(val, params)
 	}
 
 	// Fall back to the default locale's bundle for the key.
 	if locale != "en" {
 		if defaultBundle, ok := s.translations["en"]; ok {
 			if val, found := defaultBundle[key]; found {
-				return val
+				return injectParams(val, params)
 			}
 		}
 	}
 
-	return key
+	return injectParams(key, params)
 }
 
 func (s *I18nService) loadLocale(locale string) map[string]string {
@@ -152,17 +154,50 @@ func parseProperties(data []byte) map[string]string {
 			continue
 		}
 		key := strings.TrimSpace(line[:idx])
-		value := strings.TrimSpace(line[idx+1:])
+		value := decodePropertyValue(strings.TrimSpace(line[idx+1:]))
 		props[key] = value
 	}
 	return props
+}
+
+func decodePropertyValue(value string) string {
+	var decoded strings.Builder
+	for i := 0; i < len(value); i++ {
+		if value[i] != '\\' || i+1 >= len(value) {
+			decoded.WriteByte(value[i])
+			continue
+		}
+		i++
+		switch value[i] {
+		case 'u':
+			if i+4 < len(value) {
+				if codepoint, err := strconv.ParseUint(value[i+1:i+5], 16, 16); err == nil {
+					decoded.WriteRune(rune(codepoint))
+					i += 4
+					continue
+				}
+			}
+			decoded.WriteString(`\u`)
+		case 't':
+			decoded.WriteByte('\t')
+		case 'n':
+			decoded.WriteByte('\n')
+		case 'r':
+			decoded.WriteByte('\r')
+		case 'f':
+			decoded.WriteByte('\f')
+		default:
+			decoded.WriteByte(value[i])
+		}
+	}
+	return decoded.String()
 }
 
 func injectParams(template string, params []interface{}) string {
 	if len(params) == 0 {
 		return template
 	}
-	return placeholderRe.ReplaceAllStringFunc(template, func(match string) string {
+	result := placeholderRe.ReplaceAllStringFunc(template, func(match string) string {
 		sub := placeholderRe.FindStringSubmatch(match)
 		if len(sub) < 2 {
 			return match
@@ -176,4 +211,8 @@ func injectParams(template string, params []interface{}) string {
 		}
 		return match
 	})
+	if javaFormatRe.MatchString(result) {
+		return fmt.Sprintf(result, params...)
+	}
+	return result
 }

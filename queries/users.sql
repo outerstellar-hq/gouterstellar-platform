@@ -85,6 +85,13 @@ RETURNING id, username, email, password_hash, role, enabled, created_at, last_ac
        language, theme, layout, failed_login_attempts, locked_until,
        totp_secret, totp_enabled, totp_backup_codes, failed_totp_attempts;
 
+-- name: UpdateEmail :one
+UPDATE plt_users SET email = $2 WHERE id = $1
+RETURNING id, username, email, password_hash, role, enabled, created_at, last_activity_at,
+       avatar_url, email_notifications_enabled, push_notifications_enabled,
+       language, theme, layout, failed_login_attempts, locked_until,
+       totp_secret, totp_enabled, totp_backup_codes, failed_totp_attempts;
+
 -- name: UpdateAvatarURL :one
 UPDATE plt_users SET avatar_url = $2 WHERE id = $1
 RETURNING id, username, email, password_hash, role, enabled, created_at, last_activity_at,

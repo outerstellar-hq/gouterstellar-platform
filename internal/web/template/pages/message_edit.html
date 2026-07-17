@@ -2,26 +2,26 @@
 <div class="message-edit-page">
     <div class="page-header">
         <div>
-            <p class="form-eyebrow">Message</p>
-            <h1>Edit message</h1>
+            <p class="form-eyebrow">{{ translate .Language "web.search.filter.message" }}</p>
+            <h1>{{ translate .Language "web.messages.edit" }}</h1>
         </div>
-        <a href="/messages" class="btn btn-secondary">Cancel</a>
+        <a href="/" class="btn btn-secondary">{{ translate .Language "web.messages.cancel" }}</a>
     </div>
 
     <form method="POST" action="/messages/{{ .BodyData.SyncID }}/update" class="message-edit-card">
         <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
         {{ if .BodyData.Error }}<div class="form-error" role="alert">{{ .BodyData.Error }}</div>{{ end }}
         <div class="form-group">
-            <label for="message-edit-author">Author</label>
+            <label for="message-edit-author">{{ translate .Language "web.messages.author" }}</label>
             <input type="text" id="message-edit-author" name="author" value="{{ .BodyData.Author }}" autocomplete="name" required autofocus>
         </div>
         <div class="form-group">
-            <label for="message-edit-content">Content</label>
+            <label for="message-edit-content">{{ translate .Language "web.messages.content" }}</label>
             <textarea id="message-edit-content" name="content" rows="7" required>{{ .BodyData.Content }}</textarea>
         </div>
         <div class="form-actions">
-            <a href="/messages" class="btn btn-secondary">Cancel</a>
-            <button type="submit" class="btn btn-primary">Save changes</button>
+            <a href="/" class="btn btn-secondary">{{ translate .Language "web.messages.cancel" }}</a>
+            <button type="submit" class="btn btn-primary">{{ translate .Language "web.messages.save" }}</button>
         </div>
     </form>
 </div>

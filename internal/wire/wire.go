@@ -2,7 +2,9 @@ package wire
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -10,17 +12,17 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/rygel/gouterstellar-platform/internal/config"
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/persistence"
-	"github.com/rygel/gouterstellar-platform/internal/platform/core"
-	"github.com/rygel/gouterstellar-platform/internal/security"
-	"github.com/rygel/gouterstellar-platform/internal/service"
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/filter"
-	"github.com/rygel/gouterstellar-platform/internal/web/handler"
-	"github.com/rygel/gouterstellar-platform/pkg/i18n"
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/config"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/platform/core"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/security"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/service"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/filter"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/handler"
+	"github.com/outerstellar-hq/gouterstellar-platform/pkg/i18n"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 )
 
 // repos groups every repository instance assembled from the connection pool.
@@ -81,6 +83,7 @@ type services struct {
 	apiKeySvc          *security.ApiKeyService
 	oauthSvc           *security.OAuthService
 	googleProvider     *security.GoogleOAuthProvider
+	appleProvider      *security.AppleOAuthProvider
 	realms             []security.AuthRealm
 	emailSvc           service.EmailService
 	analytics          service.AnalyticsService
@@ -144,6 +147,10 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 			cfg.OAuth.Google.RedirectURI,
 		)
 	}
+	var appleProvider *security.AppleOAuthProvider
+	if cfg.OAuth.Apple.Enabled && cfg.OAuth.Apple.ClientID != "" {
+		appleProvider = security.NewAppleOAuthProvider()
+	}
 
 	realms := buildRealms(r, securitySvc, jwtSvc, apiKeySvc)
 
@@ -174,6 +181,7 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 		apiKeySvc:          apiKeySvc,
 		oauthSvc:           oauthSvc,
 		googleProvider:     googleProvider,
+		appleProvider:      appleProvider,
 		realms:             realms,
 		emailSvc:           emailSvc,
 		analytics:          analytics,
@@ -251,7 +259,6 @@ type App struct {
 	PollAPI               *handler.PollAPI
 	AuthAPI               *handler.AuthAPI
 	AuthHandler           *handler.AuthHandler
-	HomeHandler           *handler.HomeHandler
 	MessagesHandler       *handler.MessagesHandler
 	ContactsHandler       *handler.ContactsHandler
 	TrashHandler          *handler.TrashHandler
@@ -312,8 +319,7 @@ func buildApp(cfg *config.Config, r repos, svcs *services, templateFS fs.FS, reg
 	voteAPI := handler.NewVoteAPI(svcs.voteSvc)
 	pollAPI := handler.NewPollAPI(svcs.pollSvc)
 	authAPI := handler.NewAuthAPI(svcs.securitySvc, svcs.totpSvc, svcs.apiKeySvc, svcs.passwordResetSvc, cfg.SessionCookieSecure, svcs.analytics, svcs.jwtSvc)
-	authHandler := handler.NewAuthHandler(svcs.securitySvc, svcs.totpSvc, svcs.passwordResetSvc, renderer, cfg.SessionCookieSecure, svcs.analytics, svcs.googleProvider != nil)
-	homeHandler := handler.NewHomeHandler(svcs.messageSvc, svcs.contactSvc, svcs.securitySvc, renderer, cfg.Version)
+	authHandler := handler.NewAuthHandler(svcs.securitySvc, svcs.totpSvc, svcs.passwordResetSvc, renderer, cfg.SessionCookieSecure, svcs.analytics, svcs.googleProvider != nil, svcs.appleProvider != nil)
 	messagesHandler := handler.NewMessagesHandler(svcs.messageSvc, svcs.voteSvc, renderer)
 	contactsHandler := handler.NewContactsHandler(svcs.contactSvc, renderer)
 	trashHandler := handler.NewTrashHandler(svcs.messageSvc, svcs.contactSvc, renderer)
@@ -331,21 +337,23 @@ func buildApp(cfg *config.Config, r repos, svcs *services, templateFS fs.FS, reg
 	if svcs.googleProvider != nil {
 		googleProviderIfc = svcs.googleProvider
 	}
-	// Apple OAuth is intentionally not wired: the provider is an unimplemented
-	// stub that can only return errors. resolveProvider returns nil for "apple",
-	// which surfaces as "Unknown OAuth provider" — preferable to a half-working
-	// flow that fails at code exchange.
-	oauthHandler := handler.NewOAuthHandler(svcs.securitySvc, svcs.oauthSvc, cfg.SessionCookieSecure, nil, googleProviderIfc, cfg.AppBaseURL)
+	var appleProviderIfc security.OAuthProvider
+	if svcs.appleProvider != nil {
+		appleProviderIfc = svcs.appleProvider
+	}
+	oauthHandler := handler.NewOAuthHandler(svcs.securitySvc, svcs.oauthSvc, cfg.SessionCookieSecure, appleProviderIfc, googleProviderIfc, cfg.AppBaseURL)
 	searchHandler := handler.NewSearchHandler(svcs.messageSvc, svcs.contactSvc, renderer)
-	settingsHandler := handler.NewSettingsHandler(svcs.securitySvc, svcs.totpSvc, svcs.apiKeySvc, renderer)
+	settingsHandler := handler.NewSettingsHandler(svcs.securitySvc, svcs.totpSvc, svcs.apiKeySvc, renderer, cfg.SessionCookieSecure)
 	errorHandler := handler.NewErrorHandler(renderer, cfg.Version)
 	devDashboardHandler := handler.NewDevDashboardHandler(svcs.outboxProcessor, svcs.securitySvc, svcs.messageSvc, renderer, cfg.DevDashboardEnabled)
-	componentsHandler := handler.NewComponentsHandler(svcs.messageSvc, svcs.contactSvc, svcs.voteSvc, svcs.pollSvc, renderer)
+	componentsHandler := handler.NewComponentsHandler(svcs.messageSvc, svcs.contactSvc, svcs.voteSvc, svcs.pollSvc, renderer, svcs.securitySvc)
 	openAPIHandler := handler.NewOpenAPIHandler()
 	syncWebSocket := handler.NewSyncWebSocket(svcs.wsPublisher, r.sessionRepo, r.userRepo, cfg.SessionCookieSecure)
 
 	svcBag := extplatform.ServiceBag{
-		MessageCounter: messageCounterAdapter{svc: svcs.messageSvc},
+		MessageCounter:  messageCounterAdapter{svc: svcs.messageSvc},
+		Pages:           renderer,
+		OperationsAudit: operationsAuditAdapter{repo: r.auditRepo},
 	}
 
 	return &App{
@@ -363,7 +371,6 @@ func buildApp(cfg *config.Config, r repos, svcs *services, templateFS fs.FS, reg
 		PollAPI:               pollAPI,
 		AuthAPI:               authAPI,
 		AuthHandler:           authHandler,
-		HomeHandler:           homeHandler,
 		MessagesHandler:       messagesHandler,
 		ContactsHandler:       contactsHandler,
 		TrashHandler:          trashHandler,
@@ -398,10 +405,11 @@ func buildApp(cfg *config.Config, r repos, svcs *services, templateFS fs.FS, reg
 // own routes via the contribution context, so the only wiring here is the
 // ordered list of contributors plus the OpenAPI spec handler (health/metrics/
 // static are infrastructure routes populated by the caller after construction).
-func BuildCoreExtension(app *App) *core.Extension {
+func BuildCoreExtension(app *App, catalog *extplatform.Catalog) *core.Extension {
 	ext := core.NewExtension()
 	ext.SetOpenAPI(app.OpenAPIHandler.Spec)
 	ext.AddContributors(
+		handler.NewExtensionAdminHandler(catalog, app.Renderer),
 		app.AuthHandler,
 		app.OAuthHandler,
 		app.AuthAPI,
@@ -412,12 +420,12 @@ func BuildCoreExtension(app *App) *core.Extension {
 		app.UserAdminAPI,
 		app.DataExportHandler,
 		app.DeviceRegistrationAPI,
-		app.HomeHandler,
 		app.MessagesHandler,
 		app.ContactsHandler,
 		app.TrashHandler,
 		app.SearchHandler,
 		app.SettingsHandler,
+		app.ErrorHandler,
 		app.NotificationsHandler,
 		app.ComponentsHandler,
 		app.SyncWebSocket,
@@ -435,4 +443,26 @@ type messageCounterAdapter struct {
 
 func (a messageCounterAdapter) CountMessages(ctx context.Context) (int64, error) {
 	return a.svc.CountMessages(ctx)
+}
+
+type operationsAuditAdapter struct {
+	repo persistence.AuditRepository
+}
+
+func (a operationsAuditAdapter) RecordOperation(ctx context.Context, event extplatform.OperationAudit) error {
+	var actorID *uuid.UUID
+	if parsed, err := uuid.Parse(event.UserID); err == nil {
+		actorID = &parsed
+	}
+	var actorName *string
+	if event.Username != "" {
+		actorName = &event.Username
+	}
+	targetName := event.Extension
+	action := "EXTENSION_" + strings.ToUpper(strings.ReplaceAll(string(event.Action), ".", "_"))
+	detail := fmt.Sprintf("extension=%s operation=%s outcome=%s", event.Extension, event.Action, event.Outcome)
+	if _, err := a.repo.LogAudit(ctx, actorID, actorName, nil, &targetName, action, detail); err != nil {
+		return fmt.Errorf("record extension operation audit: %w", err)
+	}
+	return nil
 }

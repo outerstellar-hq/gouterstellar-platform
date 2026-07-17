@@ -1,8 +1,10 @@
 {{ define "contact_list" }}
-<div class="contact-list">
+<div id="contact-list-container" class="contact-list" hx-get="{{ .RefreshURL }}" hx-trigger="refresh from:body, htmx:oobAfterSwap from:body" hx-swap="outerHTML">
     {{ range .Contacts }}
     {{ template "contact_row" . }}
+    {{ else }}
+    <p class="empty-state">{{ translate .Pagination.Language "web.contacts.empty" }}</p>
     {{ end }}
+    {{ template "pagination" .Pagination }}
 </div>
-{{ template "pagination" .Pagination }}
 {{ end }}

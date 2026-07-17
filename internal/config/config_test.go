@@ -40,6 +40,16 @@ func TestLoadConfigFromEnv(t *testing.T) {
 	assert.False(t, cfg.RegistrationEnabled)
 }
 
+func TestLoadStarforgeConfigFromEnv(t *testing.T) {
+	t.Setenv("STARFORGE_BASE_URL", "https://starforge.internal")
+	t.Setenv("STARFORGE_CREDENTIAL", "server-only-token")
+
+	cfg := Load()
+
+	assert.Equal(t, "https://starforge.internal", cfg.Starforge.BaseURL)
+	assert.Equal(t, "server-only-token", cfg.Starforge.Credential)
+}
+
 func TestJwtConfigDefaults(t *testing.T) {
 	cfg := Load()
 	assert.Equal(t, "outerstellar", cfg.JWT.Issuer)

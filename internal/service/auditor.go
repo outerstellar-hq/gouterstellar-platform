@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/rygel/gouterstellar-platform/internal/persistence"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence"
 )
 
 // Auditor is the single sink for audit-log writes across the service layer.

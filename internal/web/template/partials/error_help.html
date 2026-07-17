@@ -1,0 +1,6 @@
+{{ define "error_help" }}
+<section class="error-help">
+    <h2>{{ .Title }}</h2>
+    <ul>{{ range .Items }}<li>{{ . }}</li>{{ end }}</ul>
+</section>
+{{ end }}

@@ -3,8 +3,8 @@
     <header class="poll-header">
         <h3 id="poll-question-{{ .SyncID }}">{{ .Question }}</h3>
         <div class="poll-state">
-            {{ if .Closed }}<span class="badge badge-error">Closed</span>{{ end }}
-            {{ if .MultiChoice }}<span class="badge">Choose multiple</span>{{ end }}
+            {{ if .Closed }}<span class="badge badge-error">{{ translate .Language "web.poll.closed" }}</span>{{ end }}
+            {{ if .MultiChoice }}<span class="badge">{{ translate .Language "web.poll.multiple" }}</span>{{ end }}
         </div>
     </header>
     <ol class="poll-options">
@@ -22,25 +22,25 @@
                       hx-post="/components/polls/{{ $.SyncID }}/remove-vote" hx-target="closest .poll-card" hx-swap="outerHTML">
                     <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
                     <input type="hidden" name="optionId" value="{{ .ID }}">
-                    <button type="submit" class="btn btn-sm poll-vote-button selected" aria-pressed="true">Remove vote</button>
+                    <button type="submit" class="btn btn-sm poll-vote-button selected" aria-pressed="true">{{ translate $.Language "web.poll.remove.vote" }}</button>
                 </form>
                 {{ else if .CanVote }}
                 <form method="POST" action="/components/polls/{{ $.SyncID }}/vote" class="poll-vote-form"
                       hx-post="/components/polls/{{ $.SyncID }}/vote" hx-target="closest .poll-card" hx-swap="outerHTML">
                     <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
                     <input type="hidden" name="optionId" value="{{ .ID }}">
-                    <button type="submit" class="btn btn-sm poll-vote-button" aria-pressed="false">Vote</button>
+                    <button type="submit" class="btn btn-sm poll-vote-button" aria-pressed="false">{{ translate $.Language "web.poll.vote" }}</button>
                 </form>
                 {{ else }}
-                <span class="poll-option-note">Remove your current vote to choose another option.</span>
+                <span class="poll-option-note">{{ translate $.Language "web.poll.remove.hint" }}</span>
                 {{ end }}
             {{ end }}
         </li>
         {{ end }}
     </ol>
     <footer class="poll-footer">
-        <span>{{ .TotalVotes }} total vote{{ if ne .TotalVotes 1 }}s{{ end }}</span>
-        {{ if .DeadlineLabel }}<span>Closes {{ .DeadlineLabel }}</span>{{ end }}
+        <span>{{ .TotalVotes }} {{ if eq .TotalVotes 1 }}{{ translate .Language "web.poll.total.vote" }}{{ else }}{{ translate .Language "web.poll.total.votes" }}{{ end }}</span>
+        {{ if .DeadlineLabel }}<span>{{ translate .Language "web.poll.closes" }} {{ .DeadlineLabel }}</span>{{ end }}
     </footer>
 </article>
 {{ end }}

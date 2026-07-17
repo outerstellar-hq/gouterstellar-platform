@@ -1,0 +1,36 @@
+{{ define "totp_setup" }}
+<section class="totp-setup-fragment" id="totp-setup-status">
+    {{ if .Error }}<div class="toast toast-error">{{ .Error }}</div>{{ end }}
+    {{ if .BackupCodes }}
+    <h3>{{ translate .Language "web.totp.backupCodes" }}</h3>
+    <p>{{ translate .Language "web.totp.backupCodes.hint" }}</p>
+    <ul class="backup-code-list">{{ range .BackupCodes }}<li><code>{{ . }}</code></li>{{ end }}</ul>
+    {{ else if .Enabled }}
+    <h3>{{ translate .Language "web.totp.enabled" }}</h3>
+    <p>{{ translate .Language "web.totp.backupCodes.remaining" (printf "%d" .RemainingBackupCodes) }}</p>
+    <form method="POST" action="/auth/components/totp-disable" hx-post="/auth/components/totp-disable" hx-target="#totp-setup-status" hx-swap="outerHTML">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <label for="totp-disable-password">{{ translate .Language "web.password.current" }}</label>
+        <input type="password" id="totp-disable-password" name="password" autocomplete="current-password" required>
+        <button type="submit" class="btn btn-danger">{{ translate .Language "web.totp.disable" }}</button>
+    </form>
+    {{ else if .Setup }}
+    <h3>{{ translate .Language "web.totp.scanQr" }}</h3>
+    <img src="{{ safeURL .Setup.QRDataURI }}" alt="{{ translate .Language "web.totp.qr.alt" }}" width="200" height="200">
+    <p>{{ translate .Language "web.totp.manualKey" }} <code>{{ .Setup.Secret }}</code></p>
+    <form method="POST" action="/auth/components/totp-verify-setup" hx-post="/auth/components/totp-verify-setup" hx-target="#totp-setup-status" hx-swap="outerHTML">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <input type="hidden" name="secret" value="{{ .Setup.Secret }}">
+        <label for="totp-setup-code">{{ translate .Language "web.totp.codeLabel" }}</label>
+        <input id="totp-setup-code" name="code" autocomplete="one-time-code" inputmode="numeric" required>
+        <button type="submit" class="btn btn-primary">{{ translate .Language "web.totp.verifyAndEnable" }}</button>
+    </form>
+    {{ else }}
+    <p>{{ translate .Language "web.totp.disabled" }}</p>
+    <form method="POST" action="/auth/components/totp-setup" hx-post="/auth/components/totp-setup" hx-target="#totp-setup-status" hx-swap="outerHTML">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <button type="submit" class="btn btn-primary">{{ translate .Language "web.totp.enable" }}</button>
+    </form>
+    {{ end }}
+</section>
+{{ end }}

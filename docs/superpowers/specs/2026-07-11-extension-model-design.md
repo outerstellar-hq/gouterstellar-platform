@@ -30,7 +30,7 @@ This design retrofits the brief's extension model into the existing codebase. Th
 
 ## Section 1: The `platform/` package and extension contract
 
-New top-level package: `github.com/rygel/gouterstellar-platform/platform`
+New top-level package: `github.com/outerstellar-hq/gouterstellar-platform/platform`
 
 The package imports **nothing from `internal/`**. It depends only on the standard library and Chi (for `http.Handler` and route patterns flowing through it).
 
@@ -395,7 +395,7 @@ extensions/reports/
     └── V001__reports_tables.sql
 ```
 
-Lives at top level (not inside `internal/`). Imports only `github.com/rygel/gouterstellar-platform/platform`. If it compiles without touching `internal/`, the boundary is proven.
+Lives at top level (not inside `internal/`). Imports only `github.com/outerstellar-hq/gouterstellar-platform/platform`. If it compiles without touching `internal/`, the boundary is proven.
 
 ### Extension
 

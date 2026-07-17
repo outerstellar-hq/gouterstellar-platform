@@ -164,8 +164,8 @@ import (
 	"path"
 	"strings"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
 )
 
 // Renderer renders HTML pages through a shared layout (base.html) and
@@ -612,9 +612,9 @@ package handler
 import (
 	"net/http"
 
-	"github.com/rygel/gouterstellar-platform/internal/service"
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/service"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
 )
 
 type MessagesHandler struct {
@@ -905,7 +905,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 )
 
 // These tests verify that the rendering pipeline produces HTTP 200
@@ -947,7 +947,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/rygel/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
 )
 
 func TestRendererParsesAllRealTemplates(t *testing.T) {

@@ -6,13 +6,14 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/service"
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/service"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
 )
 
 type AuthHandler struct {
@@ -23,6 +24,7 @@ type AuthHandler struct {
 	sessionSecure      bool
 	analytics          service.AnalyticsService
 	googleLoginEnabled bool
+	appleLoginEnabled  bool
 }
 
 func NewAuthHandler(
@@ -33,6 +35,7 @@ func NewAuthHandler(
 	sessionSecure bool,
 	analytics service.AnalyticsService,
 	googleLoginEnabled bool,
+	appleLoginEnabled bool,
 ) *AuthHandler {
 	return &AuthHandler{
 		securityService:    secSvc,
@@ -42,23 +45,142 @@ func NewAuthHandler(
 		sessionSecure:      sessionSecure,
 		analytics:          analytics,
 		googleLoginEnabled: googleLoginEnabled,
+		appleLoginEnabled:  appleLoginEnabled,
 	}
 }
 
 // ContributeRoutes registers the auth UI routes (public, no auth required).
 func (h *AuthHandler) ContributeRoutes(ctx *extplatform.ContributionContext) error {
 	ctx.Routes.Public(http.MethodGet, "/auth", "Login page", http.HandlerFunc(h.ShowLogin))
+	ctx.Routes.Public(http.MethodGet, "/auth/components/forms/{mode}", "Auth form fragment", http.HandlerFunc(h.AuthForm))
+	ctx.Routes.Public(http.MethodPost, "/auth/components/result", "Process auth form", http.HandlerFunc(h.HandleAuthResult))
 	ctx.Routes.Public(http.MethodPost, "/auth/login", "Handle login", http.HandlerFunc(h.HandleLogin))
 	ctx.Routes.Public(http.MethodPost, "/auth/totp/verify", "Verify TOTP challenge", http.HandlerFunc(h.HandleTOTPVerify))
+	ctx.Routes.Public(http.MethodPost, "/auth/components/totp-verify", "Verify TOTP challenge component", http.HandlerFunc(h.HandleTOTPVerifyComponent))
 	ctx.Routes.Public(http.MethodPost, "/auth/register", "Handle registration", http.HandlerFunc(h.HandleRegister))
-	ctx.Routes.Public(http.MethodPost, "/auth/logout", "Handle logout", http.HandlerFunc(h.HandleLogout))
-	ctx.Routes.Public(http.MethodGet, "/auth/change-password", "Change password page", http.HandlerFunc(h.ShowChangePassword))
-	ctx.Routes.Public(http.MethodPost, "/auth/change-password", "Handle password change", http.HandlerFunc(h.HandleChangePassword))
 	ctx.Routes.Public(http.MethodGet, "/auth/reset", "Reset password page", http.HandlerFunc(h.ShowResetPassword))
 	ctx.Routes.Public(http.MethodPost, "/auth/reset", "Handle password reset", http.HandlerFunc(h.HandleResetPassword))
+	ctx.Routes.Public(http.MethodGet, "/auth/reset/{token}", "Password reset token page", http.HandlerFunc(h.ShowResetToken))
+	ctx.Routes.Public(http.MethodPost, "/auth/components/reset-confirm", "Confirm password reset", http.HandlerFunc(h.HandleConfirmResetPasswordComponent))
 	ctx.Routes.Public(http.MethodGet, "/auth/reset/confirm", "Confirm reset password page", http.HandlerFunc(h.ShowConfirmResetPassword))
 	ctx.Routes.Public(http.MethodPost, "/auth/reset/confirm", "Handle password reset confirmation", http.HandlerFunc(h.HandleConfirmResetPassword))
+	ctx.Routes.Protected(http.MethodPost, "/logout", "Logout", http.HandlerFunc(h.HandleLogout))
+	ctx.Routes.Protected(http.MethodGet, "/auth/change-password", "Change password page", http.HandlerFunc(h.ShowChangePassword))
+	ctx.Routes.Protected(http.MethodPost, "/auth/components/change-password", "Handle password change", http.HandlerFunc(h.HandleChangePasswordComponent))
+	ctx.Routes.Protected(http.MethodPost, "/auth/change-password", "Handle password change", http.HandlerFunc(h.HandleChangePassword))
 	return nil
+}
+
+func (h *AuthHandler) AuthForm(w http.ResponseWriter, r *http.Request) {
+	mode := chi.URLParam(r, "mode")
+	switch mode {
+	case "register", "recover", "sign-in":
+	default:
+		mode = "sign-in"
+	}
+	if err := h.renderer.RenderPartial(w, "auth_form", authFormFragment{
+		Mode:                mode,
+		ReturnTo:            safeReturnTo(r.URL.Query().Get("returnTo")),
+		CSRFToken:           web.CSRFTokenFromRequest(r),
+		RegistrationEnabled: h.securityService.RegistrationEnabled(),
+		AppleLoginEnabled:   h.appleLoginEnabled,
+		Language:            web.LanguageFromRequest(r),
+	}); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
+}
+
+func (h *AuthHandler) HandleAuthResult(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		h.renderAuthError(w, r, "Invalid form submission")
+		return
+	}
+	username := r.FormValue("email")
+	password := r.FormValue("password")
+	returnTo := safeReturnTo(r.URL.Query().Get("returnTo"))
+	if returnTo == "/" {
+		returnTo = safeReturnTo(r.FormValue("returnTo"))
+	}
+	switch r.FormValue("mode") {
+	case "", "sign-in":
+		result, err := h.securityService.Authenticate(r.Context(), username, password)
+		if err != nil {
+			h.renderAuthResult(w, false, "Sign in failed", "Invalid credentials")
+			return
+		}
+		switch authenticated := result.(type) {
+		case model.Authenticated:
+			token, err := h.securityService.CreateSession(r.Context(), authenticated.User.ID)
+			if err != nil {
+				h.renderAuthResult(w, false, "Sign in failed", "Failed to create session")
+				return
+			}
+			http.SetCookie(w, web.CreateSessionCookie(token, h.sessionSecure))
+			// #nosec G710 -- safeReturnTo permits only same-origin absolute paths and rejects scheme-relative/backslash forms.
+			http.Redirect(w, r, returnTo, http.StatusFound)
+		case model.TOTPRequired:
+			if err := h.renderer.RenderPartial(w, "auth_totp", authTOTPFragment{
+				PartialToken: authenticated.PartialToken,
+				ReturnTo:     returnTo,
+				CSRFToken:    web.CSRFTokenFromRequest(r),
+				Language:     web.LanguageFromRequest(r),
+			}); err != nil {
+				http.Error(w, "Template error", http.StatusInternalServerError)
+			}
+		default:
+			h.renderAuthResult(w, false, "Sign in failed", "Invalid credentials")
+		}
+	case "register":
+		if !h.securityService.RegistrationEnabled() {
+			h.renderAuthResult(w, false, "Registration failed", "Registration is currently disabled")
+			return
+		}
+		if password != r.FormValue("confirmPassword") {
+			h.renderAuthResult(w, false, "Registration failed", "Password and confirmation do not match")
+			return
+		}
+		if _, err := h.securityService.Register(r.Context(), username, password); err != nil {
+			h.renderAuthResult(w, false, "Registration failed", registrationErrorMessage(err))
+			return
+		}
+		http.Redirect(w, r, "/auth?registered=true", http.StatusFound)
+	case "recover":
+		if username != "" {
+			_, _ = h.passwordResetSvc.RequestPasswordReset(r.Context(), username)
+		}
+		h.renderAuthResult(w, true, "Request accepted", "If an account exists, a reset link has been sent.")
+	default:
+		h.renderAuthResult(w, false, "Unable to continue", "Unknown authentication mode")
+	}
+}
+
+type authFormFragment struct {
+	Mode                string
+	ReturnTo            string
+	CSRFToken           string
+	RegistrationEnabled bool
+	AppleLoginEnabled   bool
+	Language            string
+}
+
+type authResultFragment struct {
+	Success bool
+	Title   string
+	Message string
+}
+
+type authTOTPFragment struct {
+	PartialToken string
+	ReturnTo     string
+	CSRFToken    string
+	Error        string
+	Language     string
+}
+
+func (h *AuthHandler) renderAuthResult(w http.ResponseWriter, success bool, title, message string) {
+	if err := h.renderer.RenderPartial(w, "auth_result", authResultFragment{Success: success, Title: title, Message: message}); err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+	}
 }
 
 func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
@@ -69,6 +191,7 @@ func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 		ReturnTo:            returnTo,
 		CSRFToken:           web.CSRFTokenFromRequest(r),
 		GoogleLoginEnabled:  h.googleLoginEnabled,
+		AppleLoginEnabled:   h.appleLoginEnabled,
 		RegistrationEnabled: registrationEnabled,
 		RegisterMode:        registerRequested && registrationEnabled,
 	}
@@ -127,6 +250,41 @@ func (h *AuthHandler) HandleTOTPVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.completeLogin(w, r, user, r.FormValue("returnTo"))
+}
+
+func (h *AuthHandler) HandleTOTPVerifyComponent(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		h.renderAuthResult(w, false, "Verification failed", "Invalid form submission")
+		return
+	}
+	partialToken := r.FormValue("partialToken")
+	user, err := h.totpService.VerifyChallenge(r.Context(), partialToken, r.FormValue("code"))
+	if err != nil {
+		message := "The authentication code was not valid."
+		if errors.Is(err, service.ErrTOTPChallengeExpired) {
+			message = "Your sign-in challenge has expired."
+		} else if errors.Is(err, service.ErrTOTPAccountLocked) {
+			message = "Your account is temporarily locked."
+		}
+		if renderErr := h.renderer.RenderPartial(w, "auth_totp", authTOTPFragment{
+			PartialToken: partialToken,
+			ReturnTo:     safeReturnTo(r.FormValue("returnTo")),
+			CSRFToken:    web.CSRFTokenFromRequest(r),
+			Error:        message,
+			Language:     web.LanguageFromRequest(r),
+		}); renderErr != nil {
+			http.Error(w, "Template error", http.StatusInternalServerError)
+		}
+		return
+	}
+	token, err := h.securityService.CreateSession(r.Context(), user.ID)
+	if err != nil {
+		h.renderAuthResult(w, false, "Verification failed", "Failed to create session")
+		return
+	}
+	http.SetCookie(w, web.CreateSessionCookie(token, h.sessionSecure))
+	w.Header().Set("HX-Redirect", safeReturnTo(r.FormValue("returnTo")))
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *AuthHandler) completeLogin(w http.ResponseWriter, r *http.Request, user *model.User, returnTo string) {
@@ -250,6 +408,27 @@ func (h *AuthHandler) HandleChangePassword(w http.ResponseWriter, r *http.Reques
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }
 
+func (h *AuthHandler) HandleChangePasswordComponent(w http.ResponseWriter, r *http.Request) {
+	user := web.UserFromRequest(r)
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		h.renderAuthResult(w, false, "Password change failed", "Invalid form submission")
+		return
+	}
+	if r.FormValue("newPassword") != r.FormValue("confirmPassword") {
+		h.renderAuthResult(w, false, "Password change failed", "New password and confirmation do not match")
+		return
+	}
+	if err := h.securityService.ChangePassword(r.Context(), user.ID, r.FormValue("currentPassword"), r.FormValue("newPassword")); err != nil {
+		h.renderAuthResult(w, false, "Password change failed", err.Error())
+		return
+	}
+	h.renderAuthResult(w, true, "Password changed", "Your password has been changed successfully.")
+}
+
 func (h *AuthHandler) ShowResetPassword(w http.ResponseWriter, r *http.Request) {
 	page := viewmodel.AuthPage{
 		CSRFToken: web.CSRFTokenFromRequest(r),
@@ -294,6 +473,13 @@ func (h *AuthHandler) ShowConfirmResetPassword(w http.ResponseWriter, r *http.Re
 	}
 }
 
+func (h *AuthHandler) ShowResetToken(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	query.Set("token", chi.URLParam(r, "token"))
+	r.URL.RawQuery = query.Encode()
+	h.ShowConfirmResetPassword(w, r)
+}
+
 // HandleConfirmResetPassword accepts the submitted new password (with the reset
 // token) and delegates to PasswordResetService.ResetPassword.
 func (h *AuthHandler) HandleConfirmResetPassword(w http.ResponseWriter, r *http.Request) {
@@ -313,6 +499,22 @@ func (h *AuthHandler) HandleConfirmResetPassword(w http.ResponseWriter, r *http.
 	http.Redirect(w, r, "/auth", http.StatusSeeOther)
 }
 
+func (h *AuthHandler) HandleConfirmResetPasswordComponent(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		h.renderAuthResult(w, false, "Password reset failed", "Invalid form submission")
+		return
+	}
+	if r.FormValue("newPassword") != r.FormValue("confirmPassword") {
+		h.renderAuthResult(w, false, "Password reset failed", "New password and confirmation do not match")
+		return
+	}
+	if err := h.passwordResetSvc.ResetPassword(r.Context(), r.FormValue("token"), r.FormValue("newPassword")); err != nil {
+		h.renderAuthResult(w, false, "Password reset failed", "The reset token is invalid or expired.")
+		return
+	}
+	h.renderAuthResult(w, true, "Password reset", "Your password has been reset successfully.")
+}
+
 func isSafeRedirect(url string) bool {
 	if url == "" {
 		return false
@@ -323,10 +525,20 @@ func isSafeRedirect(url string) bool {
 	if strings.HasPrefix(url, "//") {
 		return false
 	}
+	if strings.HasPrefix(url, `/\`) {
+		return false
+	}
 	if strings.Contains(url, "://") {
 		return false
 	}
 	return true
+}
+
+func safeReturnTo(value string) string {
+	if !isSafeRedirect(value) {
+		return "/"
+	}
+	return value
 }
 
 func (h *AuthHandler) renderAuthError(w http.ResponseWriter, r *http.Request, errMsg string) {
@@ -344,6 +556,7 @@ func (h *AuthHandler) renderAuthError(w http.ResponseWriter, r *http.Request, er
 		Error:               errMsg,
 		CSRFToken:           web.CSRFTokenFromRequest(r),
 		GoogleLoginEnabled:  h.googleLoginEnabled,
+		AppleLoginEnabled:   h.appleLoginEnabled,
 		RegistrationEnabled: h.securityService.RegistrationEnabled(),
 	}
 	page.RegisterMode = r.URL.Path == "/auth/register" && page.RegistrationEnabled

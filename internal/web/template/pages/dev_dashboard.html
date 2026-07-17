@@ -1,27 +1,27 @@
 {{ define "content" }}
 <div class="page-header">
-    <h1>Dev Dashboard</h1>
+    <h1>{{ translate .Language "web.dev.heading" }}</h1>
 </div>
 <div class="card-grid">
     <div class="card">
-        <h2>Outbox</h2>
-        <form method="POST" action="/dev/outbox/process">
+        <h2>{{ translate .Language "web.dev.outbox" }}</h2>
+        <form method="POST" action="/admin/dev/outbox/process">
             <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
-            <button type="submit" class="btn btn-primary">Process Pending</button>
+            <button type="submit" class="btn btn-primary">{{ translate .Language "web.dev.outbox.process" }}</button>
         </form>
     </div>
     <div class="card">
-        <h2>Sessions</h2>
-        <form method="POST" action="/dev/sessions/cleanup">
+        <h2>{{ translate .Language "web.settings.sessions" }}</h2>
+        <form method="POST" action="/admin/dev/sessions/cleanup">
             <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
-            <button type="submit" class="btn btn-primary">Cleanup Expired</button>
+            <button type="submit" class="btn btn-primary">{{ translate .Language "web.dev.sessions.cleanup" }}</button>
         </form>
     </div>
     <div class="card">
-        <h2>Cache</h2>
-        <form method="POST" action="/dev/cache/invalidate">
+        <h2>{{ translate .Language "web.dev.cache" }}</h2>
+        <form method="POST" action="/admin/dev/cache/invalidate">
             <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
-            <button type="submit" class="btn btn-primary">Invalidate Cache</button>
+            <button type="submit" class="btn btn-primary">{{ translate .Language "web.dev.cache.invalidate" }}</button>
         </form>
     </div>
 </div>

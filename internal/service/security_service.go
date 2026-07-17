@@ -16,10 +16,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/persistence"
-	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
-	"github.com/rygel/gouterstellar-platform/internal/security"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence/db"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/security"
 )
 
 var errInvalidCredentials = errors.New("invalid credentials")
@@ -168,7 +168,7 @@ func (s *SecurityService) UnlockAccount(ctx context.Context, adminID, targetID u
 	}
 	adminModel := security.PltUserToModel(admin)
 	if adminModel.Role != model.RoleAdmin {
-		return fmt.Errorf("admin access required")
+		return &model.InsufficientPermissionError{Message: "Admin access required to unlock accounts"}
 	}
 
 	target, err := s.userRepo.FindByID(ctx, targetID)
@@ -225,7 +225,10 @@ func (s *SecurityService) Register(ctx context.Context, username, password strin
 	}
 
 	userID := uuid.New()
-	pltUser, err := s.userRepo.CreateUser(ctx, userID, username, "", hash, string(model.RoleUser), true)
+	// The Java authority initializes email from the registration name. Keeping
+	// the same value also avoids colliding on the database's unique email column
+	// when more than one user registers before editing a profile.
+	pltUser, err := s.userRepo.CreateUser(ctx, userID, username, username, hash, string(model.RoleUser), true)
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
 	}
@@ -318,14 +321,29 @@ func (s *SecurityService) CountUsers(ctx context.Context) (int64, error) {
 }
 
 func (s *SecurityService) SetUserEnabled(ctx context.Context, adminID, targetID uuid.UUID, enabled bool) error {
+	if adminID == targetID {
+		return &model.InsufficientPermissionError{Message: "Cannot change your own enabled status"}
+	}
 	admin, err := s.userRepo.FindByID(ctx, adminID)
 	if err != nil {
 		return &model.UserNotFoundError{UserID: adminID.String()}
+	}
+	if admin.Role != string(model.RoleAdmin) {
+		return &model.InsufficientPermissionError{Message: "Only administrators can enable/disable accounts"}
 	}
 
 	target, err := s.userRepo.FindByID(ctx, targetID)
 	if err != nil {
 		return &model.UserNotFoundError{UserID: targetID.String()}
+	}
+	if !enabled && target.Role == string(model.RoleAdmin) {
+		lastAdmin, err := s.wouldLeaveNoEnabledAdmin(ctx, targetID)
+		if err != nil {
+			return err
+		}
+		if lastAdmin {
+			return &model.InsufficientPermissionError{Message: "Cannot disable the last enabled administrator"}
+		}
 	}
 
 	_, err = s.userRepo.UpdateEnabled(ctx, targetID, enabled)
@@ -365,15 +383,38 @@ func (s *SecurityService) SetUserEnabled(ctx context.Context, adminID, targetID 
 	return nil
 }
 
+func (s *SecurityService) ToggleUserEnabled(ctx context.Context, adminID, targetID uuid.UUID) error {
+	target, err := s.userRepo.FindByID(ctx, targetID)
+	if err != nil {
+		return &model.UserNotFoundError{UserID: targetID.String()}
+	}
+	return s.SetUserEnabled(ctx, adminID, targetID, !target.Enabled)
+}
+
 func (s *SecurityService) SetUserRole(ctx context.Context, adminID, targetID uuid.UUID, role model.UserRole) error {
+	if adminID == targetID {
+		return &model.InsufficientPermissionError{Message: "Cannot change your own role"}
+	}
 	admin, err := s.userRepo.FindByID(ctx, adminID)
 	if err != nil {
 		return &model.UserNotFoundError{UserID: adminID.String()}
+	}
+	if admin.Role != string(model.RoleAdmin) {
+		return &model.InsufficientPermissionError{Message: "Only administrators can change user roles"}
 	}
 
 	target, err := s.userRepo.FindByID(ctx, targetID)
 	if err != nil {
 		return &model.UserNotFoundError{UserID: targetID.String()}
+	}
+	if target.Role == string(model.RoleAdmin) && role != model.RoleAdmin {
+		lastAdmin, err := s.wouldLeaveNoEnabledAdmin(ctx, targetID)
+		if err != nil {
+			return err
+		}
+		if lastAdmin {
+			return &model.InsufficientPermissionError{Message: "Cannot demote the last enabled administrator"}
+		}
 	}
 
 	_, err = s.userRepo.UpdateRole(ctx, targetID, string(role))
@@ -386,7 +427,7 @@ func (s *SecurityService) SetUserRole(ctx context.Context, adminID, targetID uui
 
 	actorID, actorName := userToAuditParams(adminModel)
 	targetIDPtr, targetName := userToAuditParams(targetModel)
-	s.auditLog(ctx, actorID, actorName, targetIDPtr, targetName, "ROLE_CHANGE", fmt.Sprintf("Role set to %s", role))
+	s.auditLog(ctx, actorID, actorName, targetIDPtr, targetName, "USER_ROLE_CHANGED", fmt.Sprintf("from %s to %s", target.Role, role))
 
 	if s.notificationService != nil {
 		body := fmt.Sprintf("Your role has been changed to %s.", role)
@@ -396,6 +437,31 @@ func (s *SecurityService) SetUserRole(ctx context.Context, adminID, targetID uui
 	}
 
 	return nil
+}
+
+func (s *SecurityService) wouldLeaveNoEnabledAdmin(ctx context.Context, targetID uuid.UUID) (bool, error) {
+	users, err := s.userRepo.FindAll(ctx)
+	if err != nil {
+		return false, fmt.Errorf("list administrators: %w", err)
+	}
+	for _, user := range users {
+		if user.ID != targetID && user.Enabled && user.Role == string(model.RoleAdmin) {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func (s *SecurityService) ToggleUserRole(ctx context.Context, adminID, targetID uuid.UUID) error {
+	target, err := s.userRepo.FindByID(ctx, targetID)
+	if err != nil {
+		return &model.UserNotFoundError{UserID: targetID.String()}
+	}
+	role := model.RoleAdmin
+	if target.Role == string(model.RoleAdmin) {
+		role = model.RoleUser
+	}
+	return s.SetUserRole(ctx, adminID, targetID, role)
 }
 
 func (s *SecurityService) DevAdminID(ctx context.Context) uuid.UUID {
@@ -615,6 +681,15 @@ func (s *SecurityService) UpdateProfile(ctx context.Context, userID uuid.UUID, e
 	if strings.TrimSpace(email) == "" {
 		return &model.ValidationError{Errors: []string{"Email must not be blank"}}
 	}
+	if email != user.Email {
+		existing, findErr := s.userRepo.FindByEmail(ctx, email)
+		if findErr == nil && existing.ID != userID {
+			return &model.ValidationError{Errors: []string{"Email is already in use"}}
+		}
+		if findErr != nil && !errors.Is(findErr, pgx.ErrNoRows) {
+			return fmt.Errorf("check email availability: %w", findErr)
+		}
+	}
 
 	if username != nil && *username != user.Username {
 		existing, err := s.userRepo.FindByUsername(ctx, *username)
@@ -639,6 +714,12 @@ func (s *SecurityService) UpdateProfile(ctx context.Context, userID uuid.UUID, e
 		}
 	}
 
+	if email != user.Email {
+		if _, err = s.userRepo.UpdateEmail(ctx, userID, email); err != nil {
+			return fmt.Errorf("update email: %w", err)
+		}
+	}
+
 	if avatarURL != nil {
 		_, err = s.userRepo.UpdateAvatarURL(ctx, userID, avatarURL)
 		if err != nil {
@@ -652,13 +733,25 @@ func (s *SecurityService) UpdateProfile(ctx context.Context, userID uuid.UUID, e
 	return nil
 }
 
-func (s *SecurityService) DeleteAccount(ctx context.Context, userID uuid.UUID) error {
+func (s *SecurityService) DeleteAccount(ctx context.Context, userID uuid.UUID, currentPassword string) error {
 	pltUser, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
 		return &model.UserNotFoundError{UserID: userID.String()}
 	}
 
 	user := security.PltUserToModel(pltUser)
+	if !s.passwordEncoder.Matches(currentPassword, user.PasswordHash) {
+		return &model.InvalidPasswordError{}
+	}
+	if user.Role == model.RoleAdmin {
+		adminCount, err := s.userRepo.CountByRole(ctx, string(model.RoleAdmin))
+		if err != nil {
+			return fmt.Errorf("count administrators: %w", err)
+		}
+		if adminCount <= 1 {
+			return &model.InsufficientPermissionError{Message: "Cannot delete the only remaining admin account"}
+		}
+	}
 
 	if err := s.sessionRepo.DeleteByUserID(ctx, userID); err != nil {
 		slog.Warn("Failed to delete user sessions", "userID", userID, "error", err)

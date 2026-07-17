@@ -12,11 +12,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/security"
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/filter"
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/security"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/filter"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 )
 
 // stubServerExtension is a minimal extension that registers the small set of

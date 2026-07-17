@@ -108,7 +108,7 @@ linters-settings:
     extra-rules: true
 
   goimports:
-    local-prefixes: github.com/rygel/gouterstellar-platform
+    local-prefixes: github.com/outerstellar-hq/gouterstellar-platform
 
   misspell:
     locale: US

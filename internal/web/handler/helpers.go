@@ -9,13 +9,20 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
 )
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+func writeText(w http.ResponseWriter, status int, value string) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(status)
+	// #nosec G705 -- dynamic text is deliberately emitted with text/plain, so it cannot execute as HTML.
+	_, _ = w.Write([]byte(value))
 }
 
 func writeError(w http.ResponseWriter, status int, message string) {

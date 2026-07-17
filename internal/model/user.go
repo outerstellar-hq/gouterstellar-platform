@@ -36,13 +36,13 @@ type User struct {
 }
 
 type UserSummary struct {
-	ID                  string
-	Username            string
-	Email               string
-	Role                string
-	Enabled             bool
-	FailedLoginAttempts int32
-	LockedUntil         *time.Time
+	ID                  string     `json:"id"`
+	Username            string     `json:"username"`
+	Email               string     `json:"email"`
+	Role                string     `json:"role"`
+	Enabled             bool       `json:"enabled"`
+	FailedLoginAttempts int32      `json:"failedLoginAttempts"`
+	LockedUntil         *time.Time `json:"lockedUntil"`
 }
 
 func (u *User) ToSummary() UserSummary {

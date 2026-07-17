@@ -1,0 +1,84 @@
+name: gouterstellar-platform
+
+x-app-image: &app-image
+  image: localhost/gouterstellar-platform:dev
+
+x-database-environment: &database-environment
+  POSTGRES_DB: outerstellar
+  POSTGRES_USER: outerstellar
+  POSTGRES_PASSWORD: outerstellar
+
+x-app-environment: &app-environment
+  DATABASE_URL: postgres://outerstellar:outerstellar@database:5432/outerstellar?sslmode=disable
+
+services:
+  database:
+    image: postgres:16-alpine
+    environment: *database-environment
+    volumes:
+      - database-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U outerstellar -d outerstellar"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    cpus: 1
+    mem_limit: 512m
+    restart: unless-stopped
+
+  migrate:
+    <<: *app-image
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["/app/migrate"]
+    environment: *app-environment
+    depends_on:
+      database:
+        condition: service_healthy
+    cpus: 1
+    mem_limit: 256m
+    restart: "no"
+
+  seed:
+    <<: *app-image
+    entrypoint: ["/app/seed"]
+    environment:
+      <<: *app-environment
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD before starting the platform}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    cpus: 1
+    mem_limit: 256m
+    restart: "no"
+
+  app:
+    <<: *app-image
+    environment:
+      <<: *app-environment
+      PORT: 8080
+      APP_BASE_URL: http://localhost:${OUTERSTELLAR_PORT:-8080}
+      APPLE_OAUTH_ENABLED: ${APPLE_OAUTH_ENABLED:-false}
+      APPLE_OAUTH_TEAM_ID: ${APPLE_OAUTH_TEAM_ID:-}
+      APPLE_OAUTH_CLIENT_ID: ${APPLE_OAUTH_CLIENT_ID:-}
+      APPLE_OAUTH_KEY_ID: ${APPLE_OAUTH_KEY_ID:-}
+      APPLE_OAUTH_PRIVATE_KEY_PEM: ${APPLE_OAUTH_PRIVATE_KEY_PEM:-}
+      STARFORGE_BASE_URL: ${STARFORGE_BASE_URL:-}
+      STARFORGE_CREDENTIAL: ${STARFORGE_CREDENTIAL:-}
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${OUTERSTELLAR_PORT:-8080}:8080"
+    cpus: 2
+    mem_limit: 512m
+    read_only: true
+    tmpfs:
+      - /tmp
+    init: true
+    restart: unless-stopped
+
+volumes:
+  database-data:

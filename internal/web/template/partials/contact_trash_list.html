@@ -1,0 +1,21 @@
+{{ define "contact_trash_list" }}
+<div id="contact-trash-list-container" class="contact-list trash-list" hx-get="{{ .RefreshURL }}" hx-trigger="refresh from:body, htmx:oobAfterSwap from:body" hx-swap="outerHTML">
+    {{ range .Contacts }}
+    <article class="contact-row trash-row">
+        <div class="trash-contact-body">
+            <strong>{{ .Name }}</strong>
+            {{ if .Company }}<span>{{ .Company }}</span>{{ end }}
+            {{ if .Department }}<span>{{ .Department }}</span>{{ end }}
+            {{ range .Emails }}<span>{{ . }}</span>{{ end }}
+            {{ range .Phones }}<span>{{ . }}</span>{{ end }}
+        </div>
+        <form method="POST" action="/contacts/{{ .SyncID }}/restore" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+            <button type="submit" class="btn btn-sm" aria-label="{{ translate .Language "web.contacts.restore" }} {{ .Name }}">{{ translate .Language "web.contacts.restore" }}</button>
+        </form>
+    </article>
+    {{ else }}
+    <p class="empty-state">{{ translate .Language "web.trash.contacts.empty" }}</p>
+    {{ end }}
+</div>
+{{ end }}

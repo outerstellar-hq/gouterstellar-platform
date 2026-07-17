@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
 )
 
 // TestContactsPageRendersCRUDWithCSRF verifies the contacts page renders the
@@ -36,9 +36,9 @@ func TestContactsPageRendersCRUDWithCSRF(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		`name="csrf_token" value="TOKEN-123"`,
-		`action="/contacts/create"`,
+		`action="/contacts"`,
 		`action="/contacts/srv_abc/delete"`,
-		`href="/contacts/srv_abc"`,
+		`href="/contacts/srv_abc/edit"`,
 		`Delete`,
 	} {
 		if !strings.Contains(body, want) {

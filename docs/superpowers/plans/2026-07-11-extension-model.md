@@ -1516,7 +1516,7 @@ package platform
 import (
 	"context"
 
-	"github.com/rygel/gouterstellar-platform/internal/service"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/service"
 )
 
 // MessageCounterAdapter wraps *service.MessageService as a platform.MessageCounter.
@@ -1581,7 +1581,7 @@ Note: This package is `internal/platform` (Go package name `platform` within `in
 
 ```go
 import (
-	platform "github.com/rygel/gouterstellar-platform/platform"
+	platform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 )
 ```
 
@@ -1695,7 +1695,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	platform "github.com/rygel/gouterstellar-platform/platform"
+	platform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 )
 
 var versionPattern = regexp.MustCompile(`^V(\d+)__.*\.sql$`)
@@ -1938,7 +1938,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	platform "github.com/rygel/gouterstellar-platform/platform"
+	platform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 )
 
 func TestRunnerEndToEnd(t *testing.T) {
@@ -2179,7 +2179,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	platform "github.com/rygel/gouterstellar-platform/platform"
+	platform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 )
 
 // stubBundle is a minimal Bundle for testing the Contribute mapping.
@@ -2251,8 +2251,8 @@ package core
 import (
 	"net/http"
 
-	platform "github.com/rygel/gouterstellar-platform/platform"
-	"github.com/rygel/gouterstellar-platform/internal/platform/core/migrations"
+	platform "github.com/outerstellar-hq/gouterstellar-platform/platform"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/platform/core/migrations"
 )
 
 // Bundle holds all the platform's internal HTTP handlers.
@@ -2404,7 +2404,7 @@ package core
 import (
 	"net/http"
 
-	platform "github.com/rygel/gouterstellar-platform/platform"
+	platform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 )
 
 func (e *Extension) Contribute(ctx *platform.ContributionContext) error {
@@ -2546,7 +2546,7 @@ git commit -m "feat: add core extension wrapping all existing handlers"
 - [ ] **Step 1: Remove plugin imports and PluginManager**
 
 In `internal/wire/wire.go`:
-1. Remove the import `"github.com/rygel/gouterstellar-platform/pkg/plugin"`
+1. Remove the import `"github.com/outerstellar-hq/gouterstellar-platform/pkg/plugin"`
 2. Remove the `PluginManager *plugin.PluginManager` field from the `App` struct
 3. Remove `pluginManager := plugin.NewPluginManager()` (line 181)
 4. Remove `PluginManager: pluginManager,` from the return struct
@@ -2557,8 +2557,8 @@ Add a method that constructs a `core.Bundle` from the existing handlers, mapping
 
 ```go
 // Add imports:
-//   "github.com/rygel/gouterstellar-platform/internal/platform/core"
-//   extplatform "github.com/rygel/gouterstellar-platform/internal/platform"
+//   "github.com/outerstellar-hq/gouterstellar-platform/internal/platform/core"
+//   extplatform "github.com/outerstellar-hq/gouterstellar-platform/internal/platform"
 
 // Add to App struct:
 //   Extensions []platform.Extension
@@ -2865,7 +2865,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	platform "github.com/rygel/gouterstellar-platform/platform"
+	platform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 )
 
 type stubMessageCounter struct{ count int64 }
@@ -2914,7 +2914,7 @@ package reports
 import (
 	"embed"
 
-	platform "github.com/rygel/gouterstellar-platform/platform"
+	platform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 )
 
 //go:embed migrations/*.sql
@@ -2958,7 +2958,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	platform "github.com/rygel/gouterstellar-platform/platform"
+	platform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 )
 
 func (e *Extension) Contribute(ctx *platform.ContributionContext) error {
@@ -3041,7 +3041,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	platform "github.com/rygel/gouterstellar-platform/platform"
+	platform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 )
 
 func TestReportsHomeHTTP(t *testing.T) {
@@ -3106,7 +3106,7 @@ Expected: All tests PASS.
 In `cmd/server/main.go`, after creating `coreExt`, add:
 
 ```go
-// Add import: "github.com/rygel/gouterstellar-platform/extensions/reports"
+// Add import: "github.com/outerstellar-hq/gouterstellar-platform/extensions/reports"
 
 // After coreExt:
 reportsExt := reports.New(app.ServiceBag.MessageCounter)
@@ -3183,9 +3183,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	platform "github.com/rygel/gouterstellar-platform/platform"
-	"github.com/rygel/gouterstellar-platform/platform/migration"
-	"github.com/rygel/gouterstellar-platform/internal/platform/core"
+	platform "github.com/outerstellar-hq/gouterstellar-platform/platform"
+	"github.com/outerstellar-hq/gouterstellar-platform/platform/migration"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/platform/core"
 )
 
 func main() {

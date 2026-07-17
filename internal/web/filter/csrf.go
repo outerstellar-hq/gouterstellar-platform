@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/rygel/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
 )
 
 const csrfCookieName = "oss_csrf"
@@ -36,7 +36,7 @@ func CSRF(enabled, secure bool) func(http.Handler) http.Handler {
 			// This replaces the former URL-prefix ("/api/") sniff, which both
 			// exempted legitimate API traffic and silently bypassed CSRF for any
 			// path that happened to start with /api/.
-			if hasBearerAuth(r) {
+			if hasBearerAuth(r) || isPublicAPIWithoutCSRFToken(r) || isOAuthCallback(r) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -98,6 +98,33 @@ func hasBearerAuth(r *http.Request) bool {
 		return false
 	}
 	return strings.EqualFold(strings.TrimSpace(v[:len(prefix)]), "bearer")
+}
+
+func isPublicAPIWithoutCSRFToken(r *http.Request) bool {
+	if r.Method != http.MethodPost {
+		return false
+	}
+	switch r.URL.Path {
+	case "/api/v1/auth/login",
+		"/api/v1/auth/register",
+		"/api/v1/auth/reset-request",
+		"/api/v1/auth/reset-password",
+		"/api/v1/auth/reset-confirm",
+		"/api/v1/auth/confirm-reset",
+		"/api/v1/auth/totp/verify",
+		"/api/v1/auth/token":
+		return true
+	default:
+		return false
+	}
+}
+
+func isOAuthCallback(r *http.Request) bool {
+	if r.Method != http.MethodPost {
+		return false
+	}
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	return len(parts) == 4 && parts[0] == "auth" && parts[1] == "oauth" && parts[2] != "" && parts[3] == "callback"
 }
 
 func isUnsafeMethod(method string) bool {

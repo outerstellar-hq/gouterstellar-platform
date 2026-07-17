@@ -19,9 +19,9 @@ import (
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/persistence"
-	"github.com/rygel/gouterstellar-platform/internal/security"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/security"
 )
 
 const (

@@ -8,9 +8,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
-	"github.com/rygel/gouterstellar-platform/platform/migration"
-	"github.com/rygel/gouterstellar-platform/internal/platform/core"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
+	"github.com/outerstellar-hq/gouterstellar-platform/platform/migration"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/platform/core"
 )
 
 func main() {

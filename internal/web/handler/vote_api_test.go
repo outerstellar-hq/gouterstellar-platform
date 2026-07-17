@@ -12,8 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
 )
 
 type stubMessageVoteService struct {
@@ -69,7 +69,7 @@ func TestVoteAPIPostRejectsUnauthenticatedAndMalformedRequests(t *testing.T) {
 
 func TestVoteComponentFallsBackToMessageListWithoutHTMX(t *testing.T) {
 	stub := &stubMessageVoteService{}
-	handler := NewComponentsHandler(nil, nil, stub, nil, nil)
+	handler := NewComponentsHandler(nil, nil, stub, nil, nil, nil)
 	router := chi.NewRouter()
 	router.Post("/components/messages/{syncId}/vote", handler.Vote)
 	form := url.Values{"direction": {"-1"}}

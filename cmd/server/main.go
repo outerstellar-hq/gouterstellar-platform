@@ -19,14 +19,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
-	"github.com/rygel/gouterstellar-platform/extensions/reports"
-	"github.com/rygel/gouterstellar-platform/internal/config"
-	"github.com/rygel/gouterstellar-platform/internal/observability"
-	"github.com/rygel/gouterstellar-platform/internal/persistence"
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/filter"
-	"github.com/rygel/gouterstellar-platform/internal/wire"
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	"github.com/outerstellar-hq/gouterstellar-platform/extensions/reports"
+	"github.com/outerstellar-hq/gouterstellar-platform/extensions/starforge"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/config"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/observability"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/filter"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/wire"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
+	"github.com/outerstellar-hq/gouterstellar-platform/platform/buildinfo"
 )
 
 func main() {
@@ -35,7 +37,7 @@ func main() {
 		slog.Error("Configuration validation failed", "error", err)
 		os.Exit(1)
 	}
-	slog.Info("Starting Outerstellar Platform", "version", cfg.Version, "port", cfg.Port)
+	slog.Info("Starting Outerstellar Platform", "version", cfg.Version, "build", buildinfo.Current().Identity, "port", cfg.Port)
 
 	ctx := context.Background()
 
@@ -79,12 +81,25 @@ func main() {
 	// Build the core extension from the wired application handlers, then
 	// populate the health/metrics/static handlers that depend on the
 	// connection pool and filesystem.
-	coreExt := wire.BuildCoreExtension(app)
-	coreExt.SetHealth(healthHandler(pool))
+	catalog := extplatform.NewCatalog()
+	coreExt := wire.BuildCoreExtension(app, catalog)
+	coreExt.SetOperations(
+		localhostOnly(livenessHandler()),
+		localhostOnly(readinessHandler(pool.Ping)),
+		robotsHandler(),
+		sitemapHandler(cfg.AppBaseURL),
+	)
 	coreExt.SetMetrics(promhttp.HandlerFor(app.Registry, promhttp.HandlerOpts{}))
+	coreExt.SetDiagnostics(localhostOnly(routeDiagnosticsHandler(catalog)))
 	coreExt.SetStatic(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
 	reportsExt := reports.New(app.ServiceBag.MessageCounter)
+	starforgeClient, err := starforge.NewHTTPClient(cfg.Starforge.BaseURL, cfg.Starforge.Credential, nil)
+	if err != nil {
+		slog.Error("Invalid Starforge configuration", "error", err)
+		os.Exit(1)
+	}
+	starforgeExt := starforge.New(starforgeClient)
 
 	// The middleware chain is applied to every route in the same order as
 	// the previous Chi-based wire root.
@@ -95,7 +110,7 @@ func main() {
 		otelhttp.NewMiddleware("outerstellar-platform"),
 		chimw.RequestID,
 		chimw.RealIP,
-		chimw.Recoverer,
+		filter.ErrorHandler(app.ErrorHandler.InternalError),
 		filter.Metrics(app.Registry),
 		chimw.Timeout(60 * time.Second),
 		cors.Handler(cors.Options{
@@ -127,15 +142,21 @@ func main() {
 		Extensions: []extplatform.Extension{
 			coreExt,
 			reportsExt,
+			starforgeExt,
 		},
 		Services:        app.ServiceBag,
 		MiddlewareChain: middlewareChain,
 		GroupMiddleware: map[extplatform.RouteGroup][]func(http.Handler) http.Handler{
+			// Browser application routes require a valid session, but no role-specific
+			// permission beyond authentication.
+			extplatform.GroupProtectedUI: {filter.RequireAuthenticated},
 			// Bearer token auth (API key / JWT) for JSON API routes.
 			extplatform.GroupAPI: {filter.BearerAuth(app.AuthMetrics, app.Realms...)},
 			// Admin routes require the wildcard admin permission.
 			extplatform.GroupAdmin: {filter.RequirePermission(app.PermissionResolver, "*", "*")},
 		},
+		NotFoundHandler: http.HandlerFunc(app.ErrorHandler.NotFound),
+		Catalog:         catalog,
 	})
 	if err != nil {
 		slog.Error("Platform assembly failed", "error", err)
@@ -158,28 +179,28 @@ func main() {
 		}
 	}()
 
-		// workerCtx is cancelled when shutdown begins so that background workers
-		// (outbox processor, session cleanup) stop promptly instead of running
-		// until process exit.
-		workerCtx, workerCancel := context.WithCancel(context.Background())
+	// workerCtx is cancelled when shutdown begins so that background workers
+	// (outbox processor, session cleanup) stop promptly instead of running
+	// until process exit.
+	workerCtx, workerCancel := context.WithCancel(context.Background())
 
-		go func() {
-			ticker := time.NewTicker(30 * time.Second)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ticker.C:
-					if err := app.OutboxProcessor.ProcessPending(workerCtx); err != nil {
-						slog.Error("Outbox processing failed", "error", err)
-					}
-					if err := app.SecurityService.DeleteExpiredSessions(workerCtx); err != nil {
-						slog.Error("Session cleanup failed", "error", err)
-					}
-				case <-workerCtx.Done():
-					return
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := app.OutboxProcessor.ProcessPending(workerCtx); err != nil {
+					slog.Error("Outbox processing failed", "error", err)
 				}
+				if err := app.SecurityService.DeleteExpiredSessions(workerCtx); err != nil {
+					slog.Error("Session cleanup failed", "error", err)
+				}
+			case <-workerCtx.Done():
+				return
 			}
-		}()
+		}
+	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -195,20 +216,4 @@ func main() {
 	}
 
 	fmt.Println("Server stopped")
-}
-
-// healthHandler returns a handler that pings the database to report liveness.
-func healthHandler(pool *pgxpool.Pool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-		defer cancel()
-		w.Header().Set("Content-Type", "application/json")
-		if err := pool.Ping(ctx); err != nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			_, _ = fmt.Fprintf(w, `{"status":"unhealthy","database":"down","error":%q}`, err.Error())
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprintf(w, `{"status":"healthy","database":"up"}`)
-	}
 }

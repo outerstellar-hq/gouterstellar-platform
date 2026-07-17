@@ -1,0 +1,28 @@
+{{ define "content" }}
+<div class="admin-extensions-page">
+    <header class="page-header">
+        <div>
+            <p class="page-eyebrow">{{ translate .Language "web.admin.label" }}</p>
+            <h1>{{ translate .Language "web.extensions.title" }}</h1>
+            <p>{{ translate .Language "web.extensions.description" }}</p>
+        </div>
+    </header>
+    <div class="extension-grid">
+        {{ range .BodyData.Extensions }}
+        <article class="extension-card">
+            <div class="extension-card-heading">
+                <h2>{{ .Label }}</h2>
+                <span class="badge">{{ .Mode }}</span>
+            </div>
+            <p class="extension-id">{{ .ID }}</p>
+            <dl>
+                <dt>{{ translate $.Language "web.extensions.routes" }}</dt><dd>{{ .RouteCount }}</dd>
+                <dt>{{ translate $.Language "web.extensions.migrations" }}</dt><dd>{{ .MigrationCount }}</dd>
+            </dl>
+        </article>
+        {{ else }}
+        <p class="empty-state">{{ translate $.Language "web.extensions.empty" }}</p>
+        {{ end }}
+    </div>
+</div>
+{{ end }}

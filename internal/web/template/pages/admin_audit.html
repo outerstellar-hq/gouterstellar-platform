@@ -1,8 +1,8 @@
 {{ define "content" }}
 <div class="admin-audit-page">
     <div class="page-header">
-        <h1>Audit Log</h1>
-		<div class="export-actions" aria-label="Export audit log">
+        <h1>{{ translate .Language "web.admin.audit.title" }}</h1>
+		<div class="export-actions" aria-label="{{ translate .Language "web.admin.audit.export" }}">
 			<a href="/admin/audit/export" class="btn btn-sm btn-secondary" download>CSV</a>
 			<a href="/admin/audit/export/json" class="btn btn-sm btn-secondary" download>JSON</a>
 		</div>
@@ -11,11 +11,11 @@
     <table class="data-table">
         <thead>
             <tr>
-                <th>Time</th>
-                <th>Actor</th>
-                <th>Target</th>
-                <th>Action</th>
-                <th>Detail</th>
+                <th>{{ translate .Language "web.admin.audit.header.when" }}</th>
+                <th>{{ translate .Language "web.admin.audit.header.actor" }}</th>
+                <th>{{ translate .Language "web.admin.audit.header.target" }}</th>
+                <th>{{ translate .Language "web.admin.audit.header.action" }}</th>
+                <th>{{ translate .Language "web.admin.audit.header.detail" }}</th>
             </tr>
         </thead>
         <tbody>
@@ -28,7 +28,7 @@
                 <td>{{ .Detail }}</td>
             </tr>
             {{ else }}
-            <tr><td colspan="5" class="empty-state">No audit entries found.</td></tr>
+            <tr><td colspan="5" class="empty-state">{{ translate $.Language "web.admin.audit.empty" }}</td></tr>
             {{ end }}
         </tbody>
     </table>

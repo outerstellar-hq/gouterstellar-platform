@@ -13,10 +13,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
 )
 
 type stubMessageExportSource struct {
@@ -93,6 +93,29 @@ func TestAdminUIRegistersJSONExportRoutes(t *testing.T) {
 	}
 	assert.Contains(t, patterns, "/admin/users/export/json")
 	assert.Contains(t, patterns, "/admin/audit/export/json")
+}
+
+func TestAdminAPIRegistersJavaCompatibleRoutes(t *testing.T) {
+	ctx := extplatform.NewContributionContext("platform-core")
+	require.NoError(t, NewUserAdminAPI(nil).ContributeRoutes(ctx))
+
+	routes := make(map[string]bool)
+	for _, route := range ctx.Routes.All() {
+		routes[route.Method+" "+route.Pattern] = true
+	}
+	assert.True(t, routes[http.MethodGet+" /api/v1/admin/users"])
+	assert.True(t, routes[http.MethodPut+" /api/v1/admin/users/{id}/enabled"])
+	assert.True(t, routes[http.MethodPut+" /api/v1/admin/users/{id}/role"])
+}
+
+func TestAdminPaginationAcceptsJavaLimitOffsetContract(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/admin/users?limit=250&offset=205", nil)
+
+	limit, offset, page := adminPagination(request)
+
+	assert.Equal(t, adminMaxPageSize, limit)
+	assert.Equal(t, 205, offset)
+	assert.Equal(t, 3, page)
 }
 
 func TestMessageCSVExportPaginatesAndNeutralizesFormulas(t *testing.T) {

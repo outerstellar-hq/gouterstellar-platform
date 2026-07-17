@@ -240,8 +240,8 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/rygel/gouterstellar-platform/internal/service"
-	"github.com/rygel/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/service"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
 )
 
 func DevAutoLogin(secSvc *service.SecurityService, enabled bool) func(http.Handler) http.Handler {
@@ -608,5 +608,5 @@ After all tasks are complete:
 3. `golangci-lint run ./...` — clean
 4. `gosec -exclude-dir=internal/persistence/db ./...` — clean
 5. `gofumpt -l .` — clean
-6. `goimports -l -local github.com/rygel/gouterstellar-platform .` — clean
+6. `goimports -l -local github.com/outerstellar-hq/gouterstellar-platform .` — clean
 7. `go test ./... -timeout 120s -count=1` — all pass

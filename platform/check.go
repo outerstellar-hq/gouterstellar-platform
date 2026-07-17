@@ -73,8 +73,14 @@ func CheckExtension(ext Extension, ctx *ContributionContext) (*Diagnostics, erro
 }
 
 // TestHostContext creates a ContributionContext suitable for contract tests.
-func TestHostContext() *ContributionContext {
-	return NewContributionContext("test-host")
+// Optional services let an extension contract exercise contributed capabilities
+// such as shared page registration without importing platform internals.
+func TestHostContext(services ...ServiceBag) *ContributionContext {
+	var serviceBag ServiceBag
+	if len(services) > 0 {
+		serviceBag = services[0]
+	}
+	return newContributionContext("test-host", serviceBag)
 }
 
 func navLabelSlice(items []NavigationItem) []string {

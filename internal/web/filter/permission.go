@@ -4,10 +4,22 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/security"
-	"github.com/rygel/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/security"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
 )
+
+// RequireAuthenticated redirects anonymous browser requests to the login page
+// while preserving JSON 401 responses for programmatic clients.
+func RequireAuthenticated(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if web.UserFromRequest(r) == nil {
+			writeUnauthenticated(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
 // RequirePermission returns middleware that checks the user has the given
 // permission. If no user is set (unauthenticated), the response shape is chosen
@@ -19,12 +31,7 @@ func RequirePermission(resolver security.PermissionResolver, domain, action stri
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user := web.UserFromRequest(r)
 			if user == nil {
-				if wantsJSON(r) {
-					w.Header().Set("Content-Type", "application/json")
-					http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-				} else {
-					http.Redirect(w, r, "/auth", http.StatusSeeOther)
-				}
+				writeUnauthenticated(w, r)
 				return
 			}
 			if !resolver.Allowed(user, perm) {
@@ -39,6 +46,15 @@ func RequirePermission(resolver security.PermissionResolver, domain, action stri
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func writeUnauthenticated(w http.ResponseWriter, r *http.Request) {
+	if wantsJSON(r) {
+		w.Header().Set("Content-Type", "application/json")
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	http.Redirect(w, r, "/auth", http.StatusSeeOther)
 }
 
 // wantsJSON reports whether the client expects a JSON response. It inspects the

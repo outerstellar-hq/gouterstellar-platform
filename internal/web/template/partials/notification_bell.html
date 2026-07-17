@@ -1,5 +1,5 @@
 {{ define "notification_bell" }}
-<a href="/notifications" class="notification-bell" aria-label="Notifications{{ if gt .UnreadCount 0 }}, {{ .UnreadCount }} unread{{ end }}" title="Notifications">
+<a href="/notifications" class="notification-bell" aria-label="{{ translate .Language "web.notification.bell.title" }}{{ if gt .UnreadCount 0 }}, {{ .UnreadCount }} {{ translate .Language "web.notifications.unread" }}{{ end }}" title="{{ translate .Language "web.notification.bell.title" }}">
     <span class="notification-bell-icon" aria-hidden="true">&#128276;</span>
     {{ if gt .UnreadCount 0 }}
     <span class="notification-bell-count" aria-hidden="true">{{ if gt .UnreadCount 99 }}99+{{ else }}{{ .UnreadCount }}{{ end }}</span>

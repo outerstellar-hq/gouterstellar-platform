@@ -1,49 +1,59 @@
 {{ define "base" }}
 <!DOCTYPE html>
-<html lang="en" data-theme="{{ .Theme }}">
+<html lang="{{ .Language }}" data-theme="{{ .Theme }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ .CSRFToken }}">
-    <title>{{ .Title }} - Outerstellar Platform</title>
+    <title>{{ .Title }} - {{ translate .Language "web.app.title" }}</title>
     <link rel="stylesheet" href="/static/css/main.css">
     {{ if .CustomCSS }}<style>{{ .CustomCSS }}</style>{{ end }}
 </head>
-<body class="{{ if .IsDark }}dark {{ end }}layout-{{ .Layout }}" hx-boost="true">
-    <a class="skip-link" href="#main-content">Skip to content</a>
+<body class="{{ if .IsDark }}dark {{ end }}layout-{{ .LayoutCSS }} density-{{ .Layout }}"{{ if .User }} hx-boost="true" hx-ext="ws" ws-connect="/ws/sync"{{ end }}>
+    <a class="skip-link" href="#main-content">{{ translate .Language "web.layout.skip" }}</a>
     <div class="app-shell{{ if not .User }} app-shell-public{{ end }}">
     {{ if .User }}
-    <nav class="app-nav" aria-label="Primary navigation">
+    <nav class="app-nav" aria-label="{{ translate .Language "web.layout.primary.navigation" }}">
         <a href="/" class="brand">Outerstellar</a>
         <div class="nav-links">
             {{ range .NavItems }}
             <a href="{{ .URL }}" class="nav-link{{ if .Active }} active{{ end }}"{{ if .Active }} aria-current="page"{{ end }}>{{ .Label }}</a>
             {{ end }}
             {{ if .User.IsAdmin }}
-            <a href="/admin/users" class="nav-link{{ if eq .Body "admin_users" }} active{{ end }}"{{ if eq .Body "admin_users" }} aria-current="page"{{ end }}>{{ translate $.Language "nav.admin" }}</a>
+            <a href="/admin/extensions" class="nav-link{{ if eq .Body "admin_extensions" }} active{{ end }}"{{ if eq .Body "admin_extensions" }} aria-current="page"{{ end }}>{{ translate $.Language "web.nav.extensions" }}</a>
+            <a href="/admin/users" class="nav-link{{ if eq .Body "admin_users" }} active{{ end }}"{{ if eq .Body "admin_users" }} aria-current="page"{{ end }}>{{ translate $.Language "web.nav.users" }}</a>
+            <a href="/admin/audit" class="nav-link{{ if eq .Body "admin_audit" }} active{{ end }}"{{ if eq .Body "admin_audit" }} aria-current="page"{{ end }}>{{ translate $.Language "web.nav.audit" }}</a>
             {{ end }}
         </div>
         <div class="user-section">
-            <div id="notification-bell" hx-get="/components/notification-bell" hx-trigger="load, every 60s" hx-swap="innerHTML">
-                <a href="/notifications" class="notification-bell notification-bell-fallback">Notifications</a>
+			<div class="shell-selectors">
+				<div hx-get="/components/sidebar/theme-selector?pagePath={{ urlEncode .CurrentPath }}&theme={{ urlEncode .Theme }}&lang={{ urlEncode .Language }}&layout={{ urlEncode .Layout }}" hx-trigger="load" hx-swap="innerHTML"></div>
+				<div hx-get="/components/sidebar/language-selector?pagePath={{ urlEncode .CurrentPath }}&theme={{ urlEncode .Theme }}&lang={{ urlEncode .Language }}&layout={{ urlEncode .Layout }}" hx-trigger="load" hx-swap="innerHTML"></div>
+				<div hx-get="/components/sidebar/layout-selector?pagePath={{ urlEncode .CurrentPath }}&theme={{ urlEncode .Theme }}&lang={{ urlEncode .Language }}&layout={{ urlEncode .Layout }}" hx-trigger="load" hx-swap="innerHTML"></div>
+			</div>
+            <div id="notification-bell" hx-get="/components/notification-bell?lang={{ urlEncode .Language }}" hx-trigger="load, every 60s" hx-swap="innerHTML">
+                <a href="/notifications" class="notification-bell notification-bell-fallback">{{ translate $.Language "web.nav.notifications" }}</a>
             </div>
             <span class="user-name">{{ .User.Username }}</span>
-            <form method="POST" action="/auth/logout"><input type="hidden" name="csrf_token" value="{{ .CSRFToken }}"><button type="submit">{{ translate $.Language "nav.logout" }}</button></form>
+            <form method="POST" action="/logout" hx-boost="false"><input type="hidden" name="csrf_token" value="{{ .CSRFToken }}"><button type="submit">{{ translate $.Language "web.layout.sign.out" }}</button></form>
         </div>
     </nav>
     {{ end }}
     <main id="main-content" class="app-main" tabindex="-1">
+        {{ if .User }}<div id="ws-updates" ws-subscribe aria-live="polite"></div>{{ end }}
         {{ range .Messages }}
         <div class="toast toast-{{ .Type }}">{{ .Message }}</div>
         {{ end }}
         {{ template "content" . }}
     </main>
     <footer class="app-footer">
-        <span>v{{ .Version }}</span>
-        <span>Request: {{ .RequestID }}</span>
+		<span class="build-identity">{{ .Build.Identity }}</span>
+		<span hx-get="/components/footer-status?lang={{ urlEncode .Language }}" hx-trigger="load, every 60s" hx-swap="innerHTML">v{{ .Version }}</span>
+        <span>{{ translate .Language "web.footer.request" }}: {{ .RequestID }}</span>
     </footer>
     </div>
     <script src="/static/js/htmx.min.js"></script>
+    {{ if .User }}<script src="/static/js/htmx-ext-ws.js"></script>{{ end }}
     <script src="/static/js/platform.js"></script>
 </body>
 </html>

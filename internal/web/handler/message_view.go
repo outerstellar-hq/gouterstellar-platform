@@ -5,8 +5,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
 )
 
 type messageVoteService interface {
@@ -22,6 +22,7 @@ func buildMessageItems(
 	voteService messageVoteService,
 	userID uuid.UUID,
 	csrfToken string,
+	language string,
 ) ([]viewmodel.MessageItem, error) {
 	syncIDs := make([]string, len(messages))
 	for i, message := range messages {
@@ -50,6 +51,7 @@ func buildMessageItems(
 			HasUpvoted:   score.UserVote != nil && *score.UserVote == model.VoteUp,
 			HasDownvoted: score.UserVote != nil && *score.UserVote == model.VoteDown,
 			CSRFToken:    csrfToken,
+			Language:     language,
 		}
 	}
 	return items, nil

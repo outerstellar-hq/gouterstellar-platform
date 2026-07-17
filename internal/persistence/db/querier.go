@@ -40,6 +40,7 @@ type Querier interface {
 	DeleteAllDeviceTokensForUser(ctx context.Context, userID uuid.UUID) (int64, error)
 	DeleteApiKey(ctx context.Context, arg DeleteApiKeyParams) (int64, error)
 	DeleteDeviceToken(ctx context.Context, arg DeleteDeviceTokenParams) (int64, error)
+	DeleteDeviceTokenByValue(ctx context.Context, arg DeleteDeviceTokenByValueParams) (int64, error)
 	DeleteExpiredSessions(ctx context.Context) (int64, error)
 	DeleteExpiredTOTPChallenges(ctx context.Context) (int64, error)
 	DeleteMessageVote(ctx context.Context, arg DeleteMessageVoteParams) (int64, error)
@@ -153,6 +154,7 @@ type Querier interface {
 	UpdateApiKeyLastUsed(ctx context.Context, id int64) error
 	UpdateAvatarURL(ctx context.Context, arg UpdateAvatarURLParams) (PltUser, error)
 	UpdateContact(ctx context.Context, arg UpdateContactParams) (PltContact, error)
+	UpdateEmail(ctx context.Context, arg UpdateEmailParams) (PltUser, error)
 	UpdateLastActivity(ctx context.Context, id uuid.UUID) error
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) (PltMessage, error)
 	UpdateMessageVote(ctx context.Context, arg UpdateMessageVoteParams) (int64, error)

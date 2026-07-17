@@ -9,17 +9,19 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/service"
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/service"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
 )
 
 const (
 	adminExportPageSize   int32 = 500
 	adminAuditExportLimit int   = 10000
+	adminDefaultPageSize        = 20
+	adminMaxPageSize            = 100
 )
 
 type UserAdminHandler struct {
@@ -37,8 +39,8 @@ func NewUserAdminHandler(secSvc *service.SecurityService, renderer *web.Renderer
 // ContributeRoutes registers the admin UI routes.
 func (h *UserAdminHandler) ContributeRoutes(ctx *extplatform.ContributionContext) error {
 	ctx.Routes.Admin(http.MethodGet, "/admin/users", "User management", http.HandlerFunc(h.ListUsers))
-	ctx.Routes.Admin(http.MethodPost, "/admin/users/{id}/enabled", "Set user enabled", http.HandlerFunc(h.SetEnabled))
-	ctx.Routes.Admin(http.MethodPost, "/admin/users/{id}/role", "Set user role", http.HandlerFunc(h.SetRole))
+	ctx.Routes.Admin(http.MethodPost, "/admin/users/{id}/toggle-enabled", "Toggle user enabled", http.HandlerFunc(h.ToggleEnabled))
+	ctx.Routes.Admin(http.MethodPost, "/admin/users/{id}/toggle-role", "Toggle user role", http.HandlerFunc(h.ToggleRole))
 	ctx.Routes.Admin(http.MethodPost, "/admin/users/{id}/unlock", "Unlock user", http.HandlerFunc(h.Unlock))
 	ctx.Routes.Admin(http.MethodGet, "/admin/users/export", "Export users", http.HandlerFunc(h.ExportUsers))
 	ctx.Routes.Admin(http.MethodGet, "/admin/users/export/json", "Export users as JSON", http.HandlerFunc(h.ExportUsersJSON))
@@ -48,10 +50,45 @@ func (h *UserAdminHandler) ContributeRoutes(ctx *extplatform.ContributionContext
 	return nil
 }
 
+func (h *UserAdminHandler) ToggleEnabled(w http.ResponseWriter, r *http.Request) {
+	currentUser := web.UserFromRequest(r)
+	if currentUser == nil || currentUser.Role != model.RoleAdmin {
+		writeError(w, http.StatusForbidden, "Admin access required")
+		return
+	}
+	targetID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid user ID")
+		return
+	}
+	if err := h.securityService.ToggleUserEnabled(r.Context(), currentUser.ID, targetID); err != nil {
+		handleServiceError(w, err)
+		return
+	}
+	h.ListUsers(w, r)
+}
+
+func (h *UserAdminHandler) ToggleRole(w http.ResponseWriter, r *http.Request) {
+	currentUser := web.UserFromRequest(r)
+	if currentUser == nil || currentUser.Role != model.RoleAdmin {
+		writeError(w, http.StatusForbidden, "Admin access required")
+		return
+	}
+	targetID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid user ID")
+		return
+	}
+	if err := h.securityService.ToggleUserRole(r.Context(), currentUser.ID, targetID); err != nil {
+		handleServiceError(w, err)
+		return
+	}
+	h.ListUsers(w, r)
+}
+
 func (h *UserAdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
-	page := getIntParam(r, "page", 1)
-	pageSize := getIntParam(r, "pageSize", 20)
-	offset := (page - 1) * pageSize
+	pageSize, offset, page := adminPagination(r)
+	currentUser := web.UserFromRequest(r)
 
 	users, err := h.securityService.ListUsersPaged(r.Context(), safeInt32(pageSize), safeInt32(offset))
 	if err != nil {
@@ -59,7 +96,11 @@ func (h *UserAdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	total, _ := h.securityService.CountUsers(r.Context())
+	total, err := h.securityService.CountUsers(r.Context())
+	if err != nil {
+		h.renderError(w, r, "Failed to count users", http.StatusInternalServerError)
+		return
+	}
 	totalPages := int(total) / pageSize
 	if int(total)%pageSize > 0 {
 		totalPages++
@@ -75,6 +116,7 @@ func (h *UserAdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 			Enabled:             u.Enabled,
 			FailedLoginAttempts: u.FailedLoginAttempts,
 			IsLocked:            u.LockedUntil != nil && u.LockedUntil.After(time.Now()),
+			IsSelf:              currentUser != nil && u.ID == currentUser.ID.String(),
 		}
 	}
 
@@ -85,6 +127,7 @@ func (h *UserAdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		HasPrevious: page > 1,
 		HasNext:     page < totalPages,
 		PageSize:    pageSize,
+		Language:    web.LanguageFromRequest(r),
 	}
 
 	if err := h.renderer.RenderPage(w, r, "admin_users", viewmodel.AdminUsersPage{
@@ -112,73 +155,27 @@ func (h *UserAdminHandler) Unlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+	h.ListUsers(w, r)
 }
 
-func (h *UserAdminHandler) SetEnabled(w http.ResponseWriter, r *http.Request) {
-	currentUser := web.UserFromRequest(r)
-	if currentUser == nil || currentUser.Role != model.RoleAdmin {
-		writeError(w, http.StatusForbidden, "Admin access required")
+func adminPagination(r *http.Request) (pageSize, offset, page int) {
+	pageSize = getIntParam(r, "limit", 0)
+	if pageSize == 0 {
+		pageSize = getIntParam(r, "pageSize", adminDefaultPageSize)
+	}
+	pageSize = min(max(pageSize, 1), adminMaxPageSize)
+	if r.URL.Query().Has("offset") {
+		offset = max(getIntParam(r, "offset", 0), 0)
+		page = offset/pageSize + 1
 		return
 	}
-
-	idStr := chi.URLParam(r, "id")
-	targetID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid user ID")
-		return
-	}
-
-	if err := r.ParseForm(); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid form submission")
-		return
-	}
-
-	enabled := r.FormValue("enabled") == "true"
-
-	err = h.securityService.SetUserEnabled(r.Context(), currentUser.ID, targetID, enabled)
-	if err != nil {
-		handleServiceError(w, err)
-		return
-	}
-
-	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
-}
-
-func (h *UserAdminHandler) SetRole(w http.ResponseWriter, r *http.Request) {
-	currentUser := web.UserFromRequest(r)
-	if currentUser == nil || currentUser.Role != model.RoleAdmin {
-		writeError(w, http.StatusForbidden, "Admin access required")
-		return
-	}
-
-	idStr := chi.URLParam(r, "id")
-	targetID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid user ID")
-		return
-	}
-
-	if err := r.ParseForm(); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid form submission")
-		return
-	}
-
-	role := r.FormValue("role")
-
-	err = h.securityService.SetUserRole(r.Context(), currentUser.ID, targetID, model.UserRole(role))
-	if err != nil {
-		handleServiceError(w, err)
-		return
-	}
-
-	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+	page = max(getIntParam(r, "page", 1), 1)
+	offset = (page - 1) * pageSize
+	return
 }
 
 func (h *UserAdminHandler) ShowAudit(w http.ResponseWriter, r *http.Request) {
-	page := getIntParam(r, "page", 1)
-	pageSize := getIntParam(r, "pageSize", 50)
-	offset := (page - 1) * pageSize
+	pageSize, offset, page := adminPagination(r)
 
 	entries, err := h.securityService.GetAuditLogPaged(r.Context(), safeInt32(pageSize), safeInt32(offset))
 	if err != nil {
@@ -186,7 +183,11 @@ func (h *UserAdminHandler) ShowAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	total, _ := h.securityService.CountAuditEntries(r.Context())
+	total, err := h.securityService.CountAuditEntries(r.Context())
+	if err != nil {
+		h.renderError(w, r, "Failed to count audit entries", http.StatusInternalServerError)
+		return
+	}
 	totalPages := int(total) / pageSize
 	if int(total)%pageSize > 0 {
 		totalPages++
@@ -224,6 +225,7 @@ func (h *UserAdminHandler) ShowAudit(w http.ResponseWriter, r *http.Request) {
 		HasPrevious: page > 1,
 		HasNext:     page < totalPages,
 		PageSize:    pageSize,
+		Language:    web.LanguageFromRequest(r),
 	}
 
 	if err := h.renderer.RenderPage(w, r, "admin_audit", viewmodel.AdminAuditPage{
@@ -282,7 +284,7 @@ func (h *UserAdminHandler) ExportAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	headers := []string{"Actor", "Target", "Action", "Detail", "Created At"}
+	headers := []string{"Timestamp", "Actor", "Action", "Target", "Detail"}
 	rows := make([][]string, len(entries))
 	for i, e := range entries {
 		actor := ""
@@ -297,10 +299,10 @@ func (h *UserAdminHandler) ExportAudit(w http.ResponseWriter, r *http.Request) {
 		if e.Detail != nil {
 			detail = *e.Detail
 		}
-		rows[i] = []string{actor, target, e.Action, detail, e.CreatedAt.Format("2006-01-02 15:04:05")}
+		rows[i] = []string{e.CreatedAt.Format(time.RFC3339), actor, e.Action, target, detail}
 	}
 
-	if err := writeCSV(w, "audit_log.csv", headers, rows); err != nil {
+	if err := writeCSV(w, "audit.csv", headers, rows); err != nil {
 		handleServiceError(w, err)
 	}
 }

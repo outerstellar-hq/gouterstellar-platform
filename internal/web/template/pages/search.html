@@ -1,21 +1,47 @@
 {{ define "content" }}
-<div class="page-header">
-    <h1>Search</h1>
-</div>
-<form method="GET" action="/search" class="search-form">
-    <input type="text" name="q" value="{{ .BodyData.Query }}" placeholder="Search messages..." autofocus>
-    <button type="submit" class="btn btn-primary">Search</button>
-</form>
-<div id="search-results">
-{{ if .BodyData.Messages }}
-<div class="message-list">
-    {{ range .BodyData.Messages }}
-    {{ template "message_row" . }}
-    {{ end }}
-</div>
-{{ template "pagination" .BodyData.Pagination }}
-{{ else if .BodyData.Query }}
-<p class="empty-state">No results found for "{{ .BodyData.Query }}".</p>
-{{ end }}
-</div>
+<section class="search-page" aria-labelledby="search-title">
+    <header class="search-intro">
+        <p class="search-eyebrow">{{ translate .Language "web.search.scope" }}</p>
+        <h1 id="search-title">{{ translate .Language "web.search.title" }}</h1>
+        <p>{{ translate .Language "web.page.description./search" }}</p>
+    </header>
+
+    <form method="GET" action="/search" class="search-command" role="search">
+        <label for="search-query">{{ translate .Language "web.search.label" }}</label>
+        <div class="search-command-row">
+            <input id="search-query" type="search" name="q" value="{{ .BodyData.Query }}"
+                   placeholder="{{ translate .Language "web.search.placeholder" }}" autofocus>
+            <button type="submit" class="btn btn-primary">{{ translate .Language "web.search.label" }}</button>
+        </div>
+    </form>
+
+    <nav class="search-type-filters" aria-label="{{ translate .Language "web.search.filter.label" }}">
+        {{ range .BodyData.TypeFilters }}
+        <a href="{{ .URL }}" class="search-type-filter{{ if .Active }} active{{ end }}"
+           {{ if .Active }}aria-current="page"{{ end }}>{{ .Label }}</a>
+        {{ end }}
+    </nav>
+
+    <div id="search-results" aria-live="polite">
+        {{ if .BodyData.Results }}
+        <p class="search-summary">{{ len .BodyData.Results }} {{ if eq (len .BodyData.Results) 1 }}{{ translate .Language "web.search.result" }}{{ else }}{{ translate .Language "web.search.results" }}{{ end }} “{{ .BodyData.Query }}”</p>
+        <ol class="search-index">
+            {{ range .BodyData.Results }}
+            <li class="search-result search-result-{{ .Type }}">
+                <span class="search-result-type">{{ .Type }}</span>
+                <div class="search-result-copy">
+                    <a href="{{ .URL }}" class="search-result-title">{{ .Title }}</a>
+                    {{ if .Subtitle }}<p>{{ .Subtitle }}</p>{{ end }}
+                </div>
+            </li>
+            {{ end }}
+        </ol>
+        {{ else if .BodyData.Query }}
+        <div class="empty-state">
+            <strong>{{ translate .Language "web.search.empty" }} “{{ .BodyData.Query }}”</strong>
+            <span>{{ translate .Language "web.search.empty.hint" }}</span>
+        </div>
+        {{ end }}
+    </div>
+</section>
 {{ end }}

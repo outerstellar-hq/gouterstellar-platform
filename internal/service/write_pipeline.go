@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/rygel/gouterstellar-platform/internal/persistence"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence"
 )
 
 // WritePipeline centralizes the post-mutation side-effects that every
@@ -18,10 +18,10 @@ import (
 // receiver, so a service that opts out of a side-effect (e.g. no email) can
 // pass nil for the relevant dependency.
 type WritePipeline struct {
-	cache       *persistence.MessageCache
-	eventPub    EventPublisher
-	notifier    *NotificationService
-	emailSvc    EmailService
+	cache    *persistence.MessageCache
+	eventPub EventPublisher
+	notifier *NotificationService
+	emailSvc EmailService
 }
 
 // NewWritePipeline assembles a WritePipeline from its dependencies. Any
@@ -49,7 +49,7 @@ func (p *WritePipeline) AfterMessageChange(ctx context.Context, syncID string) {
 		p.cache.InvalidateByPrefix("messages:")
 	}
 	if p.eventPub != nil {
-		p.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
+		p.eventPub.PublishRefresh(MessageListPanel)
 	}
 }
 
@@ -67,7 +67,7 @@ func (p *WritePipeline) AfterMessageCreated(ctx context.Context, author, content
 		p.cache.InvalidateByPrefix("messages:")
 	}
 	if p.eventPub != nil {
-		p.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
+		p.eventPub.PublishRefresh(MessageListPanel)
 	}
 	p.notifyActor(ctx, "New Message", truncateContent(content), "message")
 	p.notifyByEmail(ctx, "New message created",

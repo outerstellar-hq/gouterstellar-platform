@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/persistence"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence"
 )
 
 // maxRetryCount is the threshold at which an outbox entry is moved to the
@@ -105,17 +105,15 @@ func (p *OutboxProcessor) processEntry(ctx context.Context, id uuid.UUID, payloa
 		}
 		slog.Info("Processing message sync outbox entry", "id", id)
 		if p.eventPub != nil {
-			// The outbox worker runs without a user context, so broadcast the
-			// refresh to all connected clients rather than scoping to a user.
-			p.eventPub.PublishRefresh("", "messages")
+			// Remote changes are visible to every workspace client.
+			p.eventPub.PublishRefresh(MessageListPanel)
 		}
 		return nil
 	case "CONTACT_SYNC":
 		slog.Info("Processing contact sync outbox entry", "id", id)
 		if p.eventPub != nil {
-			// The outbox worker runs without a user context, so broadcast the
-			// refresh to all connected clients rather than scoping to a user.
-			p.eventPub.PublishRefresh("", "contacts")
+			// Remote changes are visible to every workspace client.
+			p.eventPub.PublishRefresh(ContactListPanel)
 		}
 		return nil
 	default:

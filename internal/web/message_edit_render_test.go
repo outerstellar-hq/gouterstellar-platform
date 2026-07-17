@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
 )
 
 func TestMessageEditPageRendersSafeAccessibleForm(t *testing.T) {
@@ -32,7 +32,7 @@ func TestMessageEditPageRendersSafeAccessibleForm(t *testing.T) {
 		`<label for="message-edit-author">Author</label>`,
 		`<label for="message-edit-content">Content</label>`,
 		`role="alert">Author and content are required.</div>`,
-		`Save changes`,
+		`>Save</button>`,
 		`&lt;script&gt;alert(1)&lt;/script&gt;`,
 	} {
 		if !strings.Contains(body, want) {

@@ -11,9 +11,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/persistence"
-	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence/db"
 )
 
 type MessageService struct {
@@ -265,7 +265,7 @@ func (s *MessageService) CreateLocalMessage(ctx context.Context, author, content
 	// notifications), so invalidate the prefix directly. A future hook could
 	// model "local create" explicitly if notifications are ever wanted.
 	s.cache.InvalidateByPrefix("messages:")
-	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
+	s.eventPub.PublishRefresh(MessageListPanel)
 
 	return stored, nil
 }
@@ -334,7 +334,7 @@ func (s *MessageService) ProcessPushRequest(ctx context.Context, req *model.Sync
 	}
 
 	s.cache.InvalidateAll()
-	s.eventPub.PublishRefresh(ActorUserIDFromContext(ctx), "messages")
+	s.eventPub.PublishRefresh(MessageListPanel)
 
 	return &model.SyncPushResponse{
 		AppliedCount: appliedCount,
@@ -499,6 +499,11 @@ func pltMessageToSyncMessage(m db.PltMessage) model.SyncMessage {
 // CountMessages returns the total number of non-deleted messages.
 func (s *MessageService) CountMessages(ctx context.Context) (int64, error) {
 	return s.repo.CountMessages(ctx)
+}
+
+// CountDirtyMessages returns the number of messages still awaiting sync.
+func (s *MessageService) CountDirtyMessages(ctx context.Context) (int64, error) {
+	return s.repo.CountDirtyMessages(ctx)
 }
 
 // InvalidateCache flushes all cached message entries. It is exposed for the dev

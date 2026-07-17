@@ -1,12 +1,19 @@
 {{ define "content" }}
 <div class="auth-page">
     <div class="auth-card">
-        <h1>Sign In</h1>
+        <h1>{{ translate .Language "web.auth.sign-in.title" }}</h1>
+		<p>{{ translate .Language "web.auth.workspace.intro" }}</p>
+		<nav class="auth-tabs" aria-label="{{ translate .Language "web.auth.options" }}">
+			<a href="/auth" hx-get="/auth/components/forms/sign-in?returnTo={{ .BodyData.ReturnTo }}" hx-target="#auth-form-container" hx-swap="innerHTML">{{ translate .Language "web.auth.signin" }}</a>
+			{{ if .BodyData.RegistrationEnabled }}<a href="/auth?mode=register" hx-get="/auth/components/forms/register?returnTo={{ .BodyData.ReturnTo }}" hx-target="#auth-form-container" hx-swap="innerHTML">{{ translate .Language "web.auth.register" }}</a>{{ end }}
+			<a href="/auth/reset" hx-get="/auth/components/forms/recover?returnTo={{ .BodyData.ReturnTo }}" hx-target="#auth-form-container" hx-swap="innerHTML">{{ translate .Language "web.auth.recover" }}</a>
+		</nav>
+		<div id="auth-form-container">
         {{ if .BodyData.Error }}
         <div class="toast toast-error">{{ .BodyData.Error }}</div>
         {{ end }}
         {{ if .BodyData.TOTPRequired }}
-        <p>Enter the 6-digit code from your authenticator app, or use one backup code.</p>
+        <p>{{ translate .Language "web.auth.totp.or.backup" }}</p>
         <form method="POST" action="/auth/totp/verify">
             <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
             <input type="hidden" name="partialToken" value="{{ .BodyData.PartialToken }}">
@@ -14,12 +21,12 @@
             <input type="hidden" name="returnTo" value="{{ .BodyData.ReturnTo }}">
             {{ end }}
             <div class="form-group">
-                <label for="code">Authentication code</label>
+                <label for="code">{{ translate .Language "web.totp.codeLabel" }}</label>
                 <input type="text" id="code" name="code" inputmode="numeric" autocomplete="one-time-code" required autofocus>
             </div>
-            <button type="submit" class="btn btn-primary">Verify</button>
+            <button type="submit" class="btn btn-primary">{{ translate .Language "web.totp.verifyCode" }}</button>
         </form>
-        <a href="/auth">Use a different account</a>
+        <a href="/auth">{{ translate .Language "web.auth.different.account" }}</a>
         {{ else if .BodyData.RegisterMode }}
         <form method="POST" action="/auth/register">
             <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
@@ -27,21 +34,21 @@
             <input type="hidden" name="returnTo" value="{{ .BodyData.ReturnTo }}">
             {{ end }}
             <div class="form-group">
-                <label for="register-username">Username</label>
+                <label for="register-username">{{ translate .Language "web.profile.username" }}</label>
                 <input type="text" id="register-username" name="username" value="{{ .BodyData.Username }}" autocomplete="username" required autofocus>
             </div>
             <div class="form-group">
-                <label for="register-password">Password</label>
+                <label for="register-password">{{ translate .Language "web.auth.field.password" }}</label>
                 <input type="password" id="register-password" name="password" autocomplete="new-password" minlength="8" maxlength="72" aria-describedby="register-password-requirements" required>
-                <p id="register-password-requirements">Use at least 8 characters with uppercase, lowercase, a number, and a special character. Passwords are limited to 72 UTF-8 bytes.</p>
+                <p id="register-password-requirements">{{ translate .Language "web.password.requirements" }}</p>
             </div>
             <div class="form-group">
-                <label for="register-confirm-password">Confirm password</label>
+                <label for="register-confirm-password">{{ translate .Language "web.auth.field.confirm" }}</label>
                 <input type="password" id="register-confirm-password" name="confirmPassword" autocomplete="new-password" minlength="8" maxlength="72" required>
             </div>
-            <button type="submit" class="btn btn-primary">Create Account</button>
+            <button type="submit" class="btn btn-primary">{{ translate .Language "web.auth.register.submit" }}</button>
         </form>
-        <a href="/auth">Already have an account? Sign in</a>
+        <a href="/auth">{{ translate .Language "web.auth.already.account" }}</a>
         {{ else }}
         <form method="POST" action="/auth/login">
             <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
@@ -49,23 +56,28 @@
             <input type="hidden" name="returnTo" value="{{ .BodyData.ReturnTo }}">
             {{ end }}
             <div class="form-group">
-                <label for="username">Username</label>
+                <label for="username">{{ translate .Language "web.profile.username" }}</label>
                 <input type="text" id="username" name="username" value="{{ .BodyData.Username }}" autocomplete="username" required autofocus>
             </div>
             <div class="form-group">
-                <label for="password">Password</label>
+                <label for="password">{{ translate .Language "web.auth.field.password" }}</label>
                 <input type="password" id="password" name="password" autocomplete="current-password" required>
             </div>
-            <button type="submit" class="btn btn-primary">Sign In</button>
+            <button type="submit" class="btn btn-primary">{{ translate .Language "web.auth.signin" }}</button>
         </form>
         {{ if .BodyData.GoogleLoginEnabled }}
-        <div class="auth-divider"><span>or</span></div>
-        <a href="/auth/oauth/google" class="btn btn-oauth">Sign in with Google</a>
+        <div class="auth-divider"><span>{{ translate .Language "web.auth.oauth.separator" }}</span></div>
+        <a href="/auth/oauth/google" class="btn btn-oauth">{{ translate .Language "web.auth.signin.google" }}</a>
         {{ end }}
+		{{ if .BodyData.AppleLoginEnabled }}
+		<div class="oauth-divider"><span>{{ translate .Language "web.auth.oauth.separator" }}</span></div>
+		<a href="/auth/oauth/apple" class="btn btn-oauth">{{ translate .Language "web.auth.signin.apple" }}</a>
+		{{ end }}
         {{ if .BodyData.RegistrationEnabled }}
-        <a href="/auth?mode=register">Create an account</a>
+        <a href="/auth?mode=register">{{ translate .Language "web.auth.register.title" }}</a>
         {{ end }}
         {{ end }}
+		</div>
     </div>
 </div>
 {{ end }}

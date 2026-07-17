@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
 )
 
 func TestSessionRealmPassesRawTokenToSharedLookup(t *testing.T) {

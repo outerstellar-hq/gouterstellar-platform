@@ -2,17 +2,19 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/service"
-	"github.com/rygel/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/service"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
 )
 
 type UserAdminAPI struct {
@@ -25,6 +27,9 @@ func NewUserAdminAPI(secSvc *service.SecurityService) *UserAdminAPI {
 
 // ContributeRoutes registers the user admin API routes (bearer auth applied by builder).
 func (h *UserAdminAPI) ContributeRoutes(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.API(http.MethodGet, "/api/v1/admin/users", "List users", requireAdminAPI(http.HandlerFunc(h.ListUsers)))
+	ctx.Routes.API(http.MethodPut, "/api/v1/admin/users/{id}/enabled", "Set user enabled", requireAdminAPI(http.HandlerFunc(h.SetEnabled)))
+	ctx.Routes.API(http.MethodPut, "/api/v1/admin/users/{id}/role", "Set user role", requireAdminAPI(http.HandlerFunc(h.SetRole)))
 	ctx.Routes.API(http.MethodGet, "/api/v1/users", "List users", requireAdminAPI(http.HandlerFunc(h.ListUsers)))
 	ctx.Routes.API(http.MethodGet, "/api/v1/users/count", "Count users", requireAdminAPI(http.HandlerFunc(h.CountUsers)))
 	ctx.Routes.API(http.MethodPut, "/api/v1/users/{id}/enabled", "Set user enabled", requireAdminAPI(http.HandlerFunc(h.SetEnabled)))
@@ -35,11 +40,7 @@ func (h *UserAdminAPI) ContributeRoutes(ctx *extplatform.ContributionContext) er
 }
 
 func (h *UserAdminAPI) ListUsers(w http.ResponseWriter, r *http.Request) {
-	page := getIntParam(r, "page", 1)
-	pageSize := getIntParam(r, "pageSize", 20)
-	offset := (page - 1) * pageSize
-
-	users, err := h.securityService.ListUsersPaged(r.Context(), safeInt32(pageSize), safeInt32(offset))
+	users, err := h.securityService.ListUsers(r.Context())
 	if err != nil {
 		handleServiceError(w, err)
 		return
@@ -80,11 +81,11 @@ func (h *UserAdminAPI) SetEnabled(w http.ResponseWriter, r *http.Request) {
 
 	err = h.securityService.SetUserEnabled(r.Context(), currentUser.ID, targetID, req.Enabled)
 	if err != nil {
-		handleServiceError(w, err)
+		handleAdminMutationError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "User enabled status updated"})
+	writeText(w, http.StatusOK, "User updated")
 }
 
 func (h *UserAdminAPI) SetRole(w http.ResponseWriter, r *http.Request) {
@@ -106,14 +107,32 @@ func (h *UserAdminAPI) SetRole(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-
-	err = h.securityService.SetUserRole(r.Context(), currentUser.ID, targetID, model.UserRole(req.Role))
-	if err != nil {
-		handleServiceError(w, err)
+	role := model.UserRole(strings.ToUpper(req.Role))
+	if role != model.RoleUser && role != model.RoleAdmin {
+		writeText(w, http.StatusBadRequest, "Invalid role")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "User role updated"})
+	err = h.securityService.SetUserRole(r.Context(), currentUser.ID, targetID, role)
+	if err != nil {
+		handleAdminMutationError(w, err)
+		return
+	}
+
+	writeText(w, http.StatusOK, "User role updated")
+}
+
+func handleAdminMutationError(w http.ResponseWriter, err error) {
+	var notFound *model.UserNotFoundError
+	var notAllowed *model.InsufficientPermissionError
+	switch {
+	case errors.As(err, &notFound):
+		writeText(w, http.StatusNotFound, err.Error())
+	case errors.As(err, &notAllowed):
+		writeText(w, http.StatusBadRequest, err.Error())
+	default:
+		handleServiceError(w, err)
+	}
 }
 
 func (h *UserAdminAPI) ExportUsersCSV(w http.ResponseWriter, r *http.Request) {

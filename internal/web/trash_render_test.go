@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
 )
 
 func TestTrashPageRendersRecoverableItemsSafely(t *testing.T) {
@@ -29,10 +29,22 @@ func TestTrashPageRendersRecoverableItemsSafely(t *testing.T) {
 	recorder := httptest.NewRecorder()
 
 	err = renderer.RenderPage(recorder, req, "trash", viewmodel.TrashPage{
-		Messages: []viewmodel.MessageItem{{
-			SyncID: "srv_message", Author: "<script>alert(1)</script>", Content: "Recover me", CSRFToken: "TOKEN-123",
-		}},
-		Contacts:     []viewmodel.ContactItem{{SyncID: "srv_contact", Name: "Alice", Emails: []string{"alice@example.com"}}},
+		MessageList: viewmodel.MessagesPage{
+			Messages: []viewmodel.MessageItem{{
+				SyncID: "srv_message", Author: "<script>alert(1)</script>", Content: "Recover me", Deleted: true,
+				CSRFToken: "TOKEN-123", Language: "en",
+			}},
+			Pagination: viewmodel.PaginationInfo{Language: "en"},
+			RefreshURL: "/components/message-list?trash=true",
+			Trash:      true,
+		},
+		ContactList: viewmodel.ContactTrashList{
+			Contacts: []viewmodel.ContactItem{{
+				SyncID: "srv_contact", Name: "Alice", Emails: []string{"alice@example.com"},
+				CSRFToken: "TOKEN-123", Language: "en",
+			}},
+			Language: "en", RefreshURL: "/contacts/trash/list?lang=en",
+		},
 		MessageTotal: 1,
 		ContactTotal: 1,
 		DeletedTotal: 2,
@@ -44,10 +56,11 @@ func TestTrashPageRendersRecoverableItemsSafely(t *testing.T) {
 	body := recorder.Body.String()
 	for _, want := range []string{
 		`<strong>2</strong>`,
-		`action="/messages/srv_message/restore"`,
+		`action="/messages/restore/srv_message"`,
 		`action="/contacts/srv_contact/restore"`,
 		`name="csrf_token" value="TOKEN-123"`,
 		`aria-label="Restore contact Alice"`,
+		`hx-trigger="refresh from:body, htmx:oobAfterSwap from:body"`,
 		`href="/messages" class="nav-link"`,
 		`href="/messages/trash" class="nav-link active"`,
 		`&lt;script&gt;alert(1)&lt;/script&gt;`,

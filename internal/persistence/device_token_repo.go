@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence/db"
 )
 
 type deviceTokenRepo struct {
@@ -30,6 +30,13 @@ func (r *deviceTokenRepo) UpsertDeviceToken(ctx context.Context, userID uuid.UUI
 func (r *deviceTokenRepo) DeleteDeviceToken(ctx context.Context, id int64, userID uuid.UUID) (int64, error) {
 	return r.q.DeleteDeviceToken(ctx, db.DeleteDeviceTokenParams{
 		ID:     id,
+		UserID: userID,
+	})
+}
+
+func (r *deviceTokenRepo) DeleteDeviceTokenByValue(ctx context.Context, token string, userID uuid.UUID) (int64, error) {
+	return r.q.DeleteDeviceTokenByValue(ctx, db.DeleteDeviceTokenByValueParams{
+		Token:  token,
 		UserID: userID,
 	})
 }

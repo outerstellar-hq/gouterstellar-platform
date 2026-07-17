@@ -2,12 +2,14 @@ package reports
 
 import (
 	"context"
+	"io/fs"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 )
 
 type stubMessageCounter struct{ count int64 }
@@ -19,7 +21,7 @@ func (s stubMessageCounter) CountMessages(ctx context.Context) (int64, error) {
 func TestReportsContract(t *testing.T) {
 	ext := New(stubMessageCounter{count: 42})
 
-	diag, err := extplatform.CheckExtension(ext, extplatform.TestHostContext())
+	diag, err := extplatform.CheckExtension(ext, extplatform.TestHostContext(extplatform.ServiceBag{Pages: contractPageRenderer{}}))
 	require.NoError(t, err)
 
 	assert.Equal(t,
@@ -27,6 +29,13 @@ func TestReportsContract(t *testing.T) {
 		diag.RoutePatterns(),
 	)
 	assert.Contains(t, diag.NavigationLabels(), "Reports")
+}
+
+type contractPageRenderer struct{}
+
+func (contractPageRenderer) RegisterTemplates(string, fs.FS, string, string) error { return nil }
+func (contractPageRenderer) RenderPage(http.ResponseWriter, *http.Request, string, any) error {
+	return nil
 }
 
 func TestReportsManifest(t *testing.T) {

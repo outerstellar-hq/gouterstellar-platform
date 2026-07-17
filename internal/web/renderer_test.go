@@ -1,16 +1,23 @@
 package web
 
 import (
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
+	"strings"
 	"testing"
 	"testing/fstest"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
 )
+
+var templateTranslationKeyPattern = regexp.MustCompile(`translate\s+[^\s}]+\s+"([^"]+)"`)
 
 func testFS() fstest.MapFS {
 	return fstest.MapFS{
@@ -30,6 +37,56 @@ func TestNewRendererParsesAllPages(t *testing.T) {
 	r, err := NewRenderer(testFS(), TemplateFuncMap(), "1.0.0")
 	require.NoError(t, err)
 	assert.Contains(t, r.pages, "home", "home page should be parsed")
+}
+
+func TestRegisterTemplatesRejectsPageCollisionWithBothOwners(t *testing.T) {
+	renderer, err := NewRenderer(TemplateFS(), TemplateFuncMap(), "test")
+	require.NoError(t, err)
+
+	first := fstest.MapFS{
+		"pages/extension.html": &fstest.MapFile{Data: []byte(`{{ define "content" }}first{{ end }}`)},
+	}
+	require.NoError(t, renderer.RegisterTemplates("first-extension", first, "pages", ""))
+
+	second := fstest.MapFS{
+		"pages/extension.html": &fstest.MapFile{Data: []byte(`{{ define "content" }}second{{ end }}`)},
+	}
+	err = renderer.RegisterTemplates("second-extension", second, "pages", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "second-extension")
+	assert.Contains(t, err.Error(), "first-extension")
+}
+
+func TestRegisterTemplatesRejectsCorePartialCollision(t *testing.T) {
+	renderer, err := NewRenderer(TemplateFS(), TemplateFuncMap(), "test")
+	require.NoError(t, err)
+
+	source := fstest.MapFS{
+		"pages/extension.html":    &fstest.MapFile{Data: []byte(`{{ define "content" }}extension{{ end }}`)},
+		"partials/collision.html": &fstest.MapFile{Data: []byte(`{{ define "message_list" }}collision{{ end }}`)},
+	}
+	err = renderer.RegisterTemplates("colliding-extension", source, "pages", "partials")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "colliding-extension")
+	assert.Contains(t, err.Error(), "owner platform")
+}
+
+func TestSidebarSelectorOnlyListensToItsOwnChanges(t *testing.T) {
+	r, err := NewRenderer(TemplateFS(), TemplateFuncMap(), "1.0.0")
+	require.NoError(t, err)
+
+	var output strings.Builder
+	err = r.partials.ExecuteTemplate(&output, "sidebar_selector", viewmodel.SidebarSelector{
+		Heading:   "Language",
+		Label:     "Choose your language",
+		Name:      "lang",
+		CSRFToken: "selector-csrf",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, output.String(), `hx-trigger="change"`)
+	assert.Contains(t, output.String(), `hx-post="/components/navigation/preferences"`)
+	assert.Contains(t, output.String(), `name="csrf_token" value="selector-csrf"`)
+	assert.NotContains(t, output.String(), `from:select`)
 }
 
 func TestRenderPageProducesShellAndContent(t *testing.T) {
@@ -71,6 +128,102 @@ func TestRenderPageSetsContentType(t *testing.T) {
 	assert.Equal(t, "text/html; charset=utf-8", rec.Header().Get("Content-Type"))
 }
 
+func TestRendererUsesJavaAppearanceDefaults(t *testing.T) {
+	r, err := NewRenderer(TemplateFS(), TemplateFuncMap(), "1.0.0")
+	require.NoError(t, err)
+	rec := httptest.NewRecorder()
+	req := WithUser(httptest.NewRequest(http.MethodGet, "/", nil), &model.User{
+		ID: uuid.New(), Username: "alice", Role: model.RoleUser,
+	})
+
+	err = r.RenderPage(rec, req, "messages", viewmodel.MessagesPage{})
+
+	require.NoError(t, err)
+	assert.Contains(t, rec.Body.String(), `<html lang="en" data-theme="dark">`)
+	assert.Contains(t, rec.Body.String(), `class="dark layout-sidebar density-nice"`)
+}
+
+func TestRendererUsesJavaFrenchCatalogForShellAndPage(t *testing.T) {
+	r, err := NewRenderer(TemplateFS(), TemplateFuncMap(), "1.0.0")
+	require.NoError(t, err)
+	language := "fr"
+	req := WithUser(httptest.NewRequest(http.MethodGet, "/search", nil), &model.User{
+		ID: uuid.New(), Username: "alice", Role: model.RoleUser, Language: &language,
+	})
+	req = WithNavItems(req, []viewmodel.NavItem{{Label: "Home", URL: "/"}, {Label: "Settings", URL: "/settings"}})
+	rec := httptest.NewRecorder()
+
+	err = r.RenderPage(rec, req, "search", viewmodel.SearchPage{})
+
+	require.NoError(t, err)
+	body := rec.Body.String()
+	assert.Contains(t, body, `<title>Recherche - Outerstellar Platform</title>`)
+	assert.Contains(t, body, `>Accueil</a>`)
+	assert.Contains(t, body, `>Paramètres</a>`)
+	assert.Contains(t, body, `>Se déconnecter</button>`)
+	assert.Contains(t, body, `Aller au contenu`)
+	assert.Contains(t, body, `theme=dark&lang=fr&layout=nice`)
+	assert.Contains(t, body, `/components/notification-bell?lang=fr`)
+	assert.NotContains(t, body, `\u00`)
+}
+
+func TestJavaCatalogUnicodeAndPrintfParameters(t *testing.T) {
+	assert.Equal(t, "L’authentification à deux facteurs a été activée", TranslateForTemplate("fr", "web.totp.setupSuccess"))
+	assert.Equal(t, "3 codes de secours restants", TranslateForTemplate("fr", "web.totp.backupCodes.remaining", "3"))
+}
+
+func TestLanguageFromRequestUsesOnlySupportedOverrides(t *testing.T) {
+	french := "fr"
+	req := WithUser(httptest.NewRequest(http.MethodGet, "/?lang=xx", nil), &model.User{Language: &french})
+	assert.Equal(t, "fr", LanguageFromRequest(req))
+
+	req = httptest.NewRequest(http.MethodGet, "/?lang=fr", nil)
+	assert.Equal(t, "fr", LanguageFromRequest(req))
+}
+
+func TestTemplateTranslationKeysExistInEnglishAndFrench(t *testing.T) {
+	english := localeKeys(t, "locales/en.properties")
+	french := localeKeys(t, "locales/fr.properties")
+	for key := range english {
+		assert.Contains(t, french, key, "French catalog is missing %s", key)
+	}
+	for key := range french {
+		assert.Contains(t, english, key, "English catalog is missing %s", key)
+	}
+
+	err := fs.WalkDir(TemplateFS(), "template", func(path string, entry fs.DirEntry, err error) error {
+		require.NoError(t, err)
+		if entry.IsDir() || !strings.HasSuffix(path, ".html") {
+			return nil
+		}
+		data, readErr := fs.ReadFile(TemplateFS(), path)
+		require.NoError(t, readErr)
+		for _, match := range templateTranslationKeyPattern.FindAllStringSubmatch(string(data), -1) {
+			assert.Contains(t, english, match[1], "%s uses missing English key %s", path, match[1])
+			assert.Contains(t, french, match[1], "%s uses missing French key %s", path, match[1])
+		}
+		return nil
+	})
+	require.NoError(t, err)
+}
+
+func localeKeys(t *testing.T, path string) map[string]struct{} {
+	t.Helper()
+	data, err := fs.ReadFile(LocaleFS, path)
+	require.NoError(t, err)
+	keys := make(map[string]struct{})
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "!") {
+			continue
+		}
+		if separator := strings.IndexAny(line, "=:"); separator >= 0 {
+			keys[strings.TrimSpace(line[:separator])] = struct{}{}
+		}
+	}
+	return keys
+}
+
 func TestAdminUsersRendersLockedAccountControl(t *testing.T) {
 	r, err := NewRenderer(TemplateFS(), TemplateFuncMap(), "1.0.0")
 	require.NoError(t, err)
@@ -92,6 +245,22 @@ func TestAdminUsersRendersLockedAccountControl(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "Locked")
 	assert.Contains(t, rec.Body.String(), "/admin/users/user-id/unlock")
 	assert.Contains(t, rec.Body.String(), "Unlock (10)")
+}
+
+func TestAdminUsersHidesMutationsForCurrentUser(t *testing.T) {
+	r, err := NewRenderer(TemplateFS(), TemplateFuncMap(), "1.0.0")
+	require.NoError(t, err)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/admin/users", nil)
+
+	err = r.RenderPage(rec, req, "admin_users", viewmodel.AdminUsersPage{
+		Users: []viewmodel.UserItem{{ID: "self", Username: "admin", Role: "ADMIN", Enabled: true, IsSelf: true}},
+	})
+
+	require.NoError(t, err)
+	assert.Contains(t, rec.Body.String(), "(you)")
+	assert.NotContains(t, rec.Body.String(), "/admin/users/self/toggle-role")
+	assert.NotContains(t, rec.Body.String(), "/admin/users/self/toggle-enabled")
 }
 
 func TestLoginRendersTOTPChallenge(t *testing.T) {

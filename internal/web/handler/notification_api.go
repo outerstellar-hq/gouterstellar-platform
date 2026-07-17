@@ -2,18 +2,28 @@ package handler
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	extplatform "github.com/rygel/gouterstellar-platform/platform"
+	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
 
-	"github.com/rygel/gouterstellar-platform/internal/service"
-	"github.com/rygel/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/service"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
 )
 
 type NotificationAPI struct {
 	notificationService *service.NotificationService
+}
+
+type notificationDTO struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Body      string `json:"body"`
+	Type      string `json:"type"`
+	Read      bool   `json:"read"`
+	CreatedAt string `json:"createdAt"`
 }
 
 func NewNotificationAPI(notifSvc *service.NotificationService) *NotificationAPI {
@@ -38,7 +48,7 @@ func (h *NotificationAPI) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	page := getIntParam(r, "page", 1)
-	pageSize := getIntParam(r, "pageSize", 20)
+	pageSize := getIntParam(r, "pageSize", 50)
 	offset := (page - 1) * pageSize
 
 	notifications, err := h.notificationService.ListForUser(r.Context(), user.ID, safeInt32(pageSize), safeInt32(offset))
@@ -47,7 +57,18 @@ func (h *NotificationAPI) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, notifications)
+	result := make([]notificationDTO, len(notifications))
+	for i, notification := range notifications {
+		result[i] = notificationDTO{
+			ID:        notification.ID.String(),
+			Title:     notification.Title,
+			Body:      notification.Body,
+			Type:      notification.Type,
+			Read:      notification.IsRead(),
+			CreatedAt: notification.CreatedAt.Format(time.RFC3339Nano),
+		}
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *NotificationAPI) UnreadCount(w http.ResponseWriter, r *http.Request) {
@@ -86,7 +107,7 @@ func (h *NotificationAPI) MarkRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "Notification marked as read"})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *NotificationAPI) MarkAllRead(w http.ResponseWriter, r *http.Request) {
@@ -102,7 +123,7 @@ func (h *NotificationAPI) MarkAllRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "All notifications marked as read"})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *NotificationAPI) Delete(w http.ResponseWriter, r *http.Request) {

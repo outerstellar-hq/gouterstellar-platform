@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence/db"
 )
 
 type mockUserRepo struct {
@@ -87,6 +87,11 @@ func (m *mockUserRepo) DeleteByID(ctx context.Context, id uuid.UUID) error {
 
 func (m *mockUserRepo) UpdateUsername(ctx context.Context, id uuid.UUID, username string) (db.PltUser, error) {
 	args := m.Called(ctx, id, username)
+	return args.Get(0).(db.PltUser), args.Error(1)
+}
+
+func (m *mockUserRepo) UpdateEmail(ctx context.Context, id uuid.UUID, email string) (db.PltUser, error) {
+	args := m.Called(ctx, id, email)
 	return args.Get(0).(db.PltUser), args.Error(1)
 }
 
@@ -283,6 +288,61 @@ func newTestSecurityService(userRepo *mockUserRepo, encoder *mockPasswordEncoder
 	}, testSecurityConfig())
 }
 
+func TestDeleteAccountRequiresCurrentPassword(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	encoder := new(mockPasswordEncoder)
+	sessionRepo := new(mockSessionRepo)
+	user := makeTestUser("alice", string(model.RoleUser), true)
+	userRepo.On("FindByID", mock.Anything, user.ID).Return(user, nil)
+	encoder.On("Matches", "wrong", user.PasswordHash).Return(false)
+
+	err := newTestSecurityService(userRepo, encoder, sessionRepo, new(mockAuditRepo)).DeleteAccount(
+		context.Background(), user.ID, "wrong",
+	)
+
+	assert.IsType(t, &model.InvalidPasswordError{}, err)
+	userRepo.AssertNotCalled(t, "DeleteByID", mock.Anything, mock.Anything)
+	sessionRepo.AssertNotCalled(t, "DeleteByUserID", mock.Anything, mock.Anything)
+}
+
+func TestDeleteAccountProtectsOnlyRemainingAdministrator(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	encoder := new(mockPasswordEncoder)
+	user := makeTestUser("admin", string(model.RoleAdmin), true)
+	userRepo.On("FindByID", mock.Anything, user.ID).Return(user, nil)
+	userRepo.On("CountByRole", mock.Anything, string(model.RoleAdmin)).Return(int64(1), nil)
+	encoder.On("Matches", "correct", user.PasswordHash).Return(true)
+
+	err := newTestSecurityService(userRepo, encoder, new(mockSessionRepo), new(mockAuditRepo)).DeleteAccount(
+		context.Background(), user.ID, "correct",
+	)
+
+	assert.IsType(t, &model.InsufficientPermissionError{}, err)
+	userRepo.AssertNotCalled(t, "DeleteByID", mock.Anything, mock.Anything)
+}
+
+func TestDeleteAccountRevokesSessionsAndDeletesVerifiedUser(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	encoder := new(mockPasswordEncoder)
+	sessionRepo := new(mockSessionRepo)
+	auditRepo := new(mockAuditRepo)
+	user := makeTestUser("alice", string(model.RoleUser), true)
+	userRepo.On("FindByID", mock.Anything, user.ID).Return(user, nil)
+	userRepo.On("DeleteByID", mock.Anything, user.ID).Return(nil)
+	encoder.On("Matches", "correct", user.PasswordHash).Return(true)
+	sessionRepo.On("DeleteByUserID", mock.Anything, user.ID).Return(nil)
+	auditRepo.On("LogAudit", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, "ACCOUNT_DELETED", "Account deleted").Return(db.PltAuditLog{}, nil)
+
+	err := newTestSecurityService(userRepo, encoder, sessionRepo, auditRepo).DeleteAccount(
+		context.Background(), user.ID, "correct",
+	)
+
+	assert.NoError(t, err)
+	userRepo.AssertExpectations(t)
+	sessionRepo.AssertExpectations(t)
+	auditRepo.AssertExpectations(t)
+}
+
 func TestCreateSession_CapsInitialExpiryAtAbsoluteDeadline(t *testing.T) {
 	sessionRepo := new(mockSessionRepo)
 	svc := newTestSecurityService(new(mockUserRepo), new(mockPasswordEncoder), sessionRepo, new(mockAuditRepo))
@@ -457,6 +517,66 @@ func TestUnlockAccount_ResetsFailuresAndAudits(t *testing.T) {
 	userRepo.AssertExpectations(t)
 }
 
+func TestSetUserEnabledRejectsChangingOwnStatus(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	userID := uuid.New()
+
+	err := newTestSecurityService(userRepo, new(mockPasswordEncoder), new(mockSessionRepo), new(mockAuditRepo)).
+		SetUserEnabled(context.Background(), userID, userID, false)
+
+	var denied *model.InsufficientPermissionError
+	assert.ErrorAs(t, err, &denied)
+	assert.Equal(t, "Cannot change your own enabled status", err.Error())
+	userRepo.AssertNotCalled(t, "UpdateEnabled", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestSetUserEnabledProtectsLastEnabledAdministrator(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	admin := makeTestUser("admin", string(model.RoleAdmin), true)
+	target := makeTestUser("other-admin", string(model.RoleAdmin), true)
+	userRepo.On("FindByID", mock.Anything, admin.ID).Return(admin, nil)
+	userRepo.On("FindByID", mock.Anything, target.ID).Return(target, nil)
+	userRepo.On("FindAll", mock.Anything).Return([]db.PltUser{target}, nil)
+
+	err := newTestSecurityService(userRepo, new(mockPasswordEncoder), new(mockSessionRepo), new(mockAuditRepo)).
+		SetUserEnabled(context.Background(), admin.ID, target.ID, false)
+
+	var denied *model.InsufficientPermissionError
+	assert.ErrorAs(t, err, &denied)
+	assert.Equal(t, "Cannot disable the last enabled administrator", err.Error())
+	userRepo.AssertNotCalled(t, "UpdateEnabled", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestSetUserRoleRejectsChangingOwnRole(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	userID := uuid.New()
+
+	err := newTestSecurityService(userRepo, new(mockPasswordEncoder), new(mockSessionRepo), new(mockAuditRepo)).
+		SetUserRole(context.Background(), userID, userID, model.RoleUser)
+
+	var denied *model.InsufficientPermissionError
+	assert.ErrorAs(t, err, &denied)
+	assert.Equal(t, "Cannot change your own role", err.Error())
+	userRepo.AssertNotCalled(t, "UpdateRole", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestSetUserRoleProtectsLastEnabledAdministrator(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	admin := makeTestUser("admin", string(model.RoleAdmin), true)
+	target := makeTestUser("other-admin", string(model.RoleAdmin), true)
+	userRepo.On("FindByID", mock.Anything, admin.ID).Return(admin, nil)
+	userRepo.On("FindByID", mock.Anything, target.ID).Return(target, nil)
+	userRepo.On("FindAll", mock.Anything).Return([]db.PltUser{target}, nil)
+
+	err := newTestSecurityService(userRepo, new(mockPasswordEncoder), new(mockSessionRepo), new(mockAuditRepo)).
+		SetUserRole(context.Background(), admin.ID, target.ID, model.RoleUser)
+
+	var denied *model.InsufficientPermissionError
+	assert.ErrorAs(t, err, &denied)
+	assert.Equal(t, "Cannot demote the last enabled administrator", err.Error())
+	userRepo.AssertNotCalled(t, "UpdateRole", mock.Anything, mock.Anything, mock.Anything)
+}
+
 func TestRegister_Success(t *testing.T) {
 	userRepo := new(mockUserRepo)
 	sessionRepo := new(mockSessionRepo)
@@ -467,7 +587,7 @@ func TestRegister_Success(t *testing.T) {
 
 	userRepo.On("FindByUsername", mock.Anything, "newuser").Return(db.PltUser{}, pgx.ErrNoRows)
 	encoder.On("Encode", "Password123!").Return("hashed", nil)
-	userRepo.On("CreateUser", mock.Anything, mock.AnythingOfType("uuid.UUID"), "newuser", "", "hashed", "USER", true).Return(makeTestUser("newuser", "USER", true), nil)
+	userRepo.On("CreateUser", mock.Anything, mock.AnythingOfType("uuid.UUID"), "newuser", "newuser", "hashed", "USER", true).Return(makeTestUser("newuser", "USER", true), nil)
 	auditRepo.On("LogAudit", mock.Anything, mock.AnythingOfType("*uuid.UUID"), mock.AnythingOfType("*string"), (*uuid.UUID)(nil), (*string)(nil), "USER_REGISTER", "New user registered").Return(db.PltAuditLog{}, nil)
 
 	user, err := svc.Register(context.Background(), "newuser", "Password123!")
@@ -527,6 +647,22 @@ func TestRegister_FailsClosedWhenAvailabilityLookupFails(t *testing.T) {
 	_, err := svc.Register(context.Background(), "newuser", "Password123!")
 
 	assert.ErrorIs(t, err, lookupErr)
+	userRepo.AssertExpectations(t)
+}
+
+func TestUpdateProfilePersistsChangedEmail(t *testing.T) {
+	userRepo := new(mockUserRepo)
+	auditRepo := new(mockAuditRepo)
+	user := makeTestUser("alice", string(model.RoleUser), true)
+	userRepo.On("FindByID", mock.Anything, user.ID).Return(user, nil)
+	userRepo.On("FindByEmail", mock.Anything, "new@example.com").Return(db.PltUser{}, pgx.ErrNoRows)
+	userRepo.On("UpdateEmail", mock.Anything, user.ID, "new@example.com").Return(user, nil)
+	auditRepo.On("LogAudit", mock.Anything, mock.AnythingOfType("*uuid.UUID"), mock.AnythingOfType("*string"), (*uuid.UUID)(nil), (*string)(nil), "PROFILE_UPDATE", "Profile updated").Return(db.PltAuditLog{}, nil)
+
+	err := newTestSecurityService(userRepo, new(mockPasswordEncoder), new(mockSessionRepo), auditRepo).
+		UpdateProfile(context.Background(), user.ID, "new@example.com", nil, nil)
+
+	assert.NoError(t, err)
 	userRepo.AssertExpectations(t)
 }
 

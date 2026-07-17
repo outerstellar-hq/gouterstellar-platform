@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GOMAXPROCS: "4"
+      GOFLAGS: "-p=4"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify dependency checksums
+        run: go mod verify
+
+      - name: Check module files
+        run: go mod tidy -diff
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./... -count=1 -parallel=4 -timeout=10m
+
+      - name: Build commands
+        run: |
+          build_date="$(date -u +%F)"
+          short_sha="${GITHUB_SHA:0:12}"
+          ldflags="-X github.com/outerstellar-hq/gouterstellar-platform/platform/buildinfo.buildDate=${build_date} -X github.com/outerstellar-hq/gouterstellar-platform/platform/buildinfo.buildNumber=${GITHUB_RUN_NUMBER} -X github.com/outerstellar-hq/gouterstellar-platform/platform/buildinfo.commitSHA=${short_sha}"
+          go build -trimpath -ldflags="${ldflags}" ./cmd/...
+
+      - name: Build deployment image
+        run: |
+          docker build \
+            --build-arg BUILD_DATE="$(date -u +%F)" \
+            --build-arg BUILD_NUMBER="${GITHUB_RUN_NUMBER}" \
+            --build-arg COMMIT_SHA="${GITHUB_SHA:0:12}" \
+            --tag gouterstellar-platform:ci .

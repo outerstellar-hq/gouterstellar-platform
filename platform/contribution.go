@@ -1,5 +1,11 @@
 package platform
 
+import (
+	"fmt"
+	"io/fs"
+	"net/http"
+)
+
 // NavigationItem is a single nav entry contributed by an extension.
 type NavigationItem struct {
 	Label string
@@ -30,14 +36,59 @@ func (n *NavigationRegistry) Items() []NavigationItem {
 type ContributionContext struct {
 	Routes     *RouteRegistry
 	Navigation *NavigationRegistry
+	Pages      *PageRegistry
+	Operations *OperationsRegistry
 }
 
 // NewContributionContext builds a context for a specific extension owner.
 func NewContributionContext(owner string) *ContributionContext {
+	return newContributionContext(owner, ServiceBag{})
+}
+
+func newContributionContext(owner string, services ServiceBag) *ContributionContext {
+	routes := newRouteRegistry(owner)
 	return &ContributionContext{
-		Routes:     newRouteRegistry(owner),
+		Routes:     routes,
 		Navigation: NewNavigationRegistry(),
+		Pages:      &PageRegistry{owner: owner, renderer: services.Pages},
+		Operations: newOperationsRegistry(owner, routes, services.Pages, services.OperationsAudit),
 	}
+}
+
+// TemplateSource describes extension-owned templates. PagesDir contains page
+// files keyed by filename; PartialsDir is optional and contains templates used
+// only by this extension's pages.
+type TemplateSource struct {
+	FS          fs.FS
+	PagesDir    string
+	PartialsDir string
+}
+
+// PageRegistry stamps template registrations with the contributing extension
+// owner and renders only through the platform's shared page renderer.
+type PageRegistry struct {
+	owner    string
+	renderer PageRenderer
+}
+
+// Register parses and validates all templates immediately. A returned error
+// aborts platform assembly before the first request is served.
+func (p *PageRegistry) Register(source TemplateSource) error {
+	if p == nil || p.renderer == nil {
+		return fmt.Errorf("page rendering capability is not configured")
+	}
+	if source.FS == nil {
+		return fmt.Errorf("extension %s template filesystem is nil", p.owner)
+	}
+	return p.renderer.RegisterTemplates(p.owner, source.FS, source.PagesDir, source.PartialsDir)
+}
+
+// Render renders a registered extension page inside the shared shell.
+func (p *PageRegistry) Render(w http.ResponseWriter, req *http.Request, page string, data any) error {
+	if p == nil || p.renderer == nil {
+		return fmt.Errorf("page rendering capability is not configured")
+	}
+	return p.renderer.RenderPage(w, req, page, data)
 }
 
 // RouteContributor contributes its own routes to the platform via the

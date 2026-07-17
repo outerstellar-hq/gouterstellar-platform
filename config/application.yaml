@@ -33,6 +33,12 @@ segment:
   write_key: ""
   enabled: false
 
+# The worker-management extension stays visible when this separate service is
+# unconfigured, reporting an explicit unavailable state.
+starforge:
+  base_url: ""
+  credential: ""
+
 # OAuth providers. Uncomment and fill in credentials to enable a provider.
 # Defaults (empty) leave all providers disabled.
 #oauth:
@@ -40,3 +46,9 @@ segment:
 #    client_id: ""
 #    client_secret: ""
 #    redirect_uri: ""
+#  apple:
+#    enabled: false
+#    team_id: ""
+#    client_id: ""
+#    key_id: ""
+#    private_key_pem: ""

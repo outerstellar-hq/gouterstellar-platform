@@ -7,8 +7,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence/db"
 )
 
 type MessageRepository interface {
@@ -126,6 +126,7 @@ type UserRepository interface {
 	UpdateLastActivity(ctx context.Context, id uuid.UUID) error
 	DeleteByID(ctx context.Context, id uuid.UUID) error
 	UpdateUsername(ctx context.Context, id uuid.UUID, username string) (db.PltUser, error)
+	UpdateEmail(ctx context.Context, id uuid.UUID, email string) (db.PltUser, error)
 	UpdateAvatarURL(ctx context.Context, id uuid.UUID, avatarURL *string) (db.PltUser, error)
 	UpdateNotificationPreferences(ctx context.Context, id uuid.UUID, emailEnabled, pushEnabled bool) (db.PltUser, error)
 	UpdatePreferences(ctx context.Context, id uuid.UUID, language, theme, layout *string) (db.PltUser, error)
@@ -204,6 +205,7 @@ type NotificationRepository interface {
 type DeviceTokenRepository interface {
 	UpsertDeviceToken(ctx context.Context, userID uuid.UUID, platform, token string, appBundle *string) (db.PltDeviceToken, error)
 	DeleteDeviceToken(ctx context.Context, id int64, userID uuid.UUID) (int64, error)
+	DeleteDeviceTokenByValue(ctx context.Context, token string, userID uuid.UUID) (int64, error)
 	FindByUserID(ctx context.Context, userID uuid.UUID) ([]db.PltDeviceToken, error)
 	DeleteAllForUser(ctx context.Context, userID uuid.UUID) (int64, error)
 }

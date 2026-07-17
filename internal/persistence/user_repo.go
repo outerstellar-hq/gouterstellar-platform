@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/rygel/gouterstellar-platform/internal/persistence/db"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence/db"
 )
 
 type userRepo struct {
@@ -96,6 +96,10 @@ func (r *userRepo) UpdateUsername(ctx context.Context, id uuid.UUID, username st
 		ID:       id,
 		Username: username,
 	})
+}
+
+func (r *userRepo) UpdateEmail(ctx context.Context, id uuid.UUID, email string) (db.PltUser, error) {
+	return r.q.UpdateEmail(ctx, db.UpdateEmailParams{ID: id, Email: email})
 }
 
 func (r *userRepo) UpdateAvatarURL(ctx context.Context, id uuid.UUID, avatarURL *string) (db.PltUser, error) {

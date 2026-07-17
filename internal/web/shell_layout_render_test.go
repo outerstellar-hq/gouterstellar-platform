@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/rygel/gouterstellar-platform/internal/model"
-	"github.com/rygel/gouterstellar-platform/internal/web"
-	"github.com/rygel/gouterstellar-platform/internal/web/viewmodel"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/viewmodel"
 )
 
 func TestAuthenticatedShellUsesSavedLayoutAndSemanticLandmarks(t *testing.T) {
@@ -26,13 +26,13 @@ func TestAuthenticatedShellUsesSavedLayoutAndSemanticLandmarks(t *testing.T) {
 			})
 			req = web.WithNavItems(req, []viewmodel.NavItem{{Label: "Home", URL: "/"}})
 			recorder := httptest.NewRecorder()
-			if err := renderer.RenderPage(recorder, req, "home", map[string]any{}); err != nil {
+			if err := renderer.RenderPage(recorder, req, "messages", viewmodel.MessagesPage{}); err != nil {
 				t.Fatalf("render shell: %v", err)
 			}
 
 			body := recorder.Body.String()
 			for _, want := range []string{
-				`class="layout-` + layout + `"`,
+				`layout-` + layout + ` density-` + layout,
 				`class="app-shell"`,
 				`class="app-nav" aria-label="Primary navigation"`,
 				`class="nav-link active" aria-current="page"`,
@@ -65,5 +65,8 @@ func TestPublicShellStaysInSingleColumnWithoutNavigation(t *testing.T) {
 	}
 	if strings.Contains(body, `class="app-nav"`) {
 		t.Error("public shell unexpectedly renders authenticated navigation")
+	}
+	if strings.Contains(body, `hx-boost="true"`) {
+		t.Error("public shell must not boost authentication transitions")
 	}
 }
