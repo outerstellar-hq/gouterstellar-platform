@@ -40,7 +40,7 @@ func TestNavigationPreferencesPersistAndReturnToCurrentPage(t *testing.T) {
 	updater := &stubPreferenceUpdater{}
 	handler := NewComponentsHandler(nil, nil, nil, nil, nil, updater)
 	form := url.Values{
-		"pagePath": {"/starforge"}, "lang": {"fr"}, "theme": {"nord"}, "layout": {"compact"},
+		"pagePath": {"/reports"}, "lang": {"fr"}, "theme": {"nord"}, "layout": {"compact"},
 	}
 	request := httptest.NewRequest(http.MethodPost, "/components/navigation/preferences", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -51,7 +51,7 @@ func TestNavigationPreferencesPersistAndReturnToCurrentPage(t *testing.T) {
 	handler.UpdateNavigationPreferences(response, request)
 
 	assert.Equal(t, http.StatusOK, response.Code)
-	assert.Equal(t, "/starforge", response.Header().Get("HX-Redirect"))
+	assert.Equal(t, "/reports", response.Header().Get("HX-Redirect"))
 	require.NotNil(t, updater.call)
 	assert.Equal(t, userID, updater.call.userID)
 	assert.Equal(t, "fr", *updater.call.language)

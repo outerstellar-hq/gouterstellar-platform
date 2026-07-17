@@ -87,15 +87,15 @@ func validOperationsProvider() *operationsTestProvider {
 func TestOperationsRegistrationIsOwnerStampedAndAdminOnly(t *testing.T) {
 	t.Parallel()
 
-	ctx, _, _ := operationsTestContext("starforge")
-	require.NoError(t, ctx.Operations.Register(OperationsDescriptor{Label: "Starforge"}, validOperationsProvider()))
+	ctx, _, _ := operationsTestContext("reports")
+	require.NoError(t, ctx.Operations.Register(OperationsDescriptor{Label: "Reports"}, validOperationsProvider()))
 
 	routes := ctx.Routes.All()
 	require.Len(t, routes, 4)
 	for _, route := range routes {
-		assert.Equal(t, "starforge", route.Owner)
+		assert.Equal(t, "reports", route.Owner)
 		assert.Equal(t, GroupAdmin, route.Group)
-		assert.True(t, strings.HasPrefix(route.Pattern, "/admin/operations/starforge"))
+		assert.True(t, strings.HasPrefix(route.Pattern, "/admin/operations/reports"))
 		assert.NotContains(t, route.Pattern, "other-extension")
 	}
 }
@@ -103,10 +103,10 @@ func TestOperationsRegistrationIsOwnerStampedAndAdminOnly(t *testing.T) {
 func TestOperationsOverviewRequiresAdminAndRendersProviderState(t *testing.T) {
 	t.Parallel()
 
-	ctx, renderer, _ := operationsTestContext("starforge")
+	ctx, renderer, _ := operationsTestContext("reports")
 	provider := validOperationsProvider()
-	require.NoError(t, ctx.Operations.Register(OperationsDescriptor{Label: "Starforge operations"}, provider))
-	route, ok := ctx.Routes.Find(http.MethodGet, "/admin/operations/starforge")
+	require.NoError(t, ctx.Operations.Register(OperationsDescriptor{Label: "Reports operations"}, provider))
+	route, ok := ctx.Routes.Find(http.MethodGet, "/admin/operations/reports")
 	require.True(t, ok)
 
 	denied := httptest.NewRecorder()
@@ -121,7 +121,7 @@ func TestOperationsOverviewRequiresAdminAndRendersProviderState(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, response.Code)
 	assert.Equal(t, "admin_operations", renderer.page)
-	assert.Equal(t, "starforge", renderer.data.Owner)
+	assert.Equal(t, "reports", renderer.data.Owner)
 	assert.True(t, renderer.data.State.Maintenance)
 	require.Len(t, renderer.data.Snapshots, 1)
 	assert.Equal(t, VerificationVerified, renderer.data.Snapshots[0].Verification)
@@ -130,10 +130,10 @@ func TestOperationsOverviewRequiresAdminAndRendersProviderState(t *testing.T) {
 func TestOperationsMutationsRequireCSRFAndUseDistinctAuditActions(t *testing.T) {
 	t.Parallel()
 
-	ctx, _, auditor := operationsTestContext("starforge")
+	ctx, _, auditor := operationsTestContext("reports")
 	provider := validOperationsProvider()
-	require.NoError(t, ctx.Operations.Register(OperationsDescriptor{Label: "Starforge"}, provider))
-	backup, ok := ctx.Routes.Find(http.MethodPost, "/admin/operations/starforge/backups")
+	require.NoError(t, ctx.Operations.Register(OperationsDescriptor{Label: "Reports"}, provider))
+	backup, ok := ctx.Routes.Find(http.MethodPost, "/admin/operations/reports/backups")
 	require.True(t, ok)
 
 	missingCSRF := withRequestContext(httptest.NewRequest(http.MethodPost, backup.Pattern, nil), RequestContext{
@@ -150,7 +150,7 @@ func TestOperationsMutationsRequireCSRFAndUseDistinctAuditActions(t *testing.T) 
 	assert.Equal(t, http.StatusOK, response.Code)
 	require.Len(t, auditor.events, 2)
 	assert.Equal(t, ActionBackupCreate, auditor.events[1].Action)
-	assert.Equal(t, "starforge", auditor.events[1].Extension)
+	assert.Equal(t, "reports", auditor.events[1].Extension)
 	assert.Equal(t, "alex", auditor.events[1].Username)
 	assert.Equal(t, "local/dev", provider.backupRequest.Build.Identity)
 	assert.False(t, provider.backupRequest.RequestedAt.IsZero())
@@ -159,12 +159,12 @@ func TestOperationsMutationsRequireCSRFAndUseDistinctAuditActions(t *testing.T) 
 func TestRestoreRequiresValidatedPlanBoundToUserAndSecondConfirmation(t *testing.T) {
 	t.Parallel()
 
-	ctx, renderer, auditor := operationsTestContext("starforge")
+	ctx, renderer, auditor := operationsTestContext("reports")
 	provider := validOperationsProvider()
-	require.NoError(t, ctx.Operations.Register(OperationsDescriptor{Label: "Starforge"}, provider))
-	plans, ok := ctx.Routes.Find(http.MethodPost, "/admin/operations/starforge/restore-plans")
+	require.NoError(t, ctx.Operations.Register(OperationsDescriptor{Label: "Reports"}, provider))
+	plans, ok := ctx.Routes.Find(http.MethodPost, "/admin/operations/reports/restore-plans")
 	require.True(t, ok)
-	restores, ok := ctx.Routes.Find(http.MethodPost, "/admin/operations/starforge/restores")
+	restores, ok := ctx.Routes.Find(http.MethodPost, "/admin/operations/reports/restores")
 	require.True(t, ok)
 
 	planned := invokeOperationsMutation(t, plans.Handler, plans.Pattern, url.Values{
@@ -173,7 +173,7 @@ func TestRestoreRequiresValidatedPlanBoundToUserAndSecondConfirmation(t *testing
 	assert.Equal(t, http.StatusOK, planned.Code)
 	require.NotNil(t, renderer.data.Plan)
 	assert.Equal(t, "plan-1", renderer.data.Plan.ID)
-	assert.Equal(t, "RESTORE starforge", renderer.data.RestoreConfirmation)
+	assert.Equal(t, "RESTORE reports", renderer.data.RestoreConfirmation)
 
 	rejected := invokeOperationsMutation(t, restores.Handler, restores.Pattern, url.Values{
 		"csrf_token": {"csrf-token"}, "plan_id": {"plan-1"}, "confirmation": {"yes"},
@@ -182,7 +182,7 @@ func TestRestoreRequiresValidatedPlanBoundToUserAndSecondConfirmation(t *testing
 	assert.Empty(t, provider.executedPlan)
 
 	accepted := invokeOperationsMutation(t, restores.Handler, restores.Pattern, url.Values{
-		"csrf_token": {"csrf-token"}, "plan_id": {"plan-1"}, "confirmation": {"RESTORE starforge"},
+		"csrf_token": {"csrf-token"}, "plan_id": {"plan-1"}, "confirmation": {"RESTORE reports"},
 	})
 	assert.Equal(t, http.StatusOK, accepted.Code)
 	assert.Equal(t, "plan-1", provider.executedPlan)

@@ -20,7 +20,6 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"github.com/outerstellar-hq/gouterstellar-platform/extensions/reports"
-	"github.com/outerstellar-hq/gouterstellar-platform/extensions/starforge"
 	"github.com/outerstellar-hq/gouterstellar-platform/internal/config"
 	"github.com/outerstellar-hq/gouterstellar-platform/internal/observability"
 	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence"
@@ -94,12 +93,6 @@ func main() {
 	coreExt.SetStatic(os.DirFS("static"))
 
 	reportsExt := reports.New(app.ServiceBag.MessageCounter)
-	starforgeClient, err := starforge.NewHTTPClient(cfg.Starforge.BaseURL, cfg.Starforge.Credential, nil)
-	if err != nil {
-		slog.Error("Invalid Starforge configuration", "error", err)
-		os.Exit(1)
-	}
-	starforgeExt := starforge.New(starforgeClient)
 
 	// The middleware chain is applied to every route in the same order as
 	// the previous Chi-based wire root.
@@ -142,7 +135,6 @@ func main() {
 		Extensions: []extplatform.Extension{
 			coreExt,
 			reportsExt,
-			starforgeExt,
 		},
 		Services:        app.ServiceBag,
 		MiddlewareChain: middlewareChain,

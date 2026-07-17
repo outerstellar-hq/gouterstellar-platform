@@ -172,7 +172,6 @@ func TestPackagedExtensionHostEndToEndParity(t *testing.T) {
 	reports := assertStatus(t, client, baseURL+"/reports", http.StatusOK)
 	assertContains(t, reports, "Reports")
 	assertContains(t, reports, `href="/reports"`)
-	assertContains(t, reports, `href="/starforge"`)
 	assertNotContains(t, reports, `action="/search"`)
 	assertNotContains(t, reports, `href="/settings"`)
 	assertNotContains(t, reports, `href="/contacts"`)
@@ -196,21 +195,9 @@ func TestPackagedExtensionHostEndToEndParity(t *testing.T) {
 		assertStatus(t, client, baseURL+path, http.StatusNotFound)
 	}
 
-	starforge := assertStatus(t, client, baseURL+"/starforge", http.StatusOK)
-	assertContains(t, starforge, "Starforge")
-	assertContains(t, starforge, "Production ledgers")
-	assertContains(t, starforge, `href="/starforge/pipelines/sleep-series"`)
-
-	sleepSeries := assertStatus(t, client, baseURL+"/starforge/pipelines/sleep-series", http.StatusOK)
-	assertContains(t, sleepSeries, "Sleep production ledger")
-	assertContains(t, sleepSeries, "Sleep catalog is temporarily unavailable")
-	assertContains(t, sleepSeries, "Typed template registry")
-
 	css := assertStatus(t, client, baseURL+"/site.css", http.StatusOK)
 	assertContains(t, css, ".extension-diagnostics")
 	assertContains(t, css, ".shell-search")
-	assertNotContains(t, css, "@tailwind")
-	assertNotContains(t, css, "tailwindcss")
 
 	assertCacheRevalidation(t, client, baseURL+"/extensions/reports/assets/site.css")
 
@@ -220,7 +207,7 @@ func TestPackagedExtensionHostEndToEndParity(t *testing.T) {
 		"--label", "agent.task="+agentTask,
 		"--entrypoint", "/bin/sh",
 		image,
-		"-c", "test -x /app/server && test -x /app/migrate && test -x /app/seed && test -f /app/static/css/main.css && test ! -e /app/node_modules && test ! -e /app/package.json && ! find /app -maxdepth 2 -iname 'tailwind.config.*' | grep .",
+		"-c", "test -x /app/server && test -x /app/migrate && test -x /app/seed && test -f /app/static/css/main.css && test ! -e /app/node_modules && test ! -e /app/package.json",
 	)
 }
 

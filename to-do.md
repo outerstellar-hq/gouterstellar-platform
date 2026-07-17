@@ -2,6 +2,13 @@
 
 Work GitHub issues in dependency order before continuing discretionary parity improvements.
 
+## Repository boundaries
+
+- [x] Keep this repository focused on the Outerstellar web platform.
+- [x] Keep product-specific application work out of this repository.
+- [x] Keep the Java desktop application out of scope; the Go project replaces only the Java web application.
+- [x] Keep styling as handwritten CSS with no Node build dependency.
+
 ## GitHub issues
 
 - [x] [#8 Migrate the Go module to the canonical repository path](https://github.com/outerstellar-hq/gouterstellar-platform/issues/8) — implemented and verified from a disposable consumer against the published upstream commit.
@@ -9,29 +16,12 @@ Work GitHub issues in dependency order before continuing discretionary parity im
 - [x] [#5 Expose authenticated identity and CSRF context to extensions](https://github.com/outerstellar-hq/gouterstellar-platform/issues/5) — implemented with structural admin enforcement and credential-free request projection.
 - [x] [#6 Add date and monotonic build identity](https://github.com/outerstellar-hq/gouterstellar-platform/issues/6) — implemented across the shell, health/diagnostics, backup provenance, containers, CI, and releases.
 - [x] [#7 Add an extension operations registry](https://github.com/outerstellar-hq/gouterstellar-platform/issues/7) — implemented with owner-isolated admin routes, typed remote providers, audit outcomes, operation states, and confirmed restores.
-- [x] [#9 Add the Starforge worker-management extension](https://github.com/outerstellar-hq/gouterstellar-platform/issues/9) — implemented with a protected page, authenticated BFF, server-only credential, explicit unavailable state, and label management.
-- [x] [#11 StarForge: render each pipeline through a deterministic typed template registry](https://github.com/outerstellar-hq/gouterstellar-platform/issues/11) — first Sleep Series vertical slice implemented with a closed schema registry, typed catalog client, deterministic story/episode ordering, fixed stage rail, distinct artifact states, and unavailable-state rendering.
 
-## Parity work already in progress
-
-- [x] Finished the owned CSS palettes for every Java-compatible theme name without adding Tailwind or Node to the Go build.
-- [x] Rebuilt the disposable Podman image and visually verified light, dark, high-contrast, and branded themes.
-- [x] Re-ran the full four-core Go, lint, security, workflow, and Podman packaging gates after the theme work.
-- [x] Re-ran the Java-to-Go route, behavior, accessibility, and operational parity audit after the GitHub issue queue was complete.
-- [x] Kept the Java desktop application out of scope; the Go project replaces only the Java web application.
-
-## Publication follow-up
-
-- [x] Review and commit the complete issue/parity change set on `codex/web-replacement`.
-- [x] Push the commit, then verify the canonical module path with a remote `go get`.
-- [x] Link [draft PR #10](https://github.com/outerstellar-hq/gouterstellar-platform/pull/10) to issues #4–#9 with automatic closing references.
-- [x] Merge PR #10 after CI and review; issues #4–#9 closed automatically on merge.
-
-## Confirmed remaining parity gaps
+## Confirmed parity work completed
 
 - [x] Add authenticated, role-aware extension banner providers to the public contribution API and render their notices in the shared shell with CSRF-safe dismissal.
 - [x] Add the Java-compatible configurable global request-body limit so declared oversized requests receive `413` before handlers read or allocate the body.
-- [x] Verify whether Java's bundled Swagger UI is intentionally user-reachable and, if so, add an equivalent Go documentation page backed by the existing OpenAPI endpoints.
+- [x] Add equivalent OpenAPI documentation endpoints.
 - [x] Restore the Java static-resource contract with a public `/site.css` alias, strong ETags, and `304 Not Modified` handling without applying ETags to API JSON.
 - [x] Match Java's content-aware error boundary: JSON 404/500 payloads with request IDs for API paths, compact HTMX failures, and themed HTML for browser routes.
 - [x] Signal expired sessions consistently: `X-Session-Expired` on API/bearer responses, cleared cookies and `/auth?expired=true` redirects for browser requests.
@@ -39,25 +29,13 @@ Work GitHub issues in dependency order before continuing discretionary parity im
 - [x] Echo or generate `X-Request-Id` on every response and expose it together with `X-Session-Expired` through CORS.
 - [x] Keep common security headers on every response while omitting browser-only CSP from `/api/` routes.
 - [x] Carry the per-request CSP nonce into shared-shell script tags and remove the unnecessary `unsafe-inline` script allowance from the default policy.
-- [x] Continue comparing Java integration-test behavior against the packaged Go runtime after each completed slice.
-
-## Next parity audit queue
-
 - [x] Reconcile session sliding timeout, absolute timeout, cookie refresh, logout invalidation, and fixation protection against Java's session integration tests.
-- [x] Verify extension-owned static assets have an equally simple embedded-filesystem registration path and preserve Java's filesystem-first, packaged-fallback behavior.
-- [x] Re-run OAuth, password-reset-token, and return-to workflow comparisons against the packaged Go server rather than route literals alone.
+- [x] Verify extension-owned static assets have an embedded-filesystem registration path and preserve Java's filesystem-first, packaged-fallback behavior.
+- [x] Re-run OAuth, password-reset-token, and return-to workflow comparisons against the packaged Go server.
 - [x] Match Java's auth-only fixed-window rate limits, reset-specific threshold, trusted-proxy handling, and cross-IP per-account protection.
-- [x] Continue the Java integration-test matrix through admin exports, sync conflicts, and WebSocket protocol edge cases.
-- [x] Continue the Java integration-test matrix through contact sync CRUD, contact detail synchronization, and concurrent same-ID pushes.
-- [x] Continue the Java integration-test matrix through API-key lifecycle, device-token registration, and poll workflows.
-- [x] Continue the Java integration-test matrix through audit-log, notifications, and user-management workflows.
-- [x] Continue the Java integration-test matrix through message restore, profile API, and CSRF-protected change-password workflows.
-- [x] Continue the Java integration-test matrix through message search, diagnostics, and developer-dashboard workflows.
-- [x] Continue the Java integration-test matrix through extension dashboard, extension host UI, and component fragment workflows.
-- [x] Continue the Java integration-test matrix through extension-host default page-set behavior and packaged navigation visibility.
-- [x] Continue the Java integration-test matrix through packaged extension-host end-to-end runtime and release artifact behavior.
+- [x] Complete the Java integration-test matrix through admin exports, sync conflicts, WebSocket protocol edges, contact sync, API keys, notifications, user management, profile, search, diagnostics, developer dashboard, extension dashboard, extension host UI, component fragments, packaged extension-host behavior, and release artifact behavior.
 
-## Completed in the current parity slice
+## Completed in the latest parity slices
 
 - [x] Added the Java-shaped WebSocket refresh channel and HTMX WebSocket asset.
 - [x] Added refreshable message, contact, and trash fragments with filter and pagination preservation.
@@ -65,7 +43,6 @@ Work GitHub issues in dependency order before continuing discretionary parity im
 - [x] Fixed HTMX-boosted authentication transitions so authenticated pages acquire the WebSocket-enabled shell.
 - [x] Proved cross-tab live refresh in the packaged Podman application.
 - [x] Persisted theme, language, and density choices across navigation through a CSRF-protected preference update.
-- [x] Added the public build identity, operations registry, and Starforge extension from GitHub issues #6, #7, and #9.
 - [x] Added extension-owned embedded static asset registration with manifest ownership validation.
 - [x] Preserved Java-compatible `STATIC_DIR` and legacy `ASSETS_DIR` filesystem overrides for platform and extension assets.
 - [x] Applied the host ETag policy uniformly to core and extension asset routes.
@@ -84,5 +61,5 @@ Work GitHub issues in dependency order before continuing discretionary parity im
 - [x] Matched Java diagnostics route metadata, extension readiness reporting, message-search/sync pull behavior, and developer-dashboard access/disabled-route behavior through real route tests and Podman-backed PostgreSQL coverage.
 - [x] Matched Java extension dashboard diagnostics for route ownership, admin sections, mounted asset routes, and readiness while confirming component fragment behavior through Podman-backed handler coverage.
 - [x] Matched Java extension-host page-set behavior so core pages and chrome are hidden by default, selected core pages can be opted in, and extensions can own root without conflicting with the core home route.
-- [x] Added a packaged Podman end-to-end gate that builds the release image, migrates and seeds PostgreSQL, logs in with CSRF, verifies extension-host page filtering, checks extension asset ETags, and rejects Node/Tailwind runtime artifacts.
+- [x] Added a packaged Podman end-to-end gate that builds the release image, migrates and seeds PostgreSQL, logs in with CSRF, verifies extension-host page filtering, checks extension asset ETags, and rejects JS runtime artifacts.
 - [x] Passed module verification, tidy check, vet, full Podman-backed tests, golangci-lint, gosec, actionlint, and compose validation.

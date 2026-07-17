@@ -53,16 +53,6 @@ func TestLoadConfigFromEnv(t *testing.T) {
 	assert.Equal(t, "10.0.0.1,10.0.0.2", cfg.TrustedProxies)
 }
 
-func TestLoadStarforgeConfigFromEnv(t *testing.T) {
-	t.Setenv("STARFORGE_BASE_URL", "https://starforge.internal")
-	t.Setenv("STARFORGE_CREDENTIAL", "server-only-token")
-
-	cfg := Load()
-
-	assert.Equal(t, "https://starforge.internal", cfg.Starforge.BaseURL)
-	assert.Equal(t, "server-only-token", cfg.Starforge.Credential)
-}
-
 func TestLoadStaticDirectoryFromJavaCompatibleEnv(t *testing.T) {
 	t.Setenv("ASSETS_DIR", "fallback-assets")
 	t.Setenv("STATIC_DIR", "preferred-assets")
