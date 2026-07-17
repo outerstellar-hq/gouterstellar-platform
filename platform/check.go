@@ -80,7 +80,7 @@ func TestHostContext(services ...ServiceBag) *ContributionContext {
 	if len(services) > 0 {
 		serviceBag = services[0]
 	}
-	return newContributionContext("test-host", serviceBag)
+	return newContributionContext("test-host", serviceBag, assetHostOptions{})
 }
 
 func navLabelSlice(items []NavigationItem) []string {

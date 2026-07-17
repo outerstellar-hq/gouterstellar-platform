@@ -13,10 +13,9 @@ LIMIT $2 OFFSET $3;
 -- name: CountUnreadNotifications :one
 SELECT COUNT(*) FROM plt_notifications WHERE user_id = $1 AND read_at IS NULL;
 
--- name: MarkNotificationRead :one
+-- name: MarkNotificationRead :execrows
 UPDATE plt_notifications SET read_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, title, body, type, read_at, created_at;
+WHERE id = $1 AND user_id = $2;
 
 -- name: MarkAllNotificationsRead :execrows
 UPDATE plt_notifications SET read_at = CURRENT_TIMESTAMP WHERE user_id = $1 AND read_at IS NULL;

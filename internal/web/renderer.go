@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -234,16 +235,25 @@ func (r *Renderer) renderPage(w http.ResponseWriter, req *http.Request, page str
 		return fmt.Errorf("unknown page template: %q", page)
 	}
 
-	shell := r.buildShell(req)
+	shell, err := r.buildShell(req)
+	if err != nil {
+		return err
+	}
 	shell.Body = page
 	shell.BodyData = data
 	shell.Title = pageTitle(page, shell.Language)
+
+	var body bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&body, "base", shell); err != nil {
+		return err
+	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if status != 0 {
 		w.WriteHeader(status)
 	}
-	return tmpl.ExecuteTemplate(w, "base", shell)
+	_, err = w.Write(body.Bytes())
+	return err
 }
 
 // RenderWithStatus renders a page with a specific HTTP status code.
@@ -253,8 +263,13 @@ func (r *Renderer) RenderWithStatus(w http.ResponseWriter, req *http.Request, pa
 
 // RenderPartial renders a fragment without shell wrapping (for HTMX responses).
 func (r *Renderer) RenderPartial(w http.ResponseWriter, name string, data interface{}) error {
+	var body bytes.Buffer
+	if err := r.partials.ExecuteTemplate(&body, name, data); err != nil {
+		return err
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	return r.partials.ExecuteTemplate(w, name, data)
+	_, err := w.Write(body.Bytes())
+	return err
 }
 
 // HasPage reports whether the renderer has a parsed template for the given page.
@@ -266,10 +281,11 @@ func (r *Renderer) HasPage(name string) bool {
 }
 
 // buildShell constructs a ShellViewModel from request context.
-func (r *Renderer) buildShell(req *http.Request) *viewmodel.ShellViewModel {
+func (r *Renderer) buildShell(req *http.Request) (*viewmodel.ShellViewModel, error) {
 	shell := &viewmodel.ShellViewModel{
 		CSRFToken:   CSRFTokenFromRequest(req),
 		RequestID:   RequestIDFromContext(req.Context()),
+		CSPNonce:    CSPNonceFromRequest(req),
 		Version:     r.version,
 		Build:       buildinfo.Current(),
 		Theme:       "dark",
@@ -335,7 +351,17 @@ func (r *Renderer) buildShell(req *http.Request) *viewmodel.ShellViewModel {
 		shell.NavItems = resolved
 	}
 
-	return shell
+	if shell.User != nil {
+		if loader := BannerLoaderFromContext(req.Context()); loader != nil {
+			banners, err := loader(req.Context())
+			if err != nil {
+				return nil, fmt.Errorf("load shell banners: %w", err)
+			}
+			shell.Banners = banners
+		}
+	}
+
+	return shell, nil
 }
 
 // LanguageFromRequest resolves the effective supported language using the

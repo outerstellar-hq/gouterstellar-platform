@@ -7,11 +7,19 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
+)
+
+const (
+	// RequestIDHeader carries the correlation ID shared by logs and clients.
+	RequestIDHeader = "X-Request-Id"
+	// SessionExpiredHeader lets API clients distinguish expiry from other 401 responses.
+	SessionExpiredHeader = "X-Session-Expired"
 )
 
 type responseCapture struct {
@@ -36,9 +44,13 @@ func (rc *responseCapture) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 func Logging() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			requestID := uuid.New().String()[:8]
+			requestID := strings.TrimSpace(r.Header.Get(RequestIDHeader))
+			if requestID == "" || len(requestID) > 128 {
+				requestID = uuid.New().String()[:8]
+			}
 			ctx := context.WithValue(r.Context(), web.ContextKey("requestId"), requestID)
 			r = r.WithContext(ctx)
+			w.Header().Set(RequestIDHeader, requestID)
 
 			start := time.Now()
 			rc := &responseCapture{ResponseWriter: w, status: http.StatusOK}

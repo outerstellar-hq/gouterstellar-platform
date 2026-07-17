@@ -3,6 +3,7 @@ package core
 import (
 	"net/http"
 	"testing"
+	"testing/fstest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,7 +46,7 @@ func TestCoreContributesAllRouteGroups(t *testing.T) {
 	ext.SetOperations(stub, stub, stub, stub)
 	ext.SetDiagnostics(stub)
 	ext.SetMetrics(stub)
-	ext.SetStatic(stub)
+	ext.SetStatic(testAssets())
 	ext.SetOpenAPI(stub)
 	ext.AddContributors(
 		stubContributor{group: extplatform.GroupPublicUI, method: http.MethodGet, pattern: "/auth", desc: "login", handler: stub},
@@ -74,6 +75,9 @@ func TestCoreContributesAllRouteGroups(t *testing.T) {
 		patterns[route.Pattern] = route.Group
 	}
 	assert.Equal(t, extplatform.GroupAPI, patterns["/api/openapi.json"])
+	assert.Equal(t, extplatform.GroupPublicUI, patterns["/openapi.json"])
+	assert.Equal(t, extplatform.GroupAssets, patterns["/swagger.html"])
+	assert.Equal(t, extplatform.GroupAssets, patterns["/site.css"])
 	assert.Equal(t, extplatform.GroupAPI, patterns["/api/v1/sync/openapi.json"])
 	assert.Equal(t, extplatform.GroupAPI, patterns["/api/v1/admin/api-openapi.json"])
 	assert.Equal(t, extplatform.GroupPublicUI, patterns["/components/openapi.json"])
@@ -97,7 +101,7 @@ func TestCoreNavigationItems(t *testing.T) {
 	ext.SetOperations(stub, stub, stub, stub)
 	ext.SetDiagnostics(stub)
 	ext.SetMetrics(stub)
-	ext.SetStatic(stub)
+	ext.SetStatic(testAssets())
 	ext.SetOpenAPI(stub)
 	ext.AddContributors(stubContributor{group: extplatform.GroupProtectedUI, method: http.MethodGet, pattern: "/", desc: "home", handler: stub})
 	ctx := extplatform.NewContributionContext(ext.Manifest().ID)
@@ -112,4 +116,11 @@ func TestCoreNavigationItems(t *testing.T) {
 
 	assert.Contains(t, labels, "Home")
 	assert.Contains(t, labels, "Contacts")
+}
+
+func testAssets() fstest.MapFS {
+	return fstest.MapFS{
+		"css/main.css": &fstest.MapFile{Data: []byte("body {}")},
+		"swagger.html": &fstest.MapFile{Data: []byte("<html></html>")},
+	}
 }

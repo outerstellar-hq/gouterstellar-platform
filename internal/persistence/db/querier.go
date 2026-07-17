@@ -12,6 +12,7 @@ import (
 
 type Querier interface {
 	CastPollVote(ctx context.Context, arg CastPollVoteParams) (int64, error)
+	ClaimPasswordResetToken(ctx context.Context, token string) (uuid.UUID, error)
 	ClaimPendingOutbox(ctx context.Context, limit int32) ([]ClaimPendingOutboxRow, error)
 	ClosePoll(ctx context.Context, id int64) (int64, error)
 	CountAllAudit(ctx context.Context) (int64, error)
@@ -58,15 +59,14 @@ type Querier interface {
 	FindApiKeysByUserID(ctx context.Context, userID uuid.UUID) ([]PltApiKey, error)
 	FindAuditPage(ctx context.Context, arg FindAuditPageParams) ([]PltAuditLog, error)
 	FindBySyncID(ctx context.Context, syncID string) (PltMessage, error)
-	FindChangesSince(ctx context.Context, updatedAtEpochMs int64) ([]PltMessage, error)
+	FindChangesSince(ctx context.Context, arg FindChangesSinceParams) ([]PltMessage, error)
 	FindContactBySyncID(ctx context.Context, syncID string) (PltContact, error)
-	FindContactChangesSince(ctx context.Context, updatedAtEpochMs int64) ([]PltContact, error)
+	FindContactChangesSince(ctx context.Context, arg FindContactChangesSinceParams) ([]PltContact, error)
 	FindDeviceTokensByUserID(ctx context.Context, userID uuid.UUID) ([]PltDeviceToken, error)
 	FindMessageVote(ctx context.Context, arg FindMessageVoteParams) (PltMessageVote, error)
 	FindNotificationsByUserID(ctx context.Context, arg FindNotificationsByUserIDParams) ([]PltNotification, error)
 	FindOAuthByProviderSubject(ctx context.Context, arg FindOAuthByProviderSubjectParams) (PltOauthConnection, error)
 	FindOAuthByUserID(ctx context.Context, userID uuid.UUID) ([]PltOauthConnection, error)
-	FindPasswordResetByToken(ctx context.Context, token string) (PltPasswordResetToken, error)
 	FindPollBySyncID(ctx context.Context, syncID string) (PltPoll, error)
 	FindPollOption(ctx context.Context, arg FindPollOptionParams) (PltPollOption, error)
 	FindRecentAudit(ctx context.Context, limit int32) ([]PltAuditLog, error)
@@ -83,6 +83,7 @@ type Querier interface {
 	InsertContactEmail(ctx context.Context, arg InsertContactEmailParams) error
 	InsertContactPhone(ctx context.Context, arg InsertContactPhoneParams) error
 	InsertContactSocial(ctx context.Context, arg InsertContactSocialParams) error
+	InvalidatePasswordResetTokensForUser(ctx context.Context, userID uuid.UUID) error
 	ListContactEmails(ctx context.Context, contactID int64) ([]string, error)
 	ListContactEmailsBatch(ctx context.Context, dollar_1 []int64) ([]PltContactEmail, error)
 	ListContactPhones(ctx context.Context, contactID int64) ([]string, error)
@@ -122,10 +123,9 @@ type Querier interface {
 	MarkCleanMessages(ctx context.Context) error
 	MarkConflictContact(ctx context.Context, arg MarkConflictContactParams) (PltContact, error)
 	MarkConflictMessage(ctx context.Context, arg MarkConflictMessageParams) (PltMessage, error)
-	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) (PltNotification, error)
+	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) (int64, error)
 	MarkOutboxFailed(ctx context.Context, arg MarkOutboxFailedParams) (MarkOutboxFailedRow, error)
 	MarkOutboxProcessed(ctx context.Context, id uuid.UUID) (MarkOutboxProcessedRow, error)
-	MarkPasswordResetUsed(ctx context.Context, token string) (PltPasswordResetToken, error)
 	RemovePollVote(ctx context.Context, arg RemovePollVoteParams) (int64, error)
 	ReplaceTOTPBackupCodes(ctx context.Context, arg ReplaceTOTPBackupCodesParams) (int64, error)
 	ResetFailedTOTPAttempts(ctx context.Context, id uuid.UUID) error

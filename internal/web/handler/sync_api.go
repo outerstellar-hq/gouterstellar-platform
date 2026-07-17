@@ -8,6 +8,7 @@ import (
 
 	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
 	"github.com/outerstellar-hq/gouterstellar-platform/internal/service"
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web/filter"
 )
 
 type SyncAPI struct {
@@ -26,10 +27,10 @@ func NewSyncAPI(msgSvc *service.MessageService, contactSvc *service.ContactServi
 
 // ContributeRoutes registers the sync API routes (bearer auth applied by builder).
 func (h *SyncAPI) ContributeRoutes(ctx *extplatform.ContributionContext) error {
-	ctx.Routes.API(http.MethodGet, "/api/v1/sync", "Pull message changes", http.HandlerFunc(h.PullMessages))
-	ctx.Routes.API(http.MethodPost, "/api/v1/sync", "Push message changes", http.HandlerFunc(h.PushMessages))
-	ctx.Routes.API(http.MethodGet, "/api/v1/sync/contacts", "Pull contact changes", http.HandlerFunc(h.PullContacts))
-	ctx.Routes.API(http.MethodPost, "/api/v1/sync/contacts", "Push contact changes", http.HandlerFunc(h.PushContacts))
+	ctx.Routes.API(http.MethodGet, "/api/v1/sync", "Pull message changes", filter.RequireAuthenticated(http.HandlerFunc(h.PullMessages)))
+	ctx.Routes.API(http.MethodPost, "/api/v1/sync", "Push message changes", filter.RequireAuthenticated(http.HandlerFunc(h.PushMessages)))
+	ctx.Routes.API(http.MethodGet, "/api/v1/sync/contacts", "Pull contact changes", filter.RequireAuthenticated(http.HandlerFunc(h.PullContacts)))
+	ctx.Routes.API(http.MethodPost, "/api/v1/sync/contacts", "Push contact changes", filter.RequireAuthenticated(http.HandlerFunc(h.PushContacts)))
 	return nil
 }
 

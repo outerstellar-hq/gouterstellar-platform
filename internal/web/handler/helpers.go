@@ -84,6 +84,7 @@ func handleServiceError(w http.ResponseWriter, err error) {
 	var validationErr *model.ValidationError
 	var registrationDisabled *model.RegistrationDisabledError
 	var invalidPassword *model.InvalidPasswordError
+	var invalidResetToken *model.InvalidPasswordResetTokenError
 	var messageNotFound *model.MessageNotFoundError
 	var contactNotFound *model.ContactNotFoundError
 	var pollNotFound *model.PollNotFoundError
@@ -105,6 +106,8 @@ func handleServiceError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusForbidden, err.Error())
 	case errors.As(err, &invalidPassword):
 		writeError(w, http.StatusUnauthorized, err.Error())
+	case errors.As(err, &invalidResetToken):
+		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.As(err, &messageNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
 	case errors.As(err, &contactNotFound):

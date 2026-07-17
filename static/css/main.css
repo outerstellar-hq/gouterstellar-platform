@@ -547,6 +547,100 @@ a:hover {
     outline: none;
 }
 
+.platform-banners {
+    display: grid;
+    gap: 10px;
+    margin: 0 0 20px;
+}
+
+.platform-banner {
+    --banner-accent: var(--color-info);
+    display: grid;
+    grid-template-columns: 5px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px;
+    overflow: hidden;
+    padding: 14px 14px 14px 0;
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--banner-accent), var(--bg-card) 92%);
+    border: 1px solid color-mix(in srgb, var(--banner-accent), var(--border-color) 60%);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+
+.platform-banner::before {
+    align-self: stretch;
+    content: "";
+    background: var(--banner-accent);
+}
+
+.platform-banner-critical {
+    --banner-accent: var(--color-error);
+}
+
+.platform-banner-warning {
+    --banner-accent: var(--color-warning);
+}
+
+.platform-banner-info {
+    --banner-accent: var(--color-info);
+}
+
+.platform-banner-maintenance {
+    --banner-accent: var(--color-secondary);
+}
+
+.platform-banner-copy h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+}
+
+.platform-banner-copy p {
+    margin: 3px 0 0;
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.platform-banner form {
+    margin: 0;
+}
+
+.platform-banner-dismiss {
+    display: inline-grid;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    place-items: center;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    font-size: 20px;
+    line-height: 1;
+}
+
+.platform-banner-dismiss:hover {
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border-color: var(--border-color);
+}
+
+.platform-banner-dismiss:focus-visible {
+    outline: 2px solid var(--banner-accent);
+    outline-offset: 2px;
+}
+
+@media (max-width: 560px) {
+    .platform-banner {
+        grid-template-columns: 4px minmax(0, 1fr) auto;
+        gap: 10px;
+        padding-right: 10px;
+    }
+}
+
 nav {
     display: flex;
     align-items: center;

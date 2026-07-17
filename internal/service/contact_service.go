@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -230,11 +231,15 @@ func (s *ContactService) RestoreContact(ctx context.Context, syncID string) erro
 }
 
 func (s *ContactService) GetChangesSince(ctx context.Context, since int64) (*model.SyncPullContactResponse, error) {
-	contacts, err := s.repo.FindChangesSince(ctx, since)
+	contacts, err := s.repo.FindChangesSince(ctx, since, defaultSyncBatchSize+1)
 	if err != nil {
 		return nil, fmt.Errorf("find contact changes since: %w", err)
 	}
 
+	hasMore := len(contacts) > int(defaultSyncBatchSize)
+	if hasMore {
+		contacts = contacts[:defaultSyncBatchSize]
+	}
 	subs, err := loadContactSubs(ctx, s.repo, contacts)
 	if err != nil {
 		return nil, err
@@ -248,27 +253,29 @@ func (s *ContactService) GetChangesSince(ctx context.Context, since int64) (*mod
 	return &model.SyncPullContactResponse{
 		Contacts:        syncContacts,
 		ServerTimestamp: time.Now().UnixMilli(),
+		HasMore:         hasMore,
 	}, nil
 }
 
 func (s *ContactService) ProcessPushRequest(ctx context.Context, req *model.SyncPushContactRequest) (*model.SyncPushContactResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
 	appliedCount := 0
 	var conflicts []model.SyncContactConflict
 
 	for _, c := range req.Contacts {
 		existing, err := s.repo.FindBySyncID(ctx, c.SyncID)
-		if err != nil {
-			_, err := s.repo.UpsertSyncedContact(ctx, &c)
-			if err != nil {
-				conflicts = append(conflicts, model.SyncContactConflict{
-					SyncID:        c.SyncID,
-					Reason:        fmt.Sprintf("Failed to upsert: %v", err),
-					ServerContact: nil,
-				})
-				continue
+		if errors.Is(err, pgx.ErrNoRows) {
+			if _, err := s.repo.UpsertSyncedContact(ctx, &c); err != nil {
+				return nil, fmt.Errorf("insert synced contact %s: %w", c.SyncID, err)
 			}
 			appliedCount++
 			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("find synced contact %s: %w", c.SyncID, err)
 		}
 
 		if existing.Version > 0 && existing.UpdatedAtEpochMs > c.UpdatedAtEpochMs {
@@ -286,12 +293,7 @@ func (s *ContactService) ProcessPushRequest(ctx context.Context, req *model.Sync
 
 		_, err = s.repo.UpsertSyncedContact(ctx, &c)
 		if err != nil {
-			conflicts = append(conflicts, model.SyncContactConflict{
-				SyncID:        c.SyncID,
-				Reason:        fmt.Sprintf("Failed to upsert: %v", err),
-				ServerContact: nil,
-			})
-			continue
+			return nil, fmt.Errorf("update synced contact %s: %w", c.SyncID, err)
 		}
 		appliedCount++
 	}
@@ -300,7 +302,9 @@ func (s *ContactService) ProcessPushRequest(ctx context.Context, req *model.Sync
 		conflicts = []model.SyncContactConflict{}
 	}
 
-	s.eventPub.PublishRefresh(ContactListPanel)
+	if appliedCount > 0 || len(conflicts) > 0 {
+		s.eventPub.PublishRefresh(ContactListPanel)
+	}
 
 	return &model.SyncPushContactResponse{
 		AppliedCount: appliedCount,

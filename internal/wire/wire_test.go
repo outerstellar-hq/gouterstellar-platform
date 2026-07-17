@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"testing/fstest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,7 +26,10 @@ func TestProductionExtensionsAssemble(t *testing.T) {
 	coreExtension.SetOperations(stub, stub, stub, stub)
 	coreExtension.SetDiagnostics(stub)
 	coreExtension.SetMetrics(http.NotFoundHandler())
-	coreExtension.SetStatic(http.NotFoundHandler())
+	coreExtension.SetStatic(fstest.MapFS{
+		"css/main.css": &fstest.MapFile{Data: []byte("body {}")},
+		"swagger.html": &fstest.MapFile{Data: []byte("<html></html>")},
+	})
 
 	handler, err := extplatform.NewHandler(extplatform.Options{
 		Mode:     extplatform.FullPlatform,
@@ -43,6 +47,6 @@ func TestProductionExtensionsAssemble(t *testing.T) {
 
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", nil))
-	assert.Equal(t, http.StatusSeeOther, response.Code)
-	assert.Equal(t, "/auth", response.Header().Get("Location"))
+	assert.Equal(t, http.StatusFound, response.Code)
+	assert.Equal(t, "/auth?returnTo=%2F", response.Header().Get("Location"))
 }

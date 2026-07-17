@@ -40,7 +40,7 @@ func (r *notificationRepo) CountUnread(ctx context.Context, userID uuid.UUID) (i
 	return r.q.CountUnreadNotifications(ctx, userID)
 }
 
-func (r *notificationRepo) MarkRead(ctx context.Context, id, userID uuid.UUID) (db.PltNotification, error) {
+func (r *notificationRepo) MarkRead(ctx context.Context, id, userID uuid.UUID) (int64, error) {
 	return r.q.MarkNotificationRead(ctx, db.MarkNotificationReadParams{
 		ID:     id,
 		UserID: userID,

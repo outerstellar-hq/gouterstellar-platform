@@ -107,8 +107,8 @@ func (r *messageRepo) UpsertSyncedMessage(ctx context.Context, syncID, author, c
 	})
 }
 
-func (r *messageRepo) FindChangesSince(ctx context.Context, since int64) ([]db.PltMessage, error) {
-	return r.q.FindChangesSince(ctx, since)
+func (r *messageRepo) FindChangesSince(ctx context.Context, since int64, limit int32) ([]db.PltMessage, error) {
+	return r.q.FindChangesSince(ctx, db.FindChangesSinceParams{UpdatedAtEpochMs: since, Limit: limit})
 }
 
 func (r *messageRepo) ListDirtyMessages(ctx context.Context) ([]db.PltMessage, error) {

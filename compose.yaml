@@ -60,6 +60,8 @@ services:
       <<: *app-environment
       PORT: 8080
       APP_BASE_URL: http://localhost:${OUTERSTELLAR_PORT:-8080}
+      TOKEN_PEPPER: ${TOKEN_PEPPER:-outerstellar-dev-token-pepper}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       APPLE_OAUTH_ENABLED: ${APPLE_OAUTH_ENABLED:-false}
       APPLE_OAUTH_TEAM_ID: ${APPLE_OAUTH_TEAM_ID:-}
       APPLE_OAUTH_CLIENT_ID: ${APPLE_OAUTH_CLIENT_ID:-}
@@ -67,6 +69,8 @@ services:
       APPLE_OAUTH_PRIVATE_KEY_PEM: ${APPLE_OAUTH_PRIVATE_KEY_PEM:-}
       STARFORGE_BASE_URL: ${STARFORGE_BASE_URL:-}
       STARFORGE_CREDENTIAL: ${STARFORGE_CREDENTIAL:-}
+      MAX_REQUEST_BODY_BYTES: ${MAX_REQUEST_BODY_BYTES:-2097152}
+      STATIC_DIR: ${STATIC_DIR:-}
     depends_on:
       seed:
         condition: service_completed_successfully

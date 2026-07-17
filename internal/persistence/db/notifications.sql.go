@@ -93,10 +93,9 @@ func (q *Queries) MarkAllNotificationsRead(ctx context.Context, userID uuid.UUID
 	return result.RowsAffected(), nil
 }
 
-const markNotificationRead = `-- name: MarkNotificationRead :one
+const markNotificationRead = `-- name: MarkNotificationRead :execrows
 UPDATE plt_notifications SET read_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, title, body, type, read_at, created_at
 `
 
 type MarkNotificationReadParams struct {
@@ -104,19 +103,12 @@ type MarkNotificationReadParams struct {
 	UserID uuid.UUID `json:"user_id"`
 }
 
-func (q *Queries) MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) (PltNotification, error) {
-	row := q.db.QueryRow(ctx, markNotificationRead, arg.ID, arg.UserID)
-	var i PltNotification
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Title,
-		&i.Body,
-		&i.Type,
-		&i.ReadAt,
-		&i.CreatedAt,
-	)
-	return i, err
+func (q *Queries) MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markNotificationRead, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const saveNotification = `-- name: SaveNotification :one

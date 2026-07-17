@@ -27,6 +27,8 @@ type MessageService struct {
 	pipeline            *WritePipeline
 }
 
+const defaultSyncBatchSize int32 = 500
+
 func NewMessageService(
 	repo persistence.MessageRepository,
 	outbox persistence.OutboxRepository,
@@ -271,11 +273,15 @@ func (s *MessageService) CreateLocalMessage(ctx context.Context, author, content
 }
 
 func (s *MessageService) GetChangesSince(ctx context.Context, since int64) (*model.SyncPullResponse, error) {
-	messages, err := s.repo.FindChangesSince(ctx, since)
+	messages, err := s.repo.FindChangesSince(ctx, since, defaultSyncBatchSize+1)
 	if err != nil {
 		return nil, fmt.Errorf("find changes since: %w", err)
 	}
 
+	hasMore := len(messages) > int(defaultSyncBatchSize)
+	if hasMore {
+		messages = messages[:defaultSyncBatchSize]
+	}
 	syncMessages := make([]model.SyncMessage, len(messages))
 	for i, m := range messages {
 		syncMessages[i] = pltMessageToSyncMessage(m)
@@ -284,47 +290,54 @@ func (s *MessageService) GetChangesSince(ctx context.Context, since int64) (*mod
 	return &model.SyncPullResponse{
 		Messages:        syncMessages,
 		ServerTimestamp: time.Now().UnixMilli(),
+		HasMore:         hasMore,
+		SchemaVersion:   model.SyncSchemaVersion,
 	}, nil
 }
 
 func (s *MessageService) ProcessPushRequest(ctx context.Context, req *model.SyncPushRequest) (*model.SyncPushResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
 	appliedCount := 0
 	var conflicts []model.SyncConflict
 
 	for _, msg := range req.Messages {
 		existing, err := s.repo.FindBySyncID(ctx, msg.SyncID)
-		if err != nil {
-			_, err := s.repo.UpsertSyncedMessage(ctx, msg.SyncID, msg.Author, msg.Content, msg.UpdatedAtEpochMs, msg.Deleted)
-			if err != nil {
-				conflicts = append(conflicts, model.SyncConflict{
-					SyncID:        msg.SyncID,
-					Reason:        fmt.Sprintf("Failed to upsert: %v", err),
-					ServerMessage: nil,
-				})
-				continue
+		if errors.Is(err, pgx.ErrNoRows) {
+			if _, err := s.repo.UpsertSyncedMessage(ctx, msg.SyncID, msg.Author, msg.Content, msg.UpdatedAtEpochMs, msg.Deleted); err != nil {
+				return nil, fmt.Errorf("insert synced message %s: %w", msg.SyncID, err)
 			}
 			appliedCount++
 			continue
 		}
+		if err != nil {
+			return nil, fmt.Errorf("find synced message %s: %w", msg.SyncID, err)
+		}
 
 		if existing.Version > 0 && existing.UpdatedAtEpochMs > msg.UpdatedAtEpochMs {
 			serverMsg := pltMessageToSyncMessage(existing)
+			conflictJSON, err := model.SyncMessageToJSON(msg)
+			if err != nil {
+				return nil, fmt.Errorf("serialize client conflict %s: %w", msg.SyncID, err)
+			}
+			if _, err := s.repo.MarkConflictMessage(ctx, msg.SyncID, conflictJSON); err != nil {
+				return nil, fmt.Errorf("store client conflict %s: %w", msg.SyncID, err)
+			}
+			clientMsg := msg
 			conflicts = append(conflicts, model.SyncConflict{
 				SyncID:        msg.SyncID,
 				Reason:        "Server has newer version",
 				ServerMessage: &serverMsg,
+				ClientMessage: &clientMsg,
 			})
 			continue
 		}
 
 		_, err = s.repo.UpsertSyncedMessage(ctx, msg.SyncID, msg.Author, msg.Content, msg.UpdatedAtEpochMs, msg.Deleted)
 		if err != nil {
-			conflicts = append(conflicts, model.SyncConflict{
-				SyncID:        msg.SyncID,
-				Reason:        fmt.Sprintf("Failed to upsert: %v", err),
-				ServerMessage: nil,
-			})
-			continue
+			return nil, fmt.Errorf("update synced message %s: %w", msg.SyncID, err)
 		}
 		appliedCount++
 	}
@@ -333,12 +346,15 @@ func (s *MessageService) ProcessPushRequest(ctx context.Context, req *model.Sync
 		conflicts = []model.SyncConflict{}
 	}
 
-	s.cache.InvalidateAll()
-	s.eventPub.PublishRefresh(MessageListPanel)
+	if appliedCount > 0 || len(conflicts) > 0 {
+		s.cache.InvalidateAll()
+		s.eventPub.PublishRefresh(MessageListPanel)
+	}
 
 	return &model.SyncPushResponse{
-		AppliedCount: appliedCount,
-		Conflicts:    conflicts,
+		AppliedCount:  appliedCount,
+		Conflicts:     conflicts,
+		SchemaVersion: model.SyncSchemaVersion,
 	}, nil
 }
 
@@ -423,26 +439,25 @@ func (s *MessageService) ResolveConflict(ctx context.Context, syncID string, str
 		return nil
 	}
 
-	var serverSyncMsg model.SyncMessage
-	if err := json.Unmarshal([]byte(*existing.SyncConflict), &serverSyncMsg); err != nil {
+	var clientSyncMsg model.SyncMessage
+	if err := json.Unmarshal([]byte(*existing.SyncConflict), &clientSyncMsg); err != nil {
 		return fmt.Errorf("parse conflict JSON: %w", err)
 	}
 
-	switch strategy {
-	case model.ConflictMine:
-		_, err = s.repo.ResolveConflictMessage(ctx, syncID)
-		if err != nil {
-			return fmt.Errorf("resolve conflict: %w", err)
+	err = s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
+		repo := s.repo.WithTx(tx)
+		if strategy == model.ConflictMine {
+			if _, err := repo.UpdateMessage(ctx, syncID, clientSyncMsg.Author, clientSyncMsg.Content, clientSyncMsg.UpdatedAtEpochMs, true, existing.Version); err != nil {
+				return fmt.Errorf("apply client version: %w", err)
+			}
 		}
-	case model.ConflictServer:
-		_, err = s.repo.UpdateMessage(ctx, syncID, serverSyncMsg.Author, serverSyncMsg.Content, serverSyncMsg.UpdatedAtEpochMs, false, existing.Version)
-		if err != nil {
-			return fmt.Errorf("apply server version: %w", err)
+		if _, err := repo.ResolveConflictMessage(ctx, syncID); err != nil {
+			return fmt.Errorf("clear conflict: %w", err)
 		}
-		_, err = s.repo.ResolveConflictMessage(ctx, syncID)
-		if err != nil {
-			return fmt.Errorf("resolve conflict after server apply: %w", err)
-		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	s.pipeline.AfterMessageChange(ctx, syncID)

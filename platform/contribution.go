@@ -38,20 +38,22 @@ type ContributionContext struct {
 	Navigation *NavigationRegistry
 	Pages      *PageRegistry
 	Operations *OperationsRegistry
+	Banners    *BannerRegistry
 }
 
 // NewContributionContext builds a context for a specific extension owner.
 func NewContributionContext(owner string) *ContributionContext {
-	return newContributionContext(owner, ServiceBag{})
+	return newContributionContext(owner, ServiceBag{}, assetHostOptions{})
 }
 
-func newContributionContext(owner string, services ServiceBag) *ContributionContext {
-	routes := newRouteRegistry(owner)
+func newContributionContext(owner string, services ServiceBag, assets assetHostOptions) *ContributionContext {
+	routes := newRouteRegistry(owner, assets)
 	return &ContributionContext{
 		Routes:     routes,
 		Navigation: NewNavigationRegistry(),
 		Pages:      &PageRegistry{owner: owner, renderer: services.Pages},
 		Operations: newOperationsRegistry(owner, routes, services.Pages, services.OperationsAudit),
+		Banners:    &BannerRegistry{owner: owner},
 	}
 }
 

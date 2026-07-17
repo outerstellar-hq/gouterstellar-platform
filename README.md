@@ -45,6 +45,9 @@ Config is loaded from `config/application.yaml` with optional profile overrides 
 APP_PROFILE=dev      # activate the dev profile
 DATABASE_URL=...     # override the database connection string
 PORT=8080            # override the listen port
+STATIC_DIR=...       # prefer deployment-specific assets, then packaged files
+TOKEN_PEPPER=...     # key opaque token hashes; set a deployment secret in production
+TRUSTED_PROXIES=...  # comma-separated proxy IPs allowed to supply client IP headers
 ```
 
 Key settings:
@@ -58,8 +61,12 @@ Key settings:
 | `session_cookie_secure` | `false` | Set Secure flag on session cookies |
 | `session_timeout_minutes` | `30` | Sliding session timeout |
 | `session_absolute_timeout_minutes` | `1440` | Maximum session lifetime, regardless of activity |
+| `token_pepper` | development-only default | HMAC key for reset-token hashes; override with `TOKEN_PEPPER` in production |
+| `trusted_proxies` | empty | Comma-separated direct proxy IPs whose forwarded client-IP headers are trusted |
 | `registration_enabled` | `true` | Allow public account registration |
 | `max_failed_login_attempts` | `10` | Failed logins before a timed account lockout |
+| `max_request_body_bytes` | `2097152` | Reject requests declaring a larger body before handlers read it |
+| `static_dir` | empty | Filesystem directory whose platform and extension assets override packaged files |
 | `lockout_duration_seconds` | `900` | Account lockout duration |
 | `jwt.enabled` | `false` | Enable JWT token auth |
 | `email.enabled` | `false` | Enable email sending |
@@ -194,6 +201,9 @@ ADMIN_PASSWORD=... make seed  # create admin user (or pass -username / -password
 ```
 
 ## API Endpoints
+
+The live OpenAPI contract is available as JSON at `GET /openapi.json` and as a
+dependency-free browser catalog at `GET /swagger.html`.
 
 ### Sync API
 - `GET /api/v1/sync?since=<epoch>` — pull message changes

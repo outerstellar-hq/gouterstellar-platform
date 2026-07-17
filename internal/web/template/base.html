@@ -41,6 +41,24 @@
     {{ end }}
     <main id="main-content" class="app-main" tabindex="-1">
         {{ if .User }}<div id="ws-updates" ws-subscribe aria-live="polite"></div>{{ end }}
+        {{ if .Banners }}
+        <section class="platform-banners" aria-label="{{ translate .Language "web.banner.region" }}" aria-live="polite">
+            {{ range .Banners }}
+            <article class="platform-banner platform-banner-{{ .Severity }}" data-banner-id="{{ .ID }}">
+                <div class="platform-banner-copy">
+                    <h2>{{ .Title }}</h2>
+                    {{ if .Body }}<p>{{ .Body }}</p>{{ end }}
+                </div>
+                {{ if .Dismissible }}
+                <form method="POST" action="{{ .DismissURL }}" hx-post="{{ .DismissURL }}" hx-target="closest .platform-banner" hx-swap="outerHTML">
+                    <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                    <button type="submit" class="platform-banner-dismiss" aria-label="{{ translate $.Language "web.banner.dismiss" }} {{ .Title }}">&times;</button>
+                </form>
+                {{ end }}
+            </article>
+            {{ end }}
+        </section>
+        {{ end }}
         {{ range .Messages }}
         <div class="toast toast-{{ .Type }}">{{ .Message }}</div>
         {{ end }}
@@ -52,9 +70,9 @@
         <span>{{ translate .Language "web.footer.request" }}: {{ .RequestID }}</span>
     </footer>
     </div>
-    <script src="/static/js/htmx.min.js"></script>
-    {{ if .User }}<script src="/static/js/htmx-ext-ws.js"></script>{{ end }}
-    <script src="/static/js/platform.js"></script>
+    <script{{ if .CSPNonce }} nonce="{{ .CSPNonce }}"{{ end }} src="/static/js/htmx.min.js"></script>
+    {{ if .User }}<script{{ if $.CSPNonce }} nonce="{{ $.CSPNonce }}"{{ end }} src="/static/js/htmx-ext-ws.js"></script>{{ end }}
+    <script{{ if .CSPNonce }} nonce="{{ .CSPNonce }}"{{ end }} src="/static/js/platform.js"></script>
 </body>
 </html>
 {{ end }}

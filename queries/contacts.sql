@@ -49,7 +49,8 @@ WHERE sync_id = $1;
 SELECT id, sync_id, name, company, company_address, department, created_at, updated_at_epoch_ms, deleted, dirty, version, sync_conflict
 FROM plt_contacts
 WHERE updated_at_epoch_ms > $1
-ORDER BY updated_at_epoch_ms ASC;
+ORDER BY updated_at_epoch_ms ASC
+LIMIT $2;
 
 -- name: CreateServerContact :one
 INSERT INTO plt_contacts (sync_id, name, company, company_address, department, updated_at_epoch_ms, dirty, deleted, version)

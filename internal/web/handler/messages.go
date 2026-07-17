@@ -228,7 +228,7 @@ func (h *MessagesHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/messages/trash", http.StatusSeeOther)
 }
 
-// Resolve renders the local and server versions of a conflicted message so
+// Resolve renders the stale client version alongside the current server row so
 // the user can make an informed choice before submitting a resolution.
 func (h *MessagesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 	syncID := chi.URLParam(r, "syncId")
@@ -242,18 +242,18 @@ func (h *MessagesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var server model.SyncMessage
-	if err := json.Unmarshal([]byte(*message.SyncConflict), &server); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to read the server version")
+	var client model.SyncMessage
+	if err := json.Unmarshal([]byte(*message.SyncConflict), &client); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to read the client version")
 		return
 	}
 
 	if err := h.renderer.RenderPage(w, r, "message_conflict", viewmodel.MessageConflictPage{
 		SyncID:        syncID,
-		MyAuthor:      message.Author,
-		MyContent:     message.Content,
-		ServerAuthor:  server.Author,
-		ServerContent: server.Content,
+		MyAuthor:      client.Author,
+		MyContent:     client.Content,
+		ServerAuthor:  message.Author,
+		ServerContent: message.Content,
 	}); err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 	}

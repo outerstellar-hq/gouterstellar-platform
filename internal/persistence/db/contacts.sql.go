@@ -159,10 +159,16 @@ SELECT id, sync_id, name, company, company_address, department, created_at, upda
 FROM plt_contacts
 WHERE updated_at_epoch_ms > $1
 ORDER BY updated_at_epoch_ms ASC
+LIMIT $2
 `
 
-func (q *Queries) FindContactChangesSince(ctx context.Context, updatedAtEpochMs int64) ([]PltContact, error) {
-	rows, err := q.db.Query(ctx, findContactChangesSince, updatedAtEpochMs)
+type FindContactChangesSinceParams struct {
+	UpdatedAtEpochMs int64 `json:"updated_at_epoch_ms"`
+	Limit            int32 `json:"limit"`
+}
+
+func (q *Queries) FindContactChangesSince(ctx context.Context, arg FindContactChangesSinceParams) ([]PltContact, error) {
+	rows, err := q.db.Query(ctx, findContactChangesSince, arg.UpdatedAtEpochMs, arg.Limit)
 	if err != nil {
 		return nil, err
 	}

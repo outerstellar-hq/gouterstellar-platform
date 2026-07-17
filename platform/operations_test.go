@@ -68,7 +68,7 @@ func (p *operationsTestProvider) ExecuteRestore(_ context.Context, planID string
 func operationsTestContext(owner string) (*ContributionContext, *operationsTestRenderer, *operationsTestAuditor) {
 	renderer := &operationsTestRenderer{}
 	auditor := &operationsTestAuditor{}
-	ctx := newContributionContext(owner, ServiceBag{Pages: renderer, OperationsAudit: auditor})
+	ctx := newContributionContext(owner, ServiceBag{Pages: renderer, OperationsAudit: auditor}, assetHostOptions{})
 	return ctx, renderer, auditor
 }
 

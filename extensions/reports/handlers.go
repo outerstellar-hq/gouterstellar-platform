@@ -22,6 +22,11 @@ func (e *Extension) Contribute(ctx *extplatform.ContributionContext) error {
 	e.pages = ctx.Pages
 	ctx.Routes.Protected(http.MethodGet, "/reports", "Reports home", http.HandlerFunc(e.home))
 	ctx.Routes.API(http.MethodGet, "/api/v1/reports/summary", "Message count summary", http.HandlerFunc(e.summary))
+	if err := ctx.Routes.StaticAssets("/extensions/reports/assets", extplatform.AssetSource{
+		FS: assetsFS, Directory: "assets",
+	}); err != nil {
+		return err
+	}
 	ctx.Navigation.Add("Reports", "/reports", "bar-chart")
 	return nil
 }

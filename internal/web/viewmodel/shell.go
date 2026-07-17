@@ -15,10 +15,12 @@ type ShellViewModel struct {
 	Version     string
 	Build       buildinfo.Info
 	RequestID   string
+	CSPNonce    string
 	Body        string
 	BodyData    interface{}
 	Page        *PageInfo
 	NavItems    []NavItem
+	Banners     []Banner
 	CustomCSS   string
 	Messages    []ToastMessage
 }
@@ -46,4 +48,13 @@ type PageInfo struct {
 type ToastMessage struct {
 	Type    string
 	Message string
+}
+
+type Banner struct {
+	ID          string
+	Title       string
+	Body        string
+	Severity    string
+	Dismissible bool
+	DismissURL  string
 }

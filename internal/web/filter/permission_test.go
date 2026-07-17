@@ -21,8 +21,8 @@ func TestRequireAuthenticated(t *testing.T) {
 	t.Run("browser redirects to login", func(t *testing.T) {
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", nil))
-		assert.Equal(t, http.StatusSeeOther, response.Code)
-		assert.Equal(t, "/auth", response.Header().Get("Location"))
+		assert.Equal(t, http.StatusFound, response.Code)
+		assert.Equal(t, "/auth?returnTo=%2F", response.Header().Get("Location"))
 	})
 
 	t.Run("json client receives unauthorized", func(t *testing.T) {

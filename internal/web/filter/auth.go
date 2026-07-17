@@ -63,6 +63,7 @@ func BearerAuth(metrics *AuthMetrics, realms ...security.AuthRealm) func(http.Ha
 					return
 				case security.ExpiredResult:
 					metrics.Attempts.WithLabelValues(realm.Name(), "expired").Inc()
+					w.Header().Set(SessionExpiredHeader, "true")
 					http.Error(w, "Token expired", http.StatusUnauthorized)
 					return
 				case security.SkippedResult:

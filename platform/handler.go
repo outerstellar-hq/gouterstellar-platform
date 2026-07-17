@@ -1,10 +1,13 @@
 package platform
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"sort"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -19,6 +22,10 @@ type Options struct {
 	Extensions      []Extension
 	Services        ServiceBag
 	MiddlewareChain []func(http.Handler) http.Handler
+	// StaticDir optionally overrides packaged platform and extension assets.
+	StaticDir string
+	// AssetMiddleware applies host caching policy to every asset route.
+	AssetMiddleware func(http.Handler) http.Handler
 	// GroupMiddleware applies middleware to specific route groups after
 	// the global MiddlewareChain. Keys are RouteGroup values
 	// (GroupAPI, GroupAdmin, etc.). The middleware is applied via Chi
@@ -57,13 +64,18 @@ func NewHandler(opts Options) (http.Handler, error) {
 	// 2. Run contribution for each extension.
 	var allRoutes []RouteRegistration
 	var allNav []NavigationItem
+	var allBanners []bannerRegistration
 	for _, ext := range opts.Extensions {
-		ctx := newContributionContext(ext.Manifest().ID, opts.Services)
+		ctx := newContributionContext(ext.Manifest().ID, opts.Services, assetHostOptions{
+			staticDir:       opts.StaticDir,
+			assetMiddleware: opts.AssetMiddleware,
+		})
 		if err := ext.Contribute(ctx); err != nil {
 			return nil, fmt.Errorf("extension %s contribute: %w", ext.Manifest().ID, err)
 		}
 		allRoutes = append(allRoutes, ctx.Routes.All()...)
 		allNav = append(allNav, ctx.Navigation.Items()...)
+		allBanners = append(allBanners, ctx.Banners.all()...)
 	}
 
 	// 3. Validate all routes against ownership + conflicts.
@@ -101,6 +113,12 @@ func NewHandler(opts Options) (http.Handler, error) {
 				}
 			}
 			req = withRequestContext(req, requestContext)
+			if requestContext.User != nil && len(allBanners) > 0 {
+				user := *requestContext.User
+				req = web.WithBannerLoader(req, func(ctx context.Context) ([]viewmodel.Banner, error) {
+					return resolveBanners(ctx, user, allBanners)
+				})
+			}
 			next.ServeHTTP(w, web.WithNavItems(req, navVM))
 		})
 	})
@@ -115,6 +133,76 @@ func NewHandler(opts Options) (http.Handler, error) {
 	logRouteTable(mounted, allNav)
 
 	return r, nil
+}
+
+func resolveBanners(ctx context.Context, user RequestUser, registrations []bannerRegistration) ([]viewmodel.Banner, error) {
+	var banners []Banner
+	for _, registration := range registrations {
+		provided, err := registration.provider.Banners(ctx, user)
+		if err != nil {
+			return nil, fmt.Errorf("extension %s banners: %w", registration.owner, err)
+		}
+		for _, banner := range provided {
+			if err := validateBanner(registration.owner, banner); err != nil {
+				return nil, err
+			}
+			banners = append(banners, banner)
+		}
+	}
+
+	sort.SliceStable(banners, func(i, j int) bool {
+		return bannerPriority(banners[i].Severity) < bannerPriority(banners[j].Severity)
+	})
+
+	resolved := make([]viewmodel.Banner, len(banners))
+	for i, banner := range banners {
+		resolved[i] = viewmodel.Banner{
+			ID:          banner.ID,
+			Title:       banner.Title,
+			Body:        banner.Body,
+			Severity:    string(banner.Severity),
+			Dismissible: banner.Dismissible && banner.DismissURL != "",
+			DismissURL:  banner.DismissURL,
+		}
+	}
+	return resolved, nil
+}
+
+func validateBanner(owner string, banner Banner) error {
+	if strings.TrimSpace(banner.ID) == "" {
+		return fmt.Errorf("extension %s banner ID must not be empty", owner)
+	}
+	if strings.TrimSpace(banner.Title) == "" {
+		return fmt.Errorf("extension %s banner %s title must not be empty", owner, banner.ID)
+	}
+	if bannerPriority(banner.Severity) < 0 {
+		return fmt.Errorf("extension %s banner %s has invalid severity %q", owner, banner.ID, banner.Severity)
+	}
+	if banner.DismissURL != "" && !sameOriginPath(banner.DismissURL) {
+		return fmt.Errorf("extension %s banner %s dismiss URL must be a same-origin absolute path", owner, banner.ID)
+	}
+	return nil
+}
+
+func bannerPriority(severity BannerSeverity) int {
+	switch severity {
+	case BannerCritical:
+		return 0
+	case BannerWarning:
+		return 1
+	case BannerInfo:
+		return 2
+	case BannerMaintenance:
+		return 3
+	default:
+		return -1
+	}
+}
+
+func sameOriginPath(raw string) bool {
+	parsed, err := url.Parse(raw)
+	return err == nil && parsed.Scheme == "" && parsed.Host == "" && strings.HasPrefix(parsed.Path, "/") &&
+		!strings.HasPrefix(raw, "//") && !strings.Contains(raw, `\`)
 }
 
 func formatValidationErrors(errs []error) error {

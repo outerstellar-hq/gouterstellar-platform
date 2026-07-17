@@ -134,7 +134,7 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 		securityConfig,
 	)
 
-	apiKeySvc := security.NewApiKeyService(r.apiKeyRepo, r.userRepo)
+	apiKeySvc := security.NewApiKeyService(r.apiKeyRepo, r.userRepo, cfg.TokenPepper)
 	oauthSvc := security.NewOAuthService(r.userRepo, r.oauthRepo, passwordEncoder)
 
 	// Register the Google OAuth provider when fully configured; otherwise leave
@@ -166,7 +166,7 @@ func buildServices(cfg *config.Config, r repos, pool *pgxpool.Pool) (*services, 
 	pollSvc := service.NewPollService(r.pollRepo, txMgr)
 	contactSvc := service.NewContactService(r.contactRepo, r.outboxRepo, txMgr, wsPublisher, notificationSvc)
 	outboxProcessor := service.NewOutboxProcessor(r.outboxRepo, txMgr, wsPublisher)
-	passwordResetSvc := service.NewPasswordResetService(r.userRepo, passwordEncoder, r.passwordResetRepo, emailSvc, service.NewAuditService(r.auditRepo), cfg.AppBaseURL)
+	passwordResetSvc := service.NewPasswordResetService(r.userRepo, passwordEncoder, r.passwordResetRepo, emailSvc, service.NewAuditService(r.auditRepo), cfg.AppBaseURL, cfg.TokenPepper)
 
 	return &services{
 		messageSvc:         messageSvc,

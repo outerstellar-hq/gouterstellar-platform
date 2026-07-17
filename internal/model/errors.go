@@ -118,6 +118,10 @@ type InvalidPasswordError struct{}
 
 func (e *InvalidPasswordError) Error() string { return "Current password is incorrect" }
 
+type InvalidPasswordResetTokenError struct{}
+
+func (e *InvalidPasswordResetTokenError) Error() string { return "Invalid or expired reset token" }
+
 type UserNotFoundError struct {
 	UserID string
 }

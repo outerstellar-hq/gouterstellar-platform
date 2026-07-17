@@ -26,6 +26,32 @@ Work GitHub issues in dependency order before continuing discretionary parity im
 - [x] Link [draft PR #10](https://github.com/outerstellar-hq/gouterstellar-platform/pull/10) to issues #4–#9 with automatic closing references.
 - [ ] Merge PR #10 after CI and review; issues #4–#9 will close automatically on merge.
 
+## Confirmed remaining parity gaps
+
+- [x] Add authenticated, role-aware extension banner providers to the public contribution API and render their notices in the shared shell with CSRF-safe dismissal.
+- [x] Add the Java-compatible configurable global request-body limit so declared oversized requests receive `413` before handlers read or allocate the body.
+- [x] Verify whether Java's bundled Swagger UI is intentionally user-reachable and, if so, add an equivalent Go documentation page backed by the existing OpenAPI endpoints.
+- [x] Restore the Java static-resource contract with a public `/site.css` alias, strong ETags, and `304 Not Modified` handling without applying ETags to API JSON.
+- [x] Match Java's content-aware error boundary: JSON 404/500 payloads with request IDs for API paths, compact HTMX failures, and themed HTML for browser routes.
+- [x] Signal expired sessions consistently: `X-Session-Expired` on API/bearer responses, cleared cookies and `/auth?expired=true` redirects for browser requests.
+- [x] Preserve same-origin browser destinations through unauthenticated redirects with a sanitized `returnTo` parameter.
+- [x] Echo or generate `X-Request-Id` on every response and expose it together with `X-Session-Expired` through CORS.
+- [x] Keep common security headers on every response while omitting browser-only CSP from `/api/` routes.
+- [x] Carry the per-request CSP nonce into shared-shell script tags and remove the unnecessary `unsafe-inline` script allowance from the default policy.
+- [ ] Continue comparing Java integration-test behavior against the packaged Go runtime after each completed slice.
+
+## Next parity audit queue
+
+- [x] Reconcile session sliding timeout, absolute timeout, cookie refresh, logout invalidation, and fixation protection against Java's session integration tests.
+- [x] Verify extension-owned static assets have an equally simple embedded-filesystem registration path and preserve Java's filesystem-first, packaged-fallback behavior.
+- [x] Re-run OAuth, password-reset-token, and return-to workflow comparisons against the packaged Go server rather than route literals alone.
+- [x] Match Java's auth-only fixed-window rate limits, reset-specific threshold, trusted-proxy handling, and cross-IP per-account protection.
+- [x] Continue the Java integration-test matrix through admin exports, sync conflicts, and WebSocket protocol edge cases.
+- [x] Continue the Java integration-test matrix through contact sync CRUD, contact detail synchronization, and concurrent same-ID pushes.
+- [x] Continue the Java integration-test matrix through API-key lifecycle, device-token registration, and poll workflows.
+- [x] Continue the Java integration-test matrix through audit-log, notifications, and user-management workflows.
+- [ ] Continue the Java integration-test matrix through message restore, profile API, and CSRF-protected change-password workflows.
+
 ## Completed in the current parity slice
 
 - [x] Added the Java-shaped WebSocket refresh channel and HTMX WebSocket asset.
@@ -35,4 +61,18 @@ Work GitHub issues in dependency order before continuing discretionary parity im
 - [x] Proved cross-tab live refresh in the packaged Podman application.
 - [x] Persisted theme, language, and density choices across navigation through a CSRF-protected preference update.
 - [x] Added the public build identity, operations registry, and Starforge extension from GitHub issues #6, #7, and #9.
+- [x] Added extension-owned embedded static asset registration with manifest ownership validation.
+- [x] Preserved Java-compatible `STATIC_DIR` and legacy `ASSETS_DIR` filesystem overrides for platform and extension assets.
+- [x] Applied the host ETag policy uniformly to core and extension asset routes.
+- [x] Proved override precedence, packaged fallback, public access, and conditional `304` responses in the packaged Podman application.
+- [x] Matched Java's OAuth callback error redirects, provider status codes, safe login destinations, atomic OAuth identity creation, and collision-safe usernames.
+- [x] Replaced raw password-reset tokens with peppered HMAC digests, invalidated older links, consumed resets atomically, and revoked all existing sessions.
+- [x] Removed the global refill throttle and matched Java's bounded auth-path, reset, trusted-proxy, and per-account rate-limit buckets.
+- [x] Reverified admin CSV/JSON export shapes, pagination, formula neutralization, access control, and packaged download behavior.
+- [x] Persisted stale sync clients as resolvable conflicts, returned both client/server versions with schema version 1, and enforced Java's sync field limits.
+- [x] Bounded message and contact pulls to 500 rows with an accurate `hasMore` signal from database-level `limit + 1` queries.
+- [x] Matched WebSocket 4401 authentication failures and Java's HTMX refresh protocol while serializing concurrent broadcasts.
+- [x] Proved contact sync create/update/conflict/tombstone behavior, complete detail-field replacement, empty and future pulls, and concurrent same-ID message pushes through real PostgreSQL routes and the packaged Podman runtime.
+- [x] Matched Java API-key validation, key shape, peppered HMAC storage, disabled/deleted-key rejection, device-token lifecycle, and poll API/HTMX workflows through real PostgreSQL routes and the packaged Podman runtime.
+- [x] Matched Java audit actor/target/action recording, admin lifecycle and password changes, notification ownership/no-op semantics, unread state, and browser bell/admin workflows through real PostgreSQL routes and the packaged Podman runtime.
 - [x] Passed module verification, tidy check, vet, full Podman-backed tests, golangci-lint, gosec, actionlint, and compose validation.

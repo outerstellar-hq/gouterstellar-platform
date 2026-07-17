@@ -78,8 +78,12 @@ func (h *UserAdminAPI) SetEnabled(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
+	if req.Enabled == nil {
+		writeError(w, http.StatusBadRequest, "Enabled is required")
+		return
+	}
 
-	err = h.securityService.SetUserEnabled(r.Context(), currentUser.ID, targetID, req.Enabled)
+	err = h.securityService.SetUserEnabled(r.Context(), currentUser.ID, targetID, *req.Enabled)
 	if err != nil {
 		handleAdminMutationError(w, err)
 		return

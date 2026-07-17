@@ -58,8 +58,8 @@ func (m *mockContactRepo) FindBySyncID(ctx context.Context, syncID string) (db.P
 	return args.Get(0).(db.PltContact), args.Error(1)
 }
 
-func (m *mockContactRepo) FindChangesSince(ctx context.Context, since int64) ([]db.PltContact, error) {
-	args := m.Called(ctx, since)
+func (m *mockContactRepo) FindChangesSince(ctx context.Context, since int64, limit int32) ([]db.PltContact, error) {
+	args := m.Called(ctx, since, limit)
 	return args.Get(0).([]db.PltContact), args.Error(1)
 }
 
