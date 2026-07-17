@@ -81,6 +81,18 @@ func TestPackagedExtensionHostEndToEndParity(t *testing.T) {
 	eventually(t, 90*time.Second, func() error {
 		return runPodmanQuiet(ctx, "exec", databaseContainer, "pg_isready", "-U", databaseUser, "-d", databaseName)
 	})
+	eventually(t, 90*time.Second, func() error {
+		return runPodmanQuiet(ctx,
+			"run", "--rm",
+			"--network", networkName,
+			"--label", "agent.owner="+agentOwner,
+			"--label", "agent.task="+agentTask,
+			"--cpus=1",
+			"--memory=128m",
+			"postgres:16-alpine",
+			"pg_isready", "-h", databaseContainer, "-U", databaseUser, "-d", databaseName,
+		)
+	})
 
 	runPodman(t, ctx,
 		"run", "--rm",
@@ -186,6 +198,13 @@ func TestPackagedExtensionHostEndToEndParity(t *testing.T) {
 
 	starforge := assertStatus(t, client, baseURL+"/starforge", http.StatusOK)
 	assertContains(t, starforge, "Starforge")
+	assertContains(t, starforge, "Production ledgers")
+	assertContains(t, starforge, `href="/starforge/pipelines/sleep-series"`)
+
+	sleepSeries := assertStatus(t, client, baseURL+"/starforge/pipelines/sleep-series", http.StatusOK)
+	assertContains(t, sleepSeries, "Sleep production ledger")
+	assertContains(t, sleepSeries, "Sleep catalog is temporarily unavailable")
+	assertContains(t, sleepSeries, "Typed template registry")
 
 	css := assertStatus(t, client, baseURL+"/site.css", http.StatusOK)
 	assertContains(t, css, ".extension-diagnostics")
