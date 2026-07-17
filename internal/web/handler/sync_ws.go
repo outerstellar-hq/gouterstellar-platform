@@ -37,9 +37,10 @@ func NewSyncWebSocket(
 	}
 }
 
-// ContributeRoutes registers the WebSocket sync route (protected).
+// ContributeRoutes registers the WebSocket sync route. Authentication happens
+// after the upgrade so rejected peers receive the Java-compatible 4401 close.
 func (h *SyncWebSocket) ContributeRoutes(ctx *extplatform.ContributionContext) error {
-	ctx.Routes.Protected(http.MethodGet, "/ws/sync", "WebSocket sync", http.HandlerFunc(h.Handle))
+	ctx.Routes.Public(http.MethodGet, "/ws/sync", "WebSocket sync", http.HandlerFunc(h.Handle))
 	return nil
 }
 
@@ -49,30 +50,19 @@ var upgrader = websocket.Upgrader{
 }
 
 func (h *SyncWebSocket) Handle(w http.ResponseWriter, r *http.Request) {
-	token := web.GetSessionToken(r)
-	if token == "" {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	hash := sha256.Sum256([]byte(token))
-	tokenHash := hex.EncodeToString(hash[:])
-
-	session, err := h.sessionRepo.FindByTokenHash(r.Context(), tokenHash)
-	if err != nil || session.ExpiresAt.Time.Before(time.Now()) {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	pltUser, err := h.userRepo.FindByID(r.Context(), session.UserID)
-	if err != nil || !pltUser.Enabled {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		slog.Error("WS upgrade failed", "error", err)
+		return
+	}
+
+	if !h.authenticated(r) {
+		_ = conn.WriteControl(
+			websocket.CloseMessage,
+			websocket.FormatCloseMessage(4401, "Authentication required"),
+			time.Now().Add(time.Second),
+		)
+		_ = conn.Close()
 		return
 	}
 
@@ -118,4 +108,19 @@ func (h *SyncWebSocket) Handle(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}()
+}
+
+func (h *SyncWebSocket) authenticated(r *http.Request) bool {
+	token := web.GetSessionToken(r)
+	if token == "" {
+		return false
+	}
+
+	hash := sha256.Sum256([]byte(token))
+	session, err := h.sessionRepo.FindByTokenHash(r.Context(), hex.EncodeToString(hash[:]))
+	if err != nil || session.ExpiresAt.Time.Before(time.Now()) {
+		return false
+	}
+	user, err := h.userRepo.FindByID(r.Context(), session.UserID)
+	return err == nil && user.Enabled
 }

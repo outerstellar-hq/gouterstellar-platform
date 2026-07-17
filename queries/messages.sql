@@ -88,7 +88,8 @@ RETURNING id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted
 SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict
 FROM plt_messages
 WHERE updated_at_epoch_ms > $1
-ORDER BY updated_at_epoch_ms ASC;
+ORDER BY updated_at_epoch_ms ASC
+LIMIT $2;
 
 -- name: ListDirtyMessages :many
 SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, dirty, deleted_at, version, sync_conflict

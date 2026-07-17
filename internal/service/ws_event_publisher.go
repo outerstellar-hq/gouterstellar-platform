@@ -35,11 +35,11 @@ func (p *WsEventPublisher) Unregister(client *WsClient) {
 }
 
 func (p *WsEventPublisher) PublishRefresh(targetID string) {
-	msg := fmt.Sprintf(`<div id="ws-updates" ws-subscribe aria-live="polite" hx-swap-oob="true">
+	msg := fmt.Sprintf(`<div id="ws-updates" ws-subscribe aria-live="polite" hx-swap-oob="true" hx-on::load="htmx.trigger(document.body, 'refresh')">
     <div data-refresh-target="%s"></div>
 </div>`, targetID)
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	for client := range p.clients {
 		err := client.Conn.WriteMessage(websocket.TextMessage, []byte(msg))
 		if err != nil {

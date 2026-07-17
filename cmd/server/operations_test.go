@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -126,10 +127,60 @@ func TestRouteDiagnosticsHandler(t *testing.T) {
 		strings.ReplaceAll(res.Body.String(), extractTimestamp(res.Body.String()), "ignored"))
 }
 
+func TestRouteDiagnosticsIncludesMountedRouteKindsAndReadiness(t *testing.T) {
+	t.Parallel()
+
+	catalog := extplatform.NewCatalog()
+	_, err := extplatform.NewHandler(extplatform.Options{
+		Mode:       extplatform.FullPlatform,
+		Extensions: []extplatform.Extension{diagnosticExtension{}},
+		Catalog:    catalog,
+	})
+	require.NoError(t, err)
+
+	res := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/debug/routes", nil)
+	req.Host = "localhost:8080"
+	localhostOnly(routeDiagnosticsHandler(catalog)).ServeHTTP(res, req)
+	require.Equal(t, http.StatusOK, res.Code)
+
+	body := res.Body.String()
+	assert.Contains(t, body, `"handlerKind":"contract"`)
+	assert.Contains(t, body, `"handlerKind":"routing"`)
+	assert.Contains(t, body, `"/extensions/reports/assets/*"`)
+	assert.Contains(t, body, `"name":"reports-cache"`)
+	assert.Contains(t, body, `"status":"UP"`)
+}
+
 func extractTimestamp(body string) string {
 	var payload struct {
 		Timestamp string `json:"timestamp"`
 	}
 	_ = json.Unmarshal([]byte(body), &payload)
 	return payload.Timestamp
+}
+
+type diagnosticExtension struct{}
+
+func (diagnosticExtension) Manifest() extplatform.Manifest {
+	return extplatform.Manifest{
+		ID: "reports", Label: "Reports", Mode: extplatform.ExtensionHost,
+		Ownership: extplatform.RouteOwnership{
+			UI:     []string{"/reports"},
+			Assets: []string{"/extensions/reports/assets"},
+		},
+	}
+}
+
+func (diagnosticExtension) Contribute(ctx *extplatform.ContributionContext) error {
+	ctx.Routes.Protected(http.MethodGet, "/reports/diagnostics", "Reports diagnostics", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	if err := ctx.Routes.StaticAssets("/extensions/reports/assets", extplatform.AssetSource{
+		FS: fstest.MapFS{"style.css": &fstest.MapFile{Data: []byte("body{}")}},
+	}); err != nil {
+		return err
+	}
+	ctx.Readiness.Up("reports-cache", "Reports cache is ready")
+	return nil
 }

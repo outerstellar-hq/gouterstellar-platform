@@ -91,7 +91,7 @@ func main() {
 	)
 	coreExt.SetMetrics(promhttp.HandlerFor(app.Registry, promhttp.HandlerOpts{}))
 	coreExt.SetDiagnostics(localhostOnly(routeDiagnosticsHandler(catalog)))
-	coreExt.SetStatic(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	coreExt.SetStatic(os.DirFS("static"))
 
 	reportsExt := reports.New(app.ServiceBag.MessageCounter)
 	starforgeClient, err := starforge.NewHTTPClient(cfg.Starforge.BaseURL, cfg.Starforge.Credential, nil)
@@ -108,28 +108,26 @@ func main() {
 		// span for every request regardless of which downstream middleware
 		// short-circuits.
 		otelhttp.NewMiddleware("outerstellar-platform"),
-		chimw.RequestID,
-		chimw.RealIP,
+		filter.Logging(),
 		filter.ErrorHandler(app.ErrorHandler.InternalError),
 		filter.Metrics(app.Registry),
 		chimw.Timeout(60 * time.Second),
 		cors.Handler(cors.Options{
 			AllowedOrigins:   strings.Split(cfg.CORSOrigins, ","),
 			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-			ExposedHeaders:   []string{"Link"},
+			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", filter.RequestIDHeader},
+			ExposedHeaders:   []string{"Link", filter.RequestIDHeader, filter.SessionExpiredHeader},
 			AllowCredentials: true,
 			MaxAge:           300,
 		}),
+		filter.MaxBodySize(cfg.MaxRequestBodyBytes),
 		filter.SecurityHeaders(cfg.CSPPolicy, cfg.SessionCookieSecure),
 		filter.DevAutoLogin(func() uuid.UUID {
 			return app.SecurityService.DevAdminID(ctx)
 		}, app.SecurityService, cfg.DevMode),
-		filter.RateLimiter(10, 20),
-		filter.AuthRateLimiter(3, 5),
+		filter.AuthRateLimiter(10, time.Minute, strings.Split(cfg.TrustedProxies, ",")),
 		filter.CSRF(cfg.CSRFEnabled, cfg.SessionCookieSecure),
 		filter.Session(app.SecurityService, cfg.SessionCookieSecure),
-		filter.Logging(),
 	}
 
 	mode := extplatform.PlatformMode(cfg.PlatformMode)
@@ -138,7 +136,9 @@ func main() {
 	}
 
 	handler, err := extplatform.NewHandler(extplatform.Options{
-		Mode: mode,
+		Mode:            mode,
+		StaticDir:       cfg.StaticDir,
+		AssetMiddleware: filter.ETag(),
 		Extensions: []extplatform.Extension{
 			coreExt,
 			reportsExt,

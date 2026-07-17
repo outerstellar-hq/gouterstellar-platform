@@ -11,7 +11,7 @@ import (
 )
 
 func TestRouteRegistryRegistration(t *testing.T) {
-	reg := newRouteRegistry("reports")
+	reg := newRouteRegistry("reports", assetHostOptions{})
 
 	reg.Protected(http.MethodGet, "/reports", "Reports home", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	reg.API(http.MethodGet, "/api/v1/reports/summary", "Summary", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
@@ -20,11 +20,22 @@ func TestRouteRegistryRegistration(t *testing.T) {
 	require.Len(t, routes, 2)
 	assert.Equal(t, "reports", routes[0].Owner)
 	assert.Equal(t, GroupProtectedUI, routes[0].Group)
+	assert.Equal(t, "contract", routes[0].HandlerKind)
 	assert.Equal(t, GroupAPI, routes[1].Group)
+	assert.Equal(t, "contract", routes[1].HandlerKind)
+}
+
+func TestRouteRegistryMarksStaticAssetsAsRoutingHandlers(t *testing.T) {
+	reg := newRouteRegistry("reports", assetHostOptions{})
+	reg.Assets("/extensions/reports/assets/*", stubHandler())
+
+	routes := reg.All()
+	require.Len(t, routes, 1)
+	assert.Equal(t, "routing", routes[0].HandlerKind)
 }
 
 func TestRouteRegistryOwnerStamping(t *testing.T) {
-	reg := newRouteRegistry("reports")
+	reg := newRouteRegistry("reports", assetHostOptions{})
 	reg.Protected(http.MethodGet, "/reports", "", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 
 	for _, r := range reg.All() {
@@ -33,7 +44,7 @@ func TestRouteRegistryOwnerStamping(t *testing.T) {
 }
 
 func TestValidateAbsolutePaths(t *testing.T) {
-	reg := newRouteRegistry("reports")
+	reg := newRouteRegistry("reports", assetHostOptions{})
 	reg.Protected(http.MethodGet, "relative/path", "", stubHandler())
 
 	errs := validateRoutes(reg.All(), FullPlatform, nil)
@@ -42,7 +53,7 @@ func TestValidateAbsolutePaths(t *testing.T) {
 }
 
 func TestValidateOwnership(t *testing.T) {
-	reg := newRouteRegistry("reports")
+	reg := newRouteRegistry("reports", assetHostOptions{})
 	reg.Protected(http.MethodGet, "/settings", "", stubHandler())
 
 	ownership := map[string]RouteOwnership{
@@ -54,10 +65,10 @@ func TestValidateOwnership(t *testing.T) {
 }
 
 func TestValidateConflictDetection(t *testing.T) {
-	reg1 := newRouteRegistry("platform-core")
+	reg1 := newRouteRegistry("platform-core", assetHostOptions{})
 	reg1.Protected(http.MethodGet, "/reports", "", stubHandler())
 
-	reg2 := newRouteRegistry("reports")
+	reg2 := newRouteRegistry("reports", assetHostOptions{})
 	reg2.Protected(http.MethodGet, "/reports", "", stubHandler())
 
 	all := append(reg1.All(), reg2.All()...)
@@ -73,7 +84,7 @@ func TestValidateConflictDetection(t *testing.T) {
 }
 
 func TestValidateHeadlessRejectsHTML(t *testing.T) {
-	reg := newRouteRegistry("platform-core")
+	reg := newRouteRegistry("platform-core", assetHostOptions{})
 	reg.Protected(http.MethodGet, "/", "", stubHandler())
 
 	ownership := map[string]RouteOwnership{
@@ -85,7 +96,7 @@ func TestValidateHeadlessRejectsHTML(t *testing.T) {
 }
 
 func TestValidateCollectsAllErrors(t *testing.T) {
-	reg := newRouteRegistry("reports")
+	reg := newRouteRegistry("reports", assetHostOptions{})
 	reg.Protected(http.MethodGet, "relative", "", stubHandler())
 	reg.Protected(http.MethodGet, "/outside", "", stubHandler())
 
@@ -97,7 +108,7 @@ func TestValidateCollectsAllErrors(t *testing.T) {
 }
 
 func TestValidateAcceptsOwnedRoute(t *testing.T) {
-	reg := newRouteRegistry("reports")
+	reg := newRouteRegistry("reports", assetHostOptions{})
 	reg.Protected(http.MethodGet, "/reports/home", "", stubHandler())
 	reg.API(http.MethodGet, "/api/v1/reports/summary", "", stubHandler())
 
@@ -113,7 +124,7 @@ func stubHandler() http.Handler {
 }
 
 func TestBuildMountsRoutes(t *testing.T) {
-	reg := newRouteRegistry("reports")
+	reg := newRouteRegistry("reports", assetHostOptions{})
 	called := false
 	reg.Protected(http.MethodGet, "/reports", "home", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
@@ -136,7 +147,7 @@ func TestBuildMountsRoutes(t *testing.T) {
 }
 
 func TestBuildHeadlessDropsHTMLRoutes(t *testing.T) {
-	reg := newRouteRegistry("reports")
+	reg := newRouteRegistry("reports", assetHostOptions{})
 	reg.Protected(http.MethodGet, "/reports", "", stubHandler())
 	reg.API(http.MethodGet, "/api/v1/reports/summary", "", stubHandler())
 
@@ -161,7 +172,7 @@ func TestBuildHeadlessDropsHTMLRoutes(t *testing.T) {
 }
 
 func TestBuildAppliesGroupMiddleware(t *testing.T) {
-	reg := newRouteRegistry("reports")
+	reg := newRouteRegistry("reports", assetHostOptions{})
 	apiCalled := false
 	reg.API(http.MethodGet, "/api/v1/reports/x", "", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		apiCalled = true

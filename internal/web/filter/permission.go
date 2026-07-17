@@ -2,6 +2,7 @@ package filter
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
@@ -54,7 +55,11 @@ func writeUnauthenticated(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
-	http.Redirect(w, r, "/auth", http.StatusSeeOther)
+	returnTo := r.URL.RequestURI()
+	if !strings.HasPrefix(returnTo, "/") || strings.HasPrefix(returnTo, "//") || strings.Contains(returnTo, `\`) {
+		returnTo = "/"
+	}
+	http.Redirect(w, r, "/auth?returnTo="+url.QueryEscape(returnTo), http.StatusFound)
 }
 
 // wantsJSON reports whether the client expects a JSON response. It inspects the

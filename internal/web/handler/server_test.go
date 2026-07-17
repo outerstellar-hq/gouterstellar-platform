@@ -127,7 +127,7 @@ func TestUnauthenticatedRedirectToAuth(t *testing.T) {
 	srv := httptest.NewServer(handler)
 	defer srv.Close()
 
-	// Use a client that does NOT follow redirects so we can inspect the 303.
+	// Use a client that does NOT follow redirects so we can inspect the 302.
 	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
@@ -136,10 +136,10 @@ func TestUnauthenticatedRedirectToAuth(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	// filter.RequirePermission issues a 303 See Other to /auth for browser routes.
-	assert.Equal(t, http.StatusSeeOther, resp.StatusCode)
+	// filter.RequirePermission issues a 302 Found to /auth for browser routes.
+	assert.Equal(t, http.StatusFound, resp.StatusCode)
 	loc := resp.Header.Get("Location")
-	assert.Equal(t, "/auth", loc, "unauthenticated protected route should redirect to /auth")
+	assert.Equal(t, "/auth?returnTo=%2F", loc, "unauthenticated protected route should preserve the destination")
 }
 
 // TestRedirectFollowsToLoginPage issues the redirect and follows it, proving
@@ -236,7 +236,7 @@ func TestCookiePersistenceWithSession(t *testing.T) {
 	resp, err := client.Get(srv.URL + "/")
 	require.NoError(t, err)
 	resp.Body.Close()
-	require.Equal(t, http.StatusSeeOther, resp.StatusCode, "unauthenticated should redirect")
+	require.Equal(t, http.StatusFound, resp.StatusCode, "unauthenticated should redirect")
 
 	// 2. With a valid session cookie, / is served (the middleware populates the
 	// user, so RequirePermission passes and the home handler renders).

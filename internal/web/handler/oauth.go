@@ -55,7 +55,7 @@ func (h *OAuthHandler) ContributeRoutes(ctx *extplatform.ContributionContext) er
 func (h *OAuthHandler) NotConfigured(w http.ResponseWriter, r *http.Request) {
 	providerName := chi.URLParam(r, "provider")
 	if h.resolveProvider(providerName) == nil {
-		writeError(w, http.StatusBadRequest, "Unknown OAuth provider")
+		writeError(w, http.StatusNotFound, "Unknown OAuth provider")
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -69,16 +69,20 @@ func (h *OAuthHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 	providerName := chi.URLParam(r, "provider")
 	provider := h.resolveProvider(providerName)
 	if provider == nil {
-		writeError(w, http.StatusBadRequest, "Unknown OAuth provider")
+		writeError(w, http.StatusNotFound, "Unknown OAuth provider")
 		return
 	}
 
-	state := generateOAuthState()
+	state, err := generateOAuthState()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to start OAuth authentication")
+		return
+	}
 	redirectURI := h.appBaseURL + "/auth/oauth/" + providerName + "/callback"
 
 	authURL := provider.AuthorizationURL(state, redirectURI)
 	if authURL == "" {
-		writeError(w, http.StatusNotImplemented, "OAuth provider not configured")
+		http.Redirect(w, r, "/auth/oauth/"+providerName+"/not-configured", http.StatusFound) // #nosec G710 -- resolveProvider restricts providerName to the apple/google allowlist.
 		return
 	}
 
@@ -107,7 +111,17 @@ func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 	providerName := chi.URLParam(r, "provider")
 	provider := h.resolveProvider(providerName)
 	if provider == nil {
-		writeError(w, http.StatusBadRequest, "Unknown OAuth provider")
+		writeError(w, http.StatusNotFound, "Unknown OAuth provider")
+		return
+	}
+	if r.Method == http.MethodPost {
+		if err := r.ParseForm(); err != nil {
+			h.oauthError(w, r, providerName, "invalid callback form", err)
+			return
+		}
+	}
+	if providerError := r.FormValue("error"); providerError != "" {
+		h.oauthError(w, r, providerName, "provider rejected authentication", nil)
 		return
 	}
 
@@ -116,13 +130,13 @@ func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		code = r.FormValue("code")
 	}
 	if code == "" {
-		writeError(w, http.StatusBadRequest, "Missing authorization code")
+		h.oauthError(w, r, providerName, "missing authorization code", nil)
 		return
 	}
 
 	stateCookie, err := r.Cookie("oauth_state")
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Missing state cookie")
+		h.oauthError(w, r, providerName, "missing state cookie", nil)
 		return
 	}
 
@@ -131,10 +145,46 @@ func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		stateParam = r.FormValue("state")
 	}
 	if stateParam != stateCookie.Value {
-		writeError(w, http.StatusBadRequest, "Invalid OAuth state")
+		h.oauthError(w, r, providerName, "invalid state", nil)
 		return
 	}
 
+	h.clearStateCookie(w)
+
+	redirectURI := h.appBaseURL + "/auth/oauth/" + providerName + "/callback"
+	userInfo, err := provider.ExchangeCode(code, stateParam, redirectURI)
+	if err != nil {
+		h.oauthError(w, r, providerName, "code exchange failed", err)
+		return
+	}
+
+	user, err := h.oauthService.FindOrCreateOAuthUser(r.Context(), providerName, userInfo.Subject, userInfo.Email)
+	if err != nil {
+		h.oauthError(w, r, providerName, "user creation failed", err)
+		return
+	}
+
+	token, err := h.securityService.CreateSession(r.Context(), user.ID)
+	if err != nil {
+		h.oauthError(w, r, providerName, "session creation failed", err)
+		return
+	}
+
+	http.SetCookie(w, web.CreateSessionCookie(token, h.sessionSecure))
+	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+func (h *OAuthHandler) oauthError(w http.ResponseWriter, r *http.Request, providerName, message string, err error) {
+	if err == nil {
+		slog.Warn("OAuth callback rejected", "provider", providerName, "reason", message)
+	} else {
+		slog.Error("OAuth callback failed", "provider", providerName, "reason", message, "error", err)
+	}
+	h.clearStateCookie(w)
+	http.Redirect(w, r, "/auth?oauth_error=true", http.StatusFound)
+}
+
+func (h *OAuthHandler) clearStateCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- attributes set; Secure is parameterized per-environment
 		Name:     "oauth_state",
 		Value:    "",
@@ -144,30 +194,6 @@ func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 	})
-
-	redirectURI := h.appBaseURL + "/auth/oauth/" + providerName + "/callback"
-	userInfo, err := provider.ExchangeCode(code, stateParam, redirectURI)
-	if err != nil {
-		slog.Error("OAuth code exchange failed", "provider", providerName, "error", err)
-		writeError(w, http.StatusInternalServerError, "OAuth authentication failed")
-		return
-	}
-
-	user, err := h.oauthService.FindOrCreateOAuthUser(r.Context(), providerName, userInfo.Subject, userInfo.Email)
-	if err != nil {
-		slog.Error("OAuth user creation failed", "provider", providerName, "error", err)
-		writeError(w, http.StatusInternalServerError, "Failed to create OAuth user")
-		return
-	}
-
-	token, err := h.securityService.CreateSession(r.Context(), user.ID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to create session")
-		return
-	}
-
-	http.SetCookie(w, web.CreateSessionCookie(token, h.sessionSecure))
-	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (h *OAuthHandler) resolveProvider(name string) security.OAuthProvider {
@@ -181,8 +207,10 @@ func (h *OAuthHandler) resolveProvider(name string) security.OAuthProvider {
 	}
 }
 
-func generateOAuthState() string {
+func generateOAuthState() (string, error) {
 	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }

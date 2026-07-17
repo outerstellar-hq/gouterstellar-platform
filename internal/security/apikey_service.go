@@ -3,10 +3,10 @@ package security
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -14,28 +14,38 @@ import (
 	"github.com/outerstellar-hq/gouterstellar-platform/internal/persistence"
 )
 
+const (
+	apiKeyRandomBytes = 16
+	apiKeyPrefixLen   = 8
+)
+
 type ApiKeyService struct {
-	apiKeyRepo persistence.ApiKeyRepository
-	userRepo   persistence.UserRepository
+	apiKeyRepo  persistence.ApiKeyRepository
+	userRepo    persistence.UserRepository
+	tokenHasher TokenHasher
 }
 
-func NewApiKeyService(apiKeyRepo persistence.ApiKeyRepository, userRepo persistence.UserRepository) *ApiKeyService {
+func NewApiKeyService(apiKeyRepo persistence.ApiKeyRepository, userRepo persistence.UserRepository, tokenPepper string) *ApiKeyService {
 	return &ApiKeyService{
-		apiKeyRepo: apiKeyRepo,
-		userRepo:   userRepo,
+		apiKeyRepo:  apiKeyRepo,
+		userRepo:    userRepo,
+		tokenHasher: NewTokenHasher(tokenPepper),
 	}
 }
 
 func (s *ApiKeyService) CreateApiKey(ctx context.Context, userID uuid.UUID, name string) (*model.CreateApiKeyResponse, error) {
-	rawBytes := make([]byte, 32)
+	if strings.TrimSpace(name) == "" {
+		return nil, &model.ValidationError{Errors: []string{"API key name is required"}}
+	}
+
+	rawBytes := make([]byte, apiKeyRandomBytes)
 	if _, err := rand.Read(rawBytes); err != nil {
 		return nil, fmt.Errorf("failed to generate API key: %w", err)
 	}
 	rawKey := "osk_" + hex.EncodeToString(rawBytes)
 
-	hash := sha256.Sum256([]byte(rawKey))
-	keyHash := hex.EncodeToString(hash[:])
-	keyPrefix := rawKey[:7]
+	keyHash := s.tokenHasher.Hash(rawKey)
+	keyPrefix := rawKey[:apiKeyPrefixLen]
 
 	_, err := s.apiKeyRepo.CreateApiKey(ctx, userID, keyHash, keyPrefix, name)
 	if err != nil {
@@ -50,8 +60,7 @@ func (s *ApiKeyService) CreateApiKey(ctx context.Context, userID uuid.UUID, name
 }
 
 func (s *ApiKeyService) AuthenticateApiKey(ctx context.Context, rawKey string) (*model.User, error) {
-	hash := sha256.Sum256([]byte(rawKey))
-	keyHash := hex.EncodeToString(hash[:])
+	keyHash := s.tokenHasher.Hash(rawKey)
 
 	apiKey, err := s.apiKeyRepo.FindByKeyHash(ctx, keyHash)
 	if err != nil {
@@ -69,6 +78,9 @@ func (s *ApiKeyService) AuthenticateApiKey(ctx context.Context, rawKey string) (
 	}
 
 	user := PltUserToModel(pltUser)
+	if !user.Enabled {
+		return nil, fmt.Errorf("invalid API key")
+	}
 	return user, nil
 }
 
@@ -86,12 +98,9 @@ func (s *ApiKeyService) ListApiKeys(ctx context.Context, userID uuid.UUID) ([]mo
 }
 
 func (s *ApiKeyService) DeleteApiKey(ctx context.Context, userID uuid.UUID, keyID int64) error {
-	deleted, err := s.apiKeyRepo.DeleteApiKey(ctx, keyID, userID)
+	_, err := s.apiKeyRepo.DeleteApiKey(ctx, keyID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to delete API key: %w", err)
-	}
-	if deleted == 0 {
-		return fmt.Errorf("API key not found or not owned by user")
 	}
 	return nil
 }

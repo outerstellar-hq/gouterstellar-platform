@@ -12,45 +12,31 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const findPasswordResetByToken = `-- name: FindPasswordResetByToken :one
-SELECT id, user_id, token, expires_at, used, created_at
-FROM plt_password_reset_tokens
-WHERE token = $1
-`
-
-func (q *Queries) FindPasswordResetByToken(ctx context.Context, token string) (PltPasswordResetToken, error) {
-	row := q.db.QueryRow(ctx, findPasswordResetByToken, token)
-	var i PltPasswordResetToken
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Token,
-		&i.ExpiresAt,
-		&i.Used,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const markPasswordResetUsed = `-- name: MarkPasswordResetUsed :one
+const claimPasswordResetToken = `-- name: ClaimPasswordResetToken :one
 UPDATE plt_password_reset_tokens
 SET used = true
 WHERE token = $1
-RETURNING id, user_id, token, expires_at, used, created_at
+  AND used = false
+  AND expires_at > CURRENT_TIMESTAMP
+RETURNING user_id
 `
 
-func (q *Queries) MarkPasswordResetUsed(ctx context.Context, token string) (PltPasswordResetToken, error) {
-	row := q.db.QueryRow(ctx, markPasswordResetUsed, token)
-	var i PltPasswordResetToken
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Token,
-		&i.ExpiresAt,
-		&i.Used,
-		&i.CreatedAt,
-	)
-	return i, err
+func (q *Queries) ClaimPasswordResetToken(ctx context.Context, token string) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, claimPasswordResetToken, token)
+	var user_id uuid.UUID
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
+const invalidatePasswordResetTokensForUser = `-- name: InvalidatePasswordResetTokensForUser :exec
+UPDATE plt_password_reset_tokens
+SET used = true
+WHERE user_id = $1 AND used = false
+`
+
+func (q *Queries) InvalidatePasswordResetTokensForUser(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, invalidatePasswordResetTokensForUser, userID)
+	return err
 }
 
 const savePasswordResetToken = `-- name: SavePasswordResetToken :one

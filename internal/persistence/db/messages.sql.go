@@ -172,10 +172,16 @@ SELECT id, sync_id, author, content, created_at, updated_at_epoch_ms, deleted, d
 FROM plt_messages
 WHERE updated_at_epoch_ms > $1
 ORDER BY updated_at_epoch_ms ASC
+LIMIT $2
 `
 
-func (q *Queries) FindChangesSince(ctx context.Context, updatedAtEpochMs int64) ([]PltMessage, error) {
-	rows, err := q.db.Query(ctx, findChangesSince, updatedAtEpochMs)
+type FindChangesSinceParams struct {
+	UpdatedAtEpochMs int64 `json:"updated_at_epoch_ms"`
+	Limit            int32 `json:"limit"`
+}
+
+func (q *Queries) FindChangesSince(ctx context.Context, arg FindChangesSinceParams) ([]PltMessage, error) {
+	rows, err := q.db.Query(ctx, findChangesSince, arg.UpdatedAtEpochMs, arg.Limit)
 	if err != nil {
 		return nil, err
 	}

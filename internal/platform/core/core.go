@@ -2,6 +2,7 @@ package core
 
 import (
 	"embed"
+	"io/fs"
 	"net/http"
 
 	extplatform "github.com/outerstellar-hq/gouterstellar-platform/platform"
@@ -25,7 +26,7 @@ type Extension struct {
 	sitemap      http.Handler
 	diagnostics  http.Handler
 	metrics      http.Handler
-	static       http.Handler
+	static       fs.FS
 	openapi      http.HandlerFunc
 }
 
@@ -51,8 +52,8 @@ func (e *Extension) SetDiagnostics(h http.Handler) { e.diagnostics = h }
 // SetMetrics registers the Prometheus metrics handler.
 func (e *Extension) SetMetrics(h http.Handler) { e.metrics = h }
 
-// SetStatic registers the static-asset file server.
-func (e *Extension) SetStatic(h http.Handler) { e.static = h }
+// SetStatic registers the packaged platform asset filesystem.
+func (e *Extension) SetStatic(source fs.FS) { e.static = source }
 
 // SetOpenAPI registers the OpenAPI spec handler.
 func (e *Extension) SetOpenAPI(h http.HandlerFunc) { e.openapi = h }
@@ -74,11 +75,11 @@ func (e *Extension) Manifest() extplatform.Manifest {
 		Ownership: extplatform.RouteOwnership{
 			UI: []string{
 				"/", "/auth", "/contacts", "/messages", "/search", "/settings",
-				"/notifications", "/components", "/ws",
+				"/notifications", "/components", "/ws", "/openapi.json",
 			},
-			API:    []string{"/api", "/openapi.json"},
+			API:    []string{"/api"},
 			Admin:  []string{"/admin", "/metrics"},
-			Assets: []string{"/static"},
+			Assets: []string{"/static", "/site.css", "/swagger.html"},
 		},
 		Migrations: []extplatform.MigrationSet{
 			{
@@ -105,7 +106,7 @@ func (e *Extension) Contribute(ctx *extplatform.ContributionContext) error {
 	ctx.Routes.Public(http.MethodGet, "/sitemap.xml", "Sitemap", e.sitemap)
 	ctx.Routes.Public(http.MethodGet, "/debug/routes", "Local route diagnostics", e.diagnostics)
 	ctx.Routes.Admin(http.MethodGet, "/metrics", "Prometheus metrics", e.metrics)
-	ctx.Routes.API(http.MethodGet, "/openapi.json", "OpenAPI spec", http.HandlerFunc(e.openapi))
+	ctx.Routes.Public(http.MethodGet, "/openapi.json", "OpenAPI spec", http.HandlerFunc(e.openapi))
 	ctx.Routes.API(http.MethodGet, "/api/openapi.json", "Public API OpenAPI spec", http.HandlerFunc(e.openapi))
 	ctx.Routes.API(http.MethodGet, "/api/v1/sync/openapi.json", "Sync API OpenAPI spec", http.HandlerFunc(e.openapi))
 	ctx.Routes.API(http.MethodGet, "/api/v1/admin/api-openapi.json", "Admin API OpenAPI spec", http.HandlerFunc(e.openapi))
@@ -114,7 +115,16 @@ func (e *Extension) Contribute(ctx *extplatform.ContributionContext) error {
 	ctx.Routes.Public(http.MethodGet, "/components/openapi.json", "Public components OpenAPI spec", http.HandlerFunc(e.openapi))
 	ctx.Routes.Protected(http.MethodGet, "/components-protected/openapi.json", "Protected components OpenAPI spec", http.HandlerFunc(e.openapi))
 	ctx.Routes.Admin(http.MethodGet, "/admin/openapi.json", "Admin OpenAPI spec", http.HandlerFunc(e.openapi))
-	ctx.Routes.Assets("/static/*", e.static)
+	assets := extplatform.AssetSource{FS: e.static}
+	if err := ctx.Routes.StaticFile("/site.css", assets, "css/main.css"); err != nil {
+		return err
+	}
+	if err := ctx.Routes.StaticFile("/swagger.html", assets, "swagger.html"); err != nil {
+		return err
+	}
+	if err := ctx.Routes.StaticAssets("/static", assets); err != nil {
+		return err
+	}
 
 	// --- Handler-owned routes ---
 	// Each contributor registers its own route group(s) via ctx.Routes.

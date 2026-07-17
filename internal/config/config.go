@@ -9,6 +9,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const DefaultMaxRequestBodyBytes int64 = 2 * 1024 * 1024
+
 type JwtConfig struct {
 	Enabled       bool   `yaml:"enabled"`
 	Secret        string `yaml:"secret"`
@@ -68,14 +70,18 @@ type Config struct {
 	SessionCookieSecure    bool            `yaml:"session_cookie_secure"`
 	SessionTimeoutMinutes  int             `yaml:"session_timeout_minutes"`
 	SessionAbsoluteMinutes int             `yaml:"session_absolute_timeout_minutes"`
+	TokenPepper            string          `yaml:"token_pepper"`
 	RegistrationEnabled    bool            `yaml:"registration_enabled"`
 	MaxFailedLoginAttempts int32           `yaml:"max_failed_login_attempts"`
+	MaxRequestBodyBytes    int64           `yaml:"max_request_body_bytes"`
 	LockoutDurationSeconds int64           `yaml:"lockout_duration_seconds"`
 	CORSOrigins            string          `yaml:"cors_origins"`
+	TrustedProxies         string          `yaml:"trusted_proxies"`
 	CSRFEnabled            bool            `yaml:"csrf_enabled"`
 	AppBaseURL             string          `yaml:"app_base_url"`
 	CSPPolicy              string          `yaml:"csp_policy"`
 	PlatformMode           string          `yaml:"platform_mode"`
+	StaticDir              string          `yaml:"static_dir"`
 	JWT                    JwtConfig       `yaml:"jwt"`
 	Email                  EmailConfig     `yaml:"email"`
 	Segment                SegmentConfig   `yaml:"segment"`
@@ -95,13 +101,17 @@ func defaults() *Config {
 		SessionCookieSecure:    false,
 		SessionTimeoutMinutes:  30,
 		SessionAbsoluteMinutes: 1440,
+		TokenPepper:            "outerstellar-dev-token-pepper",
 		RegistrationEnabled:    true,
 		MaxFailedLoginAttempts: 10,
+		MaxRequestBodyBytes:    DefaultMaxRequestBodyBytes,
 		LockoutDurationSeconds: 900,
 		CORSOrigins:            "*",
+		TrustedProxies:         "",
 		CSRFEnabled:            true,
 		AppBaseURL:             "http://localhost:8080",
 		PlatformMode:           "full",
+		StaticDir:              "",
 		JWT: JwtConfig{
 			Enabled:       false,
 			Secret:        "",
@@ -200,6 +210,9 @@ func applyEnvOverrides(cfg *Config) {
 			cfg.SessionAbsoluteMinutes = n
 		}
 	}
+	if v := os.Getenv("TOKEN_PEPPER"); v != "" {
+		cfg.TokenPepper = v
+	}
 	if v := os.Getenv("REGISTRATION_ENABLED"); v != "" {
 		if enabled, err := strconv.ParseBool(v); err == nil {
 			cfg.RegistrationEnabled = enabled
@@ -208,6 +221,11 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("MAX_FAILED_LOGIN_ATTEMPTS"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 32); err == nil {
 			cfg.MaxFailedLoginAttempts = int32(n)
+		}
+	}
+	if v := os.Getenv("MAX_REQUEST_BODY_BYTES"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			cfg.MaxRequestBodyBytes = n
 		}
 	}
 	if v := os.Getenv("LOCKOUT_DURATION_SECONDS"); v != "" {
@@ -221,6 +239,9 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("CORS_ORIGINS"); v != "" {
 		cfg.CORSOrigins = v
 	}
+	if v := os.Getenv("TRUSTED_PROXIES"); v != "" {
+		cfg.TrustedProxies = v
+	}
 	if v := os.Getenv("CSRF_ENABLED"); v == "false" {
 		cfg.CSRFEnabled = false
 	}
@@ -229,6 +250,11 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("PLATFORM_MODE"); v != "" {
 		cfg.PlatformMode = v
+	}
+	if v := os.Getenv("STATIC_DIR"); v != "" {
+		cfg.StaticDir = v
+	} else if v := os.Getenv("ASSETS_DIR"); v != "" {
+		cfg.StaticDir = v
 	}
 	if v := os.Getenv("CSP_POLICY"); v != "" {
 		cfg.CSPPolicy = v
@@ -279,6 +305,9 @@ func (c *Config) Validate() error {
 	}
 	if c.MaxFailedLoginAttempts < 1 {
 		return fmt.Errorf("max_failed_login_attempts must be positive, got %d", c.MaxFailedLoginAttempts)
+	}
+	if c.MaxRequestBodyBytes < 1 {
+		return fmt.Errorf("max_request_body_bytes must be positive, got %d", c.MaxRequestBodyBytes)
 	}
 	if c.LockoutDurationSeconds < 1 {
 		return fmt.Errorf("lockout_duration_seconds must be positive, got %d", c.LockoutDurationSeconds)

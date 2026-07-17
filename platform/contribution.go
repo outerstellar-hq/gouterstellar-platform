@@ -30,28 +30,64 @@ func (n *NavigationRegistry) Items() []NavigationItem {
 	return n.items
 }
 
+// ReadinessStatus is a diagnostic status contributed by an extension.
+type ReadinessStatus struct {
+	Name    string `json:"name"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+	Owner   string `json:"owner"`
+}
+
+// ReadinessRegistry collects extension-owned readiness diagnostics during
+// contribution.
+type ReadinessRegistry struct {
+	owner    string
+	statuses []ReadinessStatus
+}
+
+func newReadinessRegistry(owner string) *ReadinessRegistry {
+	return &ReadinessRegistry{owner: owner}
+}
+
+func (r *ReadinessRegistry) Up(name, message string) {
+	r.statuses = append(r.statuses, ReadinessStatus{
+		Name:    name,
+		Status:  "UP",
+		Message: message,
+		Owner:   r.owner,
+	})
+}
+
+func (r *ReadinessRegistry) All() []ReadinessStatus {
+	return append([]ReadinessStatus{}, r.statuses...)
+}
+
 // ContributionContext is the capability surface passed to Extension.Contribute.
 // Each instance is constructed per-extension and stamps the owner ID onto
 // every route registration.
 type ContributionContext struct {
 	Routes     *RouteRegistry
 	Navigation *NavigationRegistry
+	Readiness  *ReadinessRegistry
 	Pages      *PageRegistry
 	Operations *OperationsRegistry
+	Banners    *BannerRegistry
 }
 
 // NewContributionContext builds a context for a specific extension owner.
 func NewContributionContext(owner string) *ContributionContext {
-	return newContributionContext(owner, ServiceBag{})
+	return newContributionContext(owner, ServiceBag{}, assetHostOptions{})
 }
 
-func newContributionContext(owner string, services ServiceBag) *ContributionContext {
-	routes := newRouteRegistry(owner)
+func newContributionContext(owner string, services ServiceBag, assets assetHostOptions) *ContributionContext {
+	routes := newRouteRegistry(owner, assets)
 	return &ContributionContext{
 		Routes:     routes,
 		Navigation: NewNavigationRegistry(),
+		Readiness:  newReadinessRegistry(owner),
 		Pages:      &PageRegistry{owner: owner, renderer: services.Pages},
 		Operations: newOperationsRegistry(owner, routes, services.Pages, services.OperationsAudit),
+		Banners:    &BannerRegistry{owner: owner},
 	}
 }
 

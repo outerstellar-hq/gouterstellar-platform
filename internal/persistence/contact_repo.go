@@ -66,8 +66,8 @@ func (r *contactRepo) FindBySyncID(ctx context.Context, syncID string) (db.PltCo
 	return r.q.FindContactBySyncID(ctx, syncID)
 }
 
-func (r *contactRepo) FindChangesSince(ctx context.Context, since int64) ([]db.PltContact, error) {
-	return r.q.FindContactChangesSince(ctx, since)
+func (r *contactRepo) FindChangesSince(ctx context.Context, since int64, limit int32) ([]db.PltContact, error) {
+	return r.q.FindContactChangesSince(ctx, db.FindContactChangesSinceParams{UpdatedAtEpochMs: since, Limit: limit})
 }
 
 func (r *contactRepo) CreateServerContact(ctx context.Context, contact *model.StoredContact) (db.PltContact, error) {

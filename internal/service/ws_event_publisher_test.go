@@ -20,7 +20,7 @@ func TestPublishRefreshBroadcastsBrowserWebSocketProtocol(t *testing.T) {
 
 	publisher.PublishRefresh(MessageListPanel)
 
-	expected := `<div id="ws-updates" ws-subscribe aria-live="polite" hx-swap-oob="true">
+	expected := `<div id="ws-updates" ws-subscribe aria-live="polite" hx-swap-oob="true" hx-on::load="htmx.trigger(document.body, 'refresh')">
     <div data-refresh-target="message-list-panel"></div>
 </div>`
 	for _, client := range []*websocket.Conn{firstClient, secondClient} {

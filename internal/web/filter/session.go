@@ -3,6 +3,7 @@ package filter
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/outerstellar-hq/gouterstellar-platform/internal/model"
 	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
@@ -28,8 +29,17 @@ func Session(service SessionLookup, secure bool) func(http.Handler) http.Handler
 				r = web.WithUser(r, v.User)
 				http.SetCookie(w, web.CreateSessionCookie(rawToken, secure))
 			case model.SessionExpired:
+				if isWebSocketRequest(r) {
+					next.ServeHTTP(w, r)
+					return
+				}
 				http.SetCookie(w, web.ClearSessionCookie(secure))
-				http.Error(w, "Session expired", http.StatusUnauthorized)
+				w.Header().Set(SessionExpiredHeader, "true")
+				if isAPIPath(r.URL.Path) || wantsJSON(r) {
+					http.Error(w, "Session expired", http.StatusUnauthorized)
+				} else {
+					http.Redirect(w, r, "/auth?expired=true", http.StatusFound)
+				}
 				return
 			case model.SessionNotFound:
 			}
@@ -37,4 +47,13 @@ func Session(service SessionLookup, secure bool) func(http.Handler) http.Handler
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func isAPIPath(path string) bool {
+	return path == "/api" || strings.HasPrefix(path, "/api/")
+}
+
+func isWebSocketRequest(r *http.Request) bool {
+	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket") &&
+		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade")
 }

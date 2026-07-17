@@ -25,10 +25,13 @@ func TestReportsContract(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t,
-		[]string{"GET /reports", "GET /api/v1/reports/summary"},
+		[]string{"GET /reports", "GET /api/v1/reports/summary", "GET /extensions/reports/assets/*"},
 		diag.RoutePatterns(),
 	)
 	assert.Contains(t, diag.NavigationLabels(), "Reports")
+	require.Len(t, diag.ReadinessStatuses(), 1)
+	assert.Equal(t, "reports-cache", diag.ReadinessStatuses()[0].Name)
+	assert.Equal(t, "UP", diag.ReadinessStatuses()[0].Status)
 }
 
 type contractPageRenderer struct{}
@@ -46,6 +49,7 @@ func TestReportsManifest(t *testing.T) {
 	assert.Equal(t, extplatform.ExtensionHost, m.Mode)
 	assert.NotEmpty(t, m.Ownership.UI)
 	assert.NotEmpty(t, m.Ownership.API)
+	assert.NotEmpty(t, m.Ownership.Assets)
 	require.Len(t, m.Migrations, 1)
 	assert.Equal(t, "schema_migrations_reports", m.Migrations[0].Table)
 }

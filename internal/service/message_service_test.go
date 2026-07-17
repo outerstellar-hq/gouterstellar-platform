@@ -84,8 +84,8 @@ func (m *mockMessageRepo) UpsertSyncedMessage(ctx context.Context, syncID, autho
 	return args.Get(0).(db.PltMessage), args.Error(1)
 }
 
-func (m *mockMessageRepo) FindChangesSince(ctx context.Context, since int64) ([]db.PltMessage, error) {
-	args := m.Called(ctx, since)
+func (m *mockMessageRepo) FindChangesSince(ctx context.Context, since int64, limit int32) ([]db.PltMessage, error) {
+	args := m.Called(ctx, since, limit)
 	return args.Get(0).([]db.PltMessage), args.Error(1)
 }
 

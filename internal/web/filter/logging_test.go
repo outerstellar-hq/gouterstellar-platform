@@ -8,8 +8,28 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/outerstellar-hq/gouterstellar-platform/internal/web"
 )
+
+func TestLoggingEchoesOrGeneratesRequestID(t *testing.T) {
+	handler := Logging()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, w.Header().Get(RequestIDHeader), web.RequestIDFromContext(r.Context()))
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	provided := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/health", nil)
+	request.Header.Set(RequestIDHeader, "test-correlation-id-42")
+	handler.ServeHTTP(provided, request)
+	assert.Equal(t, "test-correlation-id-42", provided.Header().Get(RequestIDHeader))
+
+	generated := httptest.NewRecorder()
+	handler.ServeHTTP(generated, httptest.NewRequest(http.MethodGet, "/health", nil))
+	assert.NotEmpty(t, generated.Header().Get(RequestIDHeader))
+}
 
 func TestObservabilityResponseCapturePreservesWebSocketUpgrade(t *testing.T) {
 	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}

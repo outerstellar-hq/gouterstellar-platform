@@ -25,7 +25,7 @@ type MessageRepository interface {
 	CreateServerMessage(ctx context.Context, syncID, author, content string, updatedAtEpochMs int64) (db.PltMessage, error)
 	CreateLocalMessage(ctx context.Context, syncID, author, content string, updatedAtEpochMs int64) (db.PltMessage, error)
 	UpsertSyncedMessage(ctx context.Context, syncID, author, content string, updatedAtEpochMs int64, deleted bool) (db.PltMessage, error)
-	FindChangesSince(ctx context.Context, since int64) ([]db.PltMessage, error)
+	FindChangesSince(ctx context.Context, since int64, limit int32) ([]db.PltMessage, error)
 	ListDirtyMessages(ctx context.Context) ([]db.PltMessage, error)
 	CountDirtyMessages(ctx context.Context) (int64, error)
 	SoftDeleteMessage(ctx context.Context, syncID string) (db.PltMessage, error)
@@ -76,7 +76,7 @@ type ContactRepository interface {
 	CountDeletedContacts(ctx context.Context) (int64, error)
 	ListDirtyContacts(ctx context.Context) ([]db.PltContact, error)
 	FindBySyncID(ctx context.Context, syncID string) (db.PltContact, error)
-	FindChangesSince(ctx context.Context, since int64) ([]db.PltContact, error)
+	FindChangesSince(ctx context.Context, since int64, limit int32) ([]db.PltContact, error)
 	CreateServerContact(ctx context.Context, contact *model.StoredContact) (db.PltContact, error)
 	CreateLocalContact(ctx context.Context, contact *model.StoredContact) (db.PltContact, error)
 	UpsertSyncedContact(ctx context.Context, contact *model.SyncContact) (db.PltContact, error)
@@ -197,7 +197,7 @@ type NotificationRepository interface {
 	SaveNotification(ctx context.Context, id, userID uuid.UUID, title, body, notificationType string) (db.PltNotification, error)
 	FindByUserID(ctx context.Context, userID uuid.UUID, limit, offset int32) ([]db.PltNotification, error)
 	CountUnread(ctx context.Context, userID uuid.UUID) (int64, error)
-	MarkRead(ctx context.Context, id, userID uuid.UUID) (db.PltNotification, error)
+	MarkRead(ctx context.Context, id, userID uuid.UUID) (int64, error)
 	MarkAllRead(ctx context.Context, userID uuid.UUID) (int64, error)
 	DeleteNotification(ctx context.Context, id, userID uuid.UUID) (int64, error)
 }
@@ -212,13 +212,13 @@ type DeviceTokenRepository interface {
 
 type OAuthRepository interface {
 	FindByProviderSubject(ctx context.Context, provider, subject string) (db.PltOauthConnection, error)
+	CreateUserAndConnection(ctx context.Context, userID uuid.UUID, username, userEmail, passwordHash, provider, subject string, oauthEmail *string) (db.PltUser, error)
 	SaveOAuthConnection(ctx context.Context, userID uuid.UUID, provider, subject string, email *string) (db.PltOauthConnection, error)
 	FindByUserID(ctx context.Context, userID uuid.UUID) ([]db.PltOauthConnection, error)
 	DeleteOAuthConnection(ctx context.Context, id int64, userID uuid.UUID) (int64, error)
 }
 
 type PasswordResetRepository interface {
-	SavePasswordResetToken(ctx context.Context, userID uuid.UUID, token string, expiresAt time.Time) (db.PltPasswordResetToken, error)
-	FindByToken(ctx context.Context, token string) (db.PltPasswordResetToken, error)
-	MarkUsed(ctx context.Context, token string) (db.PltPasswordResetToken, error)
+	ReplacePasswordResetToken(ctx context.Context, userID uuid.UUID, tokenHash string, expiresAt time.Time) error
+	ConsumePasswordResetToken(ctx context.Context, tokenHash, passwordHash string) (uuid.UUID, error)
 }

@@ -298,7 +298,7 @@ func (h *AuthHandler) completeLogin(w http.ResponseWriter, r *http.Request, user
 	if returnTo == "" || !isSafeRedirect(returnTo) {
 		returnTo = "/"
 	}
-	http.Redirect(w, r, returnTo, http.StatusSeeOther) // #nosec G710 -- returnTo validated by isSafeRedirect above
+	http.Redirect(w, r, returnTo, http.StatusFound) // #nosec G710 -- returnTo validated by isSafeRedirect above
 }
 
 func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {

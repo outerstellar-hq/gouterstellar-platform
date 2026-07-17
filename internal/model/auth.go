@@ -94,7 +94,7 @@ type UserProfileResponse struct {
 }
 
 type SetUserEnabledRequest struct {
-	Enabled bool `json:"enabled"`
+	Enabled *bool `json:"enabled"`
 }
 
 type SetUserRoleRequest struct {
