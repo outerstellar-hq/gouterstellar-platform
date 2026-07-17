@@ -16,7 +16,7 @@ RUN build_flags="-s -w -X github.com/outerstellar-hq/gouterstellar-platform/plat
     && go build -p=4 -trimpath -ldflags="${build_flags}" -o /out/migrate ./cmd/migrate \
     && go build -p=4 -trimpath -ldflags="${build_flags}" -o /out/seed ./cmd/seed
 
-FROM alpine:3.23
+FROM alpine:3.24
 
 RUN addgroup -S outerstellar && adduser -S -G outerstellar outerstellar
 WORKDIR /app
