@@ -39,4 +39,39 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     });
+
+    document.querySelectorAll('[data-copy-target]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var targetID = button.getAttribute('data-copy-target');
+            var target = targetID ? document.getElementById(targetID) : null;
+            if (!target) {
+                return;
+            }
+            var statusID = button.getAttribute('data-copy-status');
+            var status = statusID ? document.getElementById(statusID) : null;
+            var value = target.value || target.textContent || '';
+            var copied = function () {
+                if (status) {
+                    status.textContent = 'Copied';
+                }
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(value).then(copied, function () {
+                    copyBySelection(target);
+                    copied();
+                });
+                return;
+            }
+            copyBySelection(target);
+            copied();
+        });
+    });
 });
+
+function copyBySelection(target) {
+    if (target.select) {
+        target.select();
+        target.setSelectionRange(0, target.value.length);
+    }
+    document.execCommand('copy');
+}

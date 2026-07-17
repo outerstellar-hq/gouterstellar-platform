@@ -53,6 +53,51 @@ func TestHTTPClientRejectsMalformedWorkerResponse(t *testing.T) {
 	assert.ErrorIs(t, err, ErrMalformedResponse)
 }
 
+func TestHTTPClientListsSleepCatalogInDeterministicOrder(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/sleep/catalog", r.URL.Path)
+		_, _ = w.Write([]byte(`{"stories":[
+			{"id":"story-b","title":"Second story","order":2,"episodes":[
+				{"id":"episode-b2","title":"Later","order":2,"status":"queued","stages":{"upload":{"status":"queued"},"text":{"status":"complete"}},"artifacts":[{"label":"Expired preview","url":"https://starline.invalid/old.mp4","state":"expired","expires_at":"2026-07-16T12:00:00Z"}]},
+				{"id":"episode-b1","title":"Earlier","order":1,"status":"complete","publication_metadata":{"title":"Copy title","description":"Copy body"},"stages":{"voice":{"status":"running"},"text":{"status":"complete"}},"artifacts":[{"label":"Durable master","url":"https://starline.invalid/master.mp4","state":"durable"}]}
+			]},
+			{"id":"story-a","title":"First story","order":1,"episodes":[]}
+		]}`))
+	}))
+	defer server.Close()
+	client, err := NewHTTPClient(server.URL, "credential", server.Client())
+	require.NoError(t, err)
+
+	catalog, err := client.SleepCatalog(context.Background())
+	require.NoError(t, err)
+	require.Len(t, catalog.Stories, 2)
+	assert.Equal(t, "First story", catalog.Stories[0].Title)
+	assert.Equal(t, "Second story", catalog.Stories[1].Title)
+	require.Len(t, catalog.Stories[1].Episodes, 2)
+	assert.Equal(t, "Earlier", catalog.Stories[1].Episodes[0].Title)
+	assert.Equal(t, "Later", catalog.Stories[1].Episodes[1].Title)
+	assert.Equal(t, fixedSleepStages, stageNames(catalog.Stories[1].Episodes[0].Stages))
+	assert.Equal(t, "missing", catalog.Stories[1].Episodes[0].Stages[2].Status)
+	assert.Equal(t, "Copy title", catalog.Stories[1].Episodes[0].PublicationMetadata.Title)
+	assert.Equal(t, "durable", catalog.Stories[1].Episodes[0].Artifacts[0].State)
+}
+
+func TestHTTPClientRejectsMalformedSleepCatalog(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"stories":[{"id":"story","title":"Story","episodes":[{"id":"episode","title":"Episode","artifacts":[{"label":"unsafe","url":"javascript:alert(1)","state":"preview"}]}]}]}`))
+	}))
+	defer server.Close()
+	client, err := NewHTTPClient(server.URL, "credential", server.Client())
+	require.NoError(t, err)
+
+	_, err = client.SleepCatalog(context.Background())
+	assert.ErrorIs(t, err, ErrMalformedResponse)
+}
+
 func TestHTTPClientErrorsNeverExposeCredentialOrResponseBody(t *testing.T) {
 	t.Parallel()
 
@@ -112,4 +157,12 @@ func TestUnconfiguredHTTPClientReportsUnavailable(t *testing.T) {
 	require.NoError(t, err)
 	_, err = client.ListWorkers(context.Background())
 	assert.True(t, errors.Is(err, ErrUnavailable))
+}
+
+func stageNames(stages []SleepStage) []string {
+	names := make([]string, 0, len(stages))
+	for _, stage := range stages {
+		names = append(names, stage.Name)
+	}
+	return names
 }

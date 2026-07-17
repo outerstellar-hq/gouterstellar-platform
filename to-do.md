@@ -10,6 +10,7 @@ Work GitHub issues in dependency order before continuing discretionary parity im
 - [x] [#6 Add date and monotonic build identity](https://github.com/outerstellar-hq/gouterstellar-platform/issues/6) — implemented across the shell, health/diagnostics, backup provenance, containers, CI, and releases.
 - [x] [#7 Add an extension operations registry](https://github.com/outerstellar-hq/gouterstellar-platform/issues/7) — implemented with owner-isolated admin routes, typed remote providers, audit outcomes, operation states, and confirmed restores.
 - [x] [#9 Add the Starforge worker-management extension](https://github.com/outerstellar-hq/gouterstellar-platform/issues/9) — implemented with a protected page, authenticated BFF, server-only credential, explicit unavailable state, and label management.
+- [x] [#11 StarForge: render each pipeline through a deterministic typed template registry](https://github.com/outerstellar-hq/gouterstellar-platform/issues/11) — first Sleep Series vertical slice implemented with a closed schema registry, typed catalog client, deterministic story/episode ordering, fixed stage rail, distinct artifact states, and unavailable-state rendering.
 
 ## Parity work already in progress
 

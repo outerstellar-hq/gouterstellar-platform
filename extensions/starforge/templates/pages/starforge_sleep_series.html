@@ -1,0 +1,109 @@
+{{ define "content" }}
+<section class="starforge-hero">
+    <div class="starforge-intro">
+        <p class="eyebrow">Sleep Series pipeline</p>
+        <h1>Sleep production ledger</h1>
+        <p>Coordinate story, episode, and artifact state across the production machines without storing media or runtime HTML in this application.</p>
+    </div>
+    <aside class="data-boundary" aria-label="Template contract">
+        <span class="data-boundary-mark" aria-hidden="true"></span>
+        <div>
+            <strong>Typed template registry</strong>
+            <p>The server renders only the compiled sleep-series schema. Unknown pipeline kinds or schema versions fail closed.</p>
+        </div>
+    </aside>
+</section>
+
+{{ if .BodyData.Unavailable }}
+<section class="card unavailable-state" role="status">
+    <h2>Sleep catalog is temporarily unavailable</h2>
+    <p>The Starline control plane could not provide a trustworthy Sleep catalog. No empty production ledger was inferred.</p>
+    <a class="btn btn-secondary" href="/starforge/pipelines/sleep-series">Try again</a>
+</section>
+{{ else }}
+<section class="fleet-overview" aria-label="Sleep production overview">
+    <div class="fleet-stat">
+        <span class="fleet-stat-value">{{ .BodyData.Summary.Stories }}</span>
+        <span class="fleet-stat-label">Stories</span>
+    </div>
+    <div class="fleet-stat">
+        <span class="fleet-stat-value">{{ .BodyData.Summary.Episodes }}</span>
+        <span class="fleet-stat-label">Episodes</span>
+    </div>
+    <div class="fleet-stat{{ if .BodyData.Summary.Blocked }} fleet-stat-attention{{ end }}">
+        <span class="fleet-stat-value">{{ .BodyData.Summary.Blocked }}</span>
+        <span class="fleet-stat-label">Blocked</span>
+    </div>
+</section>
+
+{{ if .BodyData.Stories }}
+<div class="sleep-ledger">
+{{ range .BodyData.Stories }}
+    <section class="sleep-story" aria-labelledby="sleep-story-{{ .ID }}">
+        <div class="fleet-heading">
+            <div>
+                <p class="eyebrow">Story</p>
+                <h2 id="sleep-story-{{ .ID }}">{{ .Title }}</h2>
+            </div>
+        </div>
+        <div class="sleep-episode-list">
+        {{ range .Episodes }}
+            <article class="card sleep-episode {{ .StatusClass }}" aria-labelledby="sleep-episode-{{ .ID }}">
+                <div class="sleep-episode-main">
+                    <div>
+                        <p class="worker-state"><span class="status-pip" aria-hidden="true"></span>{{ .Status }}</p>
+                        <h3 id="sleep-episode-{{ .ID }}">{{ .Title }}</h3>
+                        <p>Last update: {{ .LastUpdatedLabel }}</p>
+                    </div>
+                    {{ if .HasPublicationCopy }}
+                    <div class="publication-copy" aria-label="Publication metadata">
+                        <label for="publication-title-{{ .ID }}">Publication title</label>
+                        <textarea id="publication-title-{{ .ID }}" readonly>{{ .PublicationTitle }}</textarea>
+                        <div class="publication-actions">
+                            <button type="button" class="btn btn-secondary" data-copy-target="publication-title-{{ .ID }}" data-copy-status="publication-copy-status-{{ .ID }}">Copy title</button>
+                        </div>
+                        <label for="publication-description-{{ .ID }}">Publication description</label>
+                        <textarea id="publication-description-{{ .ID }}" readonly>{{ .PublicationDescription }}</textarea>
+                        <div class="publication-actions">
+                            <button type="button" class="btn btn-secondary" data-copy-target="publication-description-{{ .ID }}" data-copy-status="publication-copy-status-{{ .ID }}">Copy description</button>
+                            <span id="publication-copy-status-{{ .ID }}" class="copy-status" aria-live="polite"></span>
+                        </div>
+                    </div>
+                    {{ end }}
+                </div>
+
+                <ol class="stage-rail" aria-label="Fixed production stages">
+                {{ range .Stages }}
+                    <li class="{{ .StatusClass }}">
+                        <span class="status-pip" aria-hidden="true"></span>
+                        <span class="stage-name">{{ .Label }}</span>
+                        <span class="stage-state">{{ .Status }}</span>
+                        <span class="stage-updated">{{ .LastUpdatedLabel }}</span>
+                    </li>
+                {{ end }}
+                </ol>
+
+                {{ if .Artifacts }}
+                <ul class="artifact-list" aria-label="Preview and durable artifacts">
+                {{ range .Artifacts }}
+                    <li class="{{ .StateClass }}">
+                        <span>
+                            <strong>{{ .Label }}</strong>
+                            <small>{{ .State }}{{ if .ExpiresAt }} · {{ .ExpiresAt }}{{ end }}</small>
+                        </span>
+                        {{ if .HasLink }}<a class="btn btn-secondary" href="{{ .URL }}">Open artifact</a>{{ else }}<span class="badge">No active link</span>{{ end }}
+                    </li>
+                {{ end }}
+                </ul>
+                {{ end }}
+            </article>
+        {{ end }}
+        </div>
+    </section>
+{{ end }}
+</div>
+{{ else }}
+<section class="card empty-state"><h2>No Sleep stories found</h2><p>The catalog was reachable, but it did not return any production rows.</p></section>
+{{ end }}
+{{ end }}
+{{ end }}
