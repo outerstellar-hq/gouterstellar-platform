@@ -59,8 +59,15 @@
                     <div class="publication-copy" aria-label="Publication metadata">
                         <label for="publication-title-{{ .ID }}">Publication title</label>
                         <textarea id="publication-title-{{ .ID }}" readonly>{{ .PublicationTitle }}</textarea>
+                        <div class="publication-actions">
+                            <button type="button" class="btn btn-secondary" data-copy-target="publication-title-{{ .ID }}" data-copy-status="publication-copy-status-{{ .ID }}">Copy title</button>
+                        </div>
                         <label for="publication-description-{{ .ID }}">Publication description</label>
                         <textarea id="publication-description-{{ .ID }}" readonly>{{ .PublicationDescription }}</textarea>
+                        <div class="publication-actions">
+                            <button type="button" class="btn btn-secondary" data-copy-target="publication-description-{{ .ID }}" data-copy-status="publication-copy-status-{{ .ID }}">Copy description</button>
+                            <span id="publication-copy-status-{{ .ID }}" class="copy-status" aria-live="polite"></span>
+                        </div>
                     </div>
                     {{ end }}
                 </div>

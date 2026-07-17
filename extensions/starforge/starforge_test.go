@@ -236,6 +236,10 @@ func TestSleepSeriesTemplateRendersKeyboardAndNarrowScreenLandmarks(t *testing.T
 			ID:     "episode-1",
 			Title:  "Episode",
 			Status: "complete",
+			PublicationMetadata: PublicationMetadata{
+				Title:       "Copy title",
+				Description: "Copy description",
+			},
 			Stages: []SleepStage{{Name: "text", Status: "complete"}},
 			Artifacts: []SleepArtifact{
 				{Label: "Durable master", URL: "https://starline.invalid/master.mp4", State: "durable"},
@@ -250,6 +254,9 @@ func TestSleepSeriesTemplateRendersKeyboardAndNarrowScreenLandmarks(t *testing.T
 	html := output.String()
 	assert.Contains(t, html, `aria-label="Fixed production stages"`)
 	assert.Contains(t, html, `aria-label="Preview and durable artifacts"`)
+	assert.Contains(t, html, `data-copy-target="publication-title-episode-1"`)
+	assert.Contains(t, html, `data-copy-target="publication-description-episode-1"`)
+	assert.Contains(t, html, `aria-live="polite"`)
 	assert.Contains(t, html, `<a class="btn btn-secondary" href="https://starline.invalid/master.mp4">Open artifact</a>`)
 	assert.NotContains(t, html, "<script")
 }
