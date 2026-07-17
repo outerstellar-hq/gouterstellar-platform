@@ -2432,6 +2432,39 @@ footer {
     margin: 0;
 }
 
+.pipeline-entrypoints {
+    margin-bottom: 2rem;
+}
+
+.pipeline-entrypoint-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+    gap: 1rem;
+}
+
+.pipeline-entrypoint {
+    display: grid;
+    gap: 0.5rem;
+    color: inherit;
+    text-decoration: none;
+}
+
+.pipeline-entrypoint:focus-visible,
+.pipeline-entrypoint:hover {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--color-primary) 18%, transparent), var(--shadow);
+}
+
+.pipeline-entrypoint-label {
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    font-weight: 750;
+}
+
+.pipeline-entrypoint span:last-child {
+    color: var(--text-secondary);
+}
+
 .worker-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
