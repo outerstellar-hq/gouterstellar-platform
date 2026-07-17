@@ -170,6 +170,8 @@ func TestStarforgeTemplateRendersFleetSummaryAndHonestMissingData(t *testing.T) 
 
 	html := output.String()
 	assert.Contains(t, html, "Starforge fleet")
+	assert.Contains(t, html, "Production ledgers")
+	assert.Contains(t, html, `href="/starforge/pipelines/sleep-series"`)
 	assert.Contains(t, html, "Linux render node")
 	assert.Contains(t, html, "Not reported")
 	assert.Contains(t, html, "No active session")
