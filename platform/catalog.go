@@ -30,11 +30,12 @@ type Catalog struct {
 	mu         sync.RWMutex
 	extensions []ExtensionInfo
 	routes     []RouteInfo
+	readiness  []ReadinessStatus
 }
 
 func NewCatalog() *Catalog { return &Catalog{} }
 
-func (c *Catalog) replace(extensions []Extension, routes []RouteRegistration) {
+func (c *Catalog) replace(extensions []Extension, routes []RouteRegistration, readiness []ReadinessStatus) {
 	if c == nil {
 		return
 	}
@@ -44,7 +45,7 @@ func (c *Catalog) replace(extensions []Extension, routes []RouteRegistration) {
 		routeCounts[route.Owner]++
 		infos[i] = RouteInfo{
 			Owner: route.Owner, Group: string(route.Group), Method: route.Method,
-			PathPattern: route.Pattern, Description: route.Description, HandlerKind: "http",
+			PathPattern: route.Pattern, Description: route.Description, HandlerKind: route.HandlerKind,
 		}
 	}
 	extensionInfos := make([]ExtensionInfo, len(extensions))
@@ -60,6 +61,7 @@ func (c *Catalog) replace(extensions []Extension, routes []RouteRegistration) {
 	c.mu.Lock()
 	c.extensions = extensionInfos
 	c.routes = infos
+	c.readiness = append([]ReadinessStatus{}, readiness...)
 	c.mu.Unlock()
 }
 
@@ -73,4 +75,10 @@ func (c *Catalog) Routes() []RouteInfo {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return append([]RouteInfo{}, c.routes...)
+}
+
+func (c *Catalog) Readiness() []ReadinessStatus {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return append([]ReadinessStatus{}, c.readiness...)
 }

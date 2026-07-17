@@ -27,6 +27,7 @@ func (e *Extension) Contribute(ctx *extplatform.ContributionContext) error {
 	}); err != nil {
 		return err
 	}
+	ctx.Readiness.Up("reports-cache", "Reports cache is ready")
 	ctx.Navigation.Add("Reports", "/reports", "bar-chart")
 	return nil
 }

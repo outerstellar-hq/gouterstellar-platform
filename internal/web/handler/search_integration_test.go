@@ -63,6 +63,7 @@ func TestUnifiedSearchUsesRealMessageAndContactData(t *testing.T) {
 	cfg := config.Load()
 	cfg.DatabaseURL = connectionString
 	cfg.Version = "search-test"
+	cfg.DevDashboardEnabled = true
 	cfg.OAuth.Apple.Enabled = true
 	cfg.OAuth.Apple.ClientID = "test-client"
 	app := wire.Wire(cfg, pool, web.TemplateFS())
@@ -846,6 +847,25 @@ func TestUnifiedSearchUsesRealMessageAndContactData(t *testing.T) {
 	require.Equal(t, http.StatusOK, auditPage.Code)
 	assert.Contains(t, auditPage.Body.String(), "USER_ROLE_CHANGED")
 
+	devDashboardRequest := httptest.NewRequest(http.MethodGet, "/admin/dev", nil)
+	devDashboardRequest.AddCookie(&http.Cookie{Name: web.SessionCookieName, Value: adminToken})
+	devDashboard := httptest.NewRecorder()
+	assembled.ServeHTTP(devDashboard, devDashboardRequest)
+	require.Equal(t, http.StatusOK, devDashboard.Code)
+	assert.Contains(t, devDashboard.Header().Get("Content-Type"), "text/html")
+	assert.Contains(t, devDashboard.Body.String(), "Outbox")
+	assert.Contains(t, devDashboard.Body.String(), `action="/admin/dev/outbox/process"`)
+
+	userDevDashboardRequest := httptest.NewRequest(http.MethodGet, "/admin/dev", nil)
+	userDevDashboardRequest.AddCookie(&http.Cookie{Name: web.SessionCookieName, Value: managedToken})
+	userDevDashboard := httptest.NewRecorder()
+	assembled.ServeHTTP(userDevDashboard, userDevDashboardRequest)
+	assert.Equal(t, http.StatusForbidden, userDevDashboard.Code)
+
+	anonymousDevDashboard := httptest.NewRecorder()
+	assembled.ServeHTTP(anonymousDevDashboard, httptest.NewRequest(http.MethodGet, "/admin/dev", nil))
+	assert.NotEqual(t, http.StatusOK, anonymousDevDashboard.Code)
+
 	notificationUser, err := app.SecurityService.Register(ctx, "parity-notifications", "NotifyParity1!")
 	require.NoError(t, err)
 	notificationToken, err := app.SecurityService.CreateSession(ctx, notificationUser.ID)
@@ -905,6 +925,149 @@ func TestUnifiedSearchUsesRealMessageAndContactData(t *testing.T) {
 	require.Equal(t, http.StatusOK, notificationPage.Code)
 	assert.Contains(t, notificationPage.Body.String(), "Hello")
 	assert.Equal(t, http.StatusFound, apiJSON(http.MethodGet, "/notifications", "", "").Code)
+
+	restoreMessage, err := app.MessageService.CreateServerMessage(ctx, "Restore Author", "Restore Content")
+	require.NoError(t, err)
+	require.NoError(t, app.MessageService.DeleteMessage(ctx, restoreMessage.SyncID))
+	trashBeforeRequest := httptest.NewRequest(http.MethodGet, "/messages/trash", nil)
+	trashBeforeRequest.AddCookie(&http.Cookie{Name: web.SessionCookieName, Value: syncToken})
+	trashBefore := httptest.NewRecorder()
+	assembled.ServeHTTP(trashBefore, trashBeforeRequest)
+	require.Equal(t, http.StatusOK, trashBefore.Code)
+	assert.Contains(t, trashBefore.Body.String(), "Restore Author")
+	homeBeforeRestoreRequest := httptest.NewRequest(http.MethodGet, "/", nil)
+	homeBeforeRestoreRequest.AddCookie(&http.Cookie{Name: web.SessionCookieName, Value: syncToken})
+	homeBeforeRestore := httptest.NewRecorder()
+	assembled.ServeHTTP(homeBeforeRestore, homeBeforeRestoreRequest)
+	assert.NotContains(t, homeBeforeRestore.Body.String(), "Restore Author")
+	restoreRequest := httptest.NewRequest(http.MethodPost, "/messages/restore/"+restoreMessage.SyncID, nil)
+	restoreRequest.AddCookie(&http.Cookie{Name: web.SessionCookieName, Value: syncToken})
+	restoreResponse := httptest.NewRecorder()
+	assembled.ServeHTTP(restoreResponse, restoreRequest)
+	require.Equal(t, http.StatusFound, restoreResponse.Code)
+	assert.Equal(t, "/messages/trash", restoreResponse.Header().Get("Location"))
+	trashAfter := httptest.NewRecorder()
+	assembled.ServeHTTP(trashAfter, trashBeforeRequest.Clone(ctx))
+	assert.NotContains(t, trashAfter.Body.String(), "Restore Author")
+	homeAfterRestore := httptest.NewRecorder()
+	assembled.ServeHTTP(homeAfterRestore, homeBeforeRestoreRequest.Clone(ctx))
+	assert.Contains(t, homeAfterRestore.Body.String(), "Restore Author")
+	unknownRestoreRequest := httptest.NewRequest(http.MethodPost, "/messages/restore/non-existent-sync-id", nil)
+	unknownRestoreRequest.AddCookie(&http.Cookie{Name: web.SessionCookieName, Value: syncToken})
+	unknownRestore := httptest.NewRecorder()
+	assembled.ServeHTTP(unknownRestore, unknownRestoreRequest)
+	assert.Equal(t, http.StatusFound, unknownRestore.Code)
+	assert.Equal(t, "/messages/trash", unknownRestore.Header().Get("Location"))
+
+	profileUser, err := app.SecurityService.Register(ctx, "profile-parity", "ProfileParity1!")
+	require.NoError(t, err)
+	profileToken, err := app.SecurityService.CreateSession(ctx, profileUser.ID)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusUnauthorized, apiJSON(http.MethodGet, "/api/v1/auth/profile", "", "").Code)
+	initialProfileResponse := apiJSON(http.MethodGet, "/api/v1/auth/profile", profileToken, "")
+	require.Equal(t, http.StatusOK, initialProfileResponse.Code)
+	var initialProfile model.UserProfileResponse
+	require.NoError(t, json.NewDecoder(initialProfileResponse.Body).Decode(&initialProfile))
+	assert.Equal(t, profileUser.Username, initialProfile.Username)
+	assert.Nil(t, initialProfile.AvatarURL)
+	assert.True(t, initialProfile.EmailNotificationsEnabled)
+	assert.True(t, initialProfile.PushNotificationsEnabled)
+
+	apiProfileUpdate := apiJSON(http.MethodPut, "/api/v1/auth/profile", profileToken,
+		`{"email":"profile-updated@example.com","username":"profile-updated","avatarUrl":"https://example.com/profile.png"}`)
+	require.Equal(t, http.StatusOK, apiProfileUpdate.Code)
+	updatedProfileResponse := apiJSON(http.MethodGet, "/api/v1/auth/profile", profileToken, "")
+	require.Equal(t, http.StatusOK, updatedProfileResponse.Code)
+	var updatedProfile model.UserProfileResponse
+	require.NoError(t, json.NewDecoder(updatedProfileResponse.Body).Decode(&updatedProfile))
+	assert.Equal(t, "profile-updated", updatedProfile.Username)
+	assert.Equal(t, "profile-updated@example.com", updatedProfile.Email)
+	require.NotNil(t, updatedProfile.AvatarURL)
+	assert.Equal(t, "https://example.com/profile.png", *updatedProfile.AvatarURL)
+	duplicateProfileUpdate := apiJSON(http.MethodPut, "/api/v1/auth/profile", profileToken,
+		`{"email":"profile-updated@example.com","username":"parity-other"}`)
+	assert.Equal(t, http.StatusConflict, duplicateProfileUpdate.Code)
+
+	require.Equal(t, http.StatusOK, apiJSON(http.MethodPut, "/api/v1/auth/notification-preferences", profileToken,
+		`{"emailEnabled":false,"pushEnabled":false}`).Code)
+	require.Equal(t, http.StatusOK, apiJSON(http.MethodPut, "/api/v1/auth/notification-preferences", profileToken,
+		`{"emailEnabled":true,"pushEnabled":false}`).Code)
+	preferencesProfileResponse := apiJSON(http.MethodGet, "/api/v1/auth/profile", profileToken, "")
+	var preferencesProfile model.UserProfileResponse
+	require.NoError(t, json.NewDecoder(preferencesProfileResponse.Body).Decode(&preferencesProfile))
+	assert.True(t, preferencesProfile.EmailNotificationsEnabled)
+	assert.False(t, preferencesProfile.PushNotificationsEnabled)
+
+	deleteAPIUser, err := app.SecurityService.Register(ctx, "delete-api-parity", "DeleteAPIParity1!")
+	require.NoError(t, err)
+	deleteAPIToken, err := app.SecurityService.CreateSession(ctx, deleteAPIUser.ID)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, apiJSON(http.MethodDelete, "/api/v1/auth/account", deleteAPIToken, "").Code)
+	assert.Equal(t, http.StatusBadRequest, apiJSON(http.MethodDelete, "/api/v1/auth/account", deleteAPIToken,
+		`{"currentPassword":"wrong-password"}`).Code)
+	require.Equal(t, http.StatusOK, apiJSON(http.MethodDelete, "/api/v1/auth/account", deleteAPIToken,
+		`{"currentPassword":"DeleteAPIParity1!"}`).Code)
+	var deletedAPICount int
+	require.NoError(t, pool.QueryRow(ctx, "SELECT COUNT(*) FROM plt_users WHERE id = $1", deleteAPIUser.ID).Scan(&deletedAPICount))
+	assert.Zero(t, deletedAPICount)
+
+	soleAdmin, err := app.SecurityService.Register(ctx, "sole-delete-admin", "SoleAdminParity1!")
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, "UPDATE plt_users SET role = 'ADMIN' WHERE id = $1", soleAdmin.ID)
+	require.NoError(t, err)
+	soleAdminToken, err := app.SecurityService.CreateSession(ctx, soleAdmin.ID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, "UPDATE plt_users SET role = 'USER' WHERE id = $1", adminUser.ID)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusForbidden, apiJSON(http.MethodDelete, "/api/v1/auth/account", soleAdminToken,
+		`{"currentPassword":"SoleAdminParity1!"}`).Code)
+	_, err = pool.Exec(ctx, "UPDATE plt_users SET role = 'ADMIN' WHERE id = $1", adminUser.ID)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, apiJSON(http.MethodDelete, "/api/v1/auth/account", soleAdminToken,
+		`{"currentPassword":"SoleAdminParity1!"}`).Code)
+
+	passwordUser, err := app.SecurityService.Register(ctx, "password-component-parity", "OldPassword1!")
+	require.NoError(t, err)
+	passwordToken, err := app.SecurityService.CreateSession(ctx, passwordUser.ID)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusFound, apiJSON(http.MethodGet, "/auth/change-password", "", "").Code)
+	changePasswordPageRequest := httptest.NewRequest(http.MethodGet, "/auth/change-password", nil)
+	changePasswordPageRequest.AddCookie(&http.Cookie{Name: web.SessionCookieName, Value: passwordToken})
+	changePasswordPage := httptest.NewRecorder()
+	assembled.ServeHTTP(changePasswordPage, changePasswordPageRequest)
+	require.Equal(t, http.StatusOK, changePasswordPage.Code)
+	assert.Contains(t, strings.ToLower(changePasswordPage.Body.String()), "html")
+	assert.Equal(t, http.StatusFound, apiJSON(http.MethodPost, "/auth/components/change-password", "",
+		"currentPassword=old&newPassword=new&confirmPassword=new").Code)
+	changePasswordComponent := func(currentPassword, newPassword, confirmPassword string) *httptest.ResponseRecorder {
+		form := url.Values{
+			"currentPassword": {currentPassword},
+			"newPassword":     {newPassword},
+			"confirmPassword": {confirmPassword},
+		}
+		request := httptest.NewRequest(http.MethodPost, "/auth/components/change-password", strings.NewReader(form.Encode()))
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.AddCookie(&http.Cookie{Name: web.SessionCookieName, Value: passwordToken})
+		response := httptest.NewRecorder()
+		assembled.ServeHTTP(response, request)
+		return response
+	}
+	mismatchedPassword := changePasswordComponent("OldPassword1!", "NewPassword2!", "DifferentPassword2!")
+	require.Equal(t, http.StatusOK, mismatchedPassword.Code)
+	assert.Contains(t, mismatchedPassword.Body.String(), "auth-result-error")
+	wrongPassword := changePasswordComponent("WrongPassword1!", "NewPassword2!", "NewPassword2!")
+	require.Equal(t, http.StatusOK, wrongPassword.Code)
+	assert.Contains(t, wrongPassword.Body.String(), "auth-result-error")
+	weakPassword := changePasswordComponent("OldPassword1!", "weak", "weak")
+	require.Equal(t, http.StatusOK, weakPassword.Code)
+	assert.Contains(t, weakPassword.Body.String(), "auth-result-error")
+	successfulPassword := changePasswordComponent("OldPassword1!", "NewPassword2!", "NewPassword2!")
+	require.Equal(t, http.StatusOK, successfulPassword.Code)
+	assert.Contains(t, successfulPassword.Body.String(), "auth-result-success")
+	assert.Equal(t, http.StatusUnauthorized, apiJSON(http.MethodPost, "/api/v1/auth/login", "",
+		`{"username":"password-component-parity","password":"OldPassword1!"}`).Code)
+	assert.Equal(t, http.StatusOK, apiJSON(http.MethodPost, "/api/v1/auth/login", "",
+		`{"username":"password-component-parity","password":"NewPassword2!"}`).Code)
 
 	pushContactSync := func(contact model.SyncContact) (int, model.SyncPushContactResponse) {
 		payload, marshalErr := json.Marshal(model.SyncPushContactRequest{Contacts: []model.SyncContact{contact}})

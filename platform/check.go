@@ -10,6 +10,7 @@ import (
 type Diagnostics struct {
 	routes        []RouteRegistration
 	navLabels     []string
+	readiness     []ReadinessStatus
 	ownershipErrs []error
 }
 
@@ -23,6 +24,10 @@ func (d Diagnostics) RoutePatterns() []string {
 
 func (d Diagnostics) NavigationLabels() []string {
 	return d.navLabels
+}
+
+func (d Diagnostics) ReadinessStatuses() []ReadinessStatus {
+	return append([]ReadinessStatus{}, d.readiness...)
 }
 
 func (d Diagnostics) OwnershipViolations() error {
@@ -62,6 +67,7 @@ func CheckExtension(ext Extension, ctx *ContributionContext) (*Diagnostics, erro
 	diag := &Diagnostics{
 		routes:        routes,
 		navLabels:     navLabelSlice(ctx.Navigation.Items()),
+		readiness:     ctx.Readiness.All(),
 		ownershipErrs: ownershipErrs,
 	}
 

@@ -29,6 +29,7 @@ type RouteRegistration struct {
 	Pattern     string
 	Group       RouteGroup
 	Description string
+	HandlerKind string
 	Handler     http.Handler
 }
 
@@ -74,7 +75,7 @@ func (r *RouteRegistry) Assets(pattern string, h http.Handler) {
 	if r.assetMiddleware != nil {
 		h = r.assetMiddleware(h)
 	}
-	r.add(http.MethodGet, pattern, "static assets", h, GroupAssets)
+	r.addWithKind(http.MethodGet, pattern, "static assets", h, GroupAssets, "routing")
 }
 
 // AssetSource identifies an extension-owned directory inside an fs.FS.
@@ -191,12 +192,17 @@ func (f *mappedAssetFS) Open(name string) (fs.File, error) {
 }
 
 func (r *RouteRegistry) add(method, pattern, desc string, h http.Handler, group RouteGroup) {
+	r.addWithKind(method, pattern, desc, h, group, "contract")
+}
+
+func (r *RouteRegistry) addWithKind(method, pattern, desc string, h http.Handler, group RouteGroup, handlerKind string) {
 	r.routes = append(r.routes, RouteRegistration{
 		Owner:       r.owner,
 		Method:      method,
 		Pattern:     pattern,
 		Group:       group,
 		Description: desc,
+		HandlerKind: handlerKind,
 		Handler:     h,
 	})
 }

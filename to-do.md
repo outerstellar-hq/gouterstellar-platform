@@ -50,7 +50,9 @@ Work GitHub issues in dependency order before continuing discretionary parity im
 - [x] Continue the Java integration-test matrix through contact sync CRUD, contact detail synchronization, and concurrent same-ID pushes.
 - [x] Continue the Java integration-test matrix through API-key lifecycle, device-token registration, and poll workflows.
 - [x] Continue the Java integration-test matrix through audit-log, notifications, and user-management workflows.
-- [ ] Continue the Java integration-test matrix through message restore, profile API, and CSRF-protected change-password workflows.
+- [x] Continue the Java integration-test matrix through message restore, profile API, and CSRF-protected change-password workflows.
+- [x] Continue the Java integration-test matrix through message search, diagnostics, and developer-dashboard workflows.
+- [ ] Continue the Java integration-test matrix through extension dashboard, extension host UI, and component fragment workflows.
 
 ## Completed in the current parity slice
 
@@ -75,4 +77,6 @@ Work GitHub issues in dependency order before continuing discretionary parity im
 - [x] Proved contact sync create/update/conflict/tombstone behavior, complete detail-field replacement, empty and future pulls, and concurrent same-ID message pushes through real PostgreSQL routes and the packaged Podman runtime.
 - [x] Matched Java API-key validation, key shape, peppered HMAC storage, disabled/deleted-key rejection, device-token lifecycle, and poll API/HTMX workflows through real PostgreSQL routes and the packaged Podman runtime.
 - [x] Matched Java audit actor/target/action recording, admin lifecycle and password changes, notification ownership/no-op semantics, unread state, and browser bell/admin workflows through real PostgreSQL routes and the packaged Podman runtime.
+- [x] Matched Java message restore no-op/redirect behavior, persisted profile/account API lifecycle, and CSRF-protected browser password-change fragments through real PostgreSQL routes and the packaged Podman runtime.
+- [x] Matched Java diagnostics route metadata, extension readiness reporting, message-search/sync pull behavior, and developer-dashboard access/disabled-route behavior through real route tests and Podman-backed PostgreSQL coverage.
 - [x] Passed module verification, tidy check, vet, full Podman-backed tests, golangci-lint, gosec, actionlint, and compose validation.

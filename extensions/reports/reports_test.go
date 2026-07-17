@@ -29,6 +29,9 @@ func TestReportsContract(t *testing.T) {
 		diag.RoutePatterns(),
 	)
 	assert.Contains(t, diag.NavigationLabels(), "Reports")
+	require.Len(t, diag.ReadinessStatuses(), 1)
+	assert.Equal(t, "reports-cache", diag.ReadinessStatuses()[0].Name)
+	assert.Equal(t, "UP", diag.ReadinessStatuses()[0].Status)
 }
 
 type contractPageRenderer struct{}

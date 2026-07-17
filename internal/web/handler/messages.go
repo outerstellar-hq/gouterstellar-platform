@@ -225,7 +225,7 @@ func (h *MessagesHandler) Restore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/messages/trash", http.StatusSeeOther)
+	http.Redirect(w, r, "/messages/trash", http.StatusFound)
 }
 
 // Resolve renders the stale client version alongside the current server row so

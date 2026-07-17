@@ -135,7 +135,7 @@ func routeDiagnosticsHandler(catalog *extplatform.Catalog) http.Handler {
 			"build":              buildinfo.Current(),
 			"routes":             catalog.Routes(),
 			"excludedPageSets":   []string{},
-			"extensionReadiness": []any{},
+			"extensionReadiness": catalog.Readiness(),
 			"timestamp":          time.Now().UTC().Format(time.RFC3339Nano),
 		})
 	})

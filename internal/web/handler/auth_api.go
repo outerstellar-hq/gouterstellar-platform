@@ -376,16 +376,10 @@ func (h *AuthAPI) GetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	avatarURL := user.AvatarURL
-	if avatarURL == nil && user.Email != "" {
-		gravatar := web.GravatarURL(user.Email, 80)
-		avatarURL = &gravatar
-	}
-
 	writeJSON(w, http.StatusOK, model.UserProfileResponse{
 		Username:                  user.Username,
 		Email:                     user.Email,
-		AvatarURL:                 avatarURL,
+		AvatarURL:                 user.AvatarURL,
 		EmailNotificationsEnabled: user.EmailNotificationsEnabled,
 		PushNotificationsEnabled:  user.PushNotificationsEnabled,
 	})

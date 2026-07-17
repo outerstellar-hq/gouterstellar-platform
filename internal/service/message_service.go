@@ -359,15 +359,23 @@ func (s *MessageService) ProcessPushRequest(ctx context.Context, req *model.Sync
 }
 
 func (s *MessageService) Restore(ctx context.Context, syncID string) error {
+	didRestore := false
 	err := s.txMgr.InTransaction(ctx, func(tx pgx.Tx) error {
 		restored, err := s.repo.WithTx(tx).RestoreMessage(ctx, syncID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
 		if err != nil {
 			return fmt.Errorf("restore message: %w", err)
 		}
+		didRestore = true
 		return s.saveOutboxEntryTx(ctx, tx, syncID, restored)
 	})
 	if err != nil {
 		return err
+	}
+	if !didRestore {
+		return nil
 	}
 	s.pipeline.AfterMessageChange(ctx, syncID)
 	return nil

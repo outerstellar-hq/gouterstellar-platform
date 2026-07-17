@@ -20,7 +20,18 @@ func TestRouteRegistryRegistration(t *testing.T) {
 	require.Len(t, routes, 2)
 	assert.Equal(t, "reports", routes[0].Owner)
 	assert.Equal(t, GroupProtectedUI, routes[0].Group)
+	assert.Equal(t, "contract", routes[0].HandlerKind)
 	assert.Equal(t, GroupAPI, routes[1].Group)
+	assert.Equal(t, "contract", routes[1].HandlerKind)
+}
+
+func TestRouteRegistryMarksStaticAssetsAsRoutingHandlers(t *testing.T) {
+	reg := newRouteRegistry("reports", assetHostOptions{})
+	reg.Assets("/extensions/reports/assets/*", stubHandler())
+
+	routes := reg.All()
+	require.Len(t, routes, 1)
+	assert.Equal(t, "routing", routes[0].HandlerKind)
 }
 
 func TestRouteRegistryOwnerStamping(t *testing.T) {

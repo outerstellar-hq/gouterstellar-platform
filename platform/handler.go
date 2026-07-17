@@ -65,6 +65,7 @@ func NewHandler(opts Options) (http.Handler, error) {
 	var allRoutes []RouteRegistration
 	var allNav []NavigationItem
 	var allBanners []bannerRegistration
+	var allReadiness []ReadinessStatus
 	for _, ext := range opts.Extensions {
 		ctx := newContributionContext(ext.Manifest().ID, opts.Services, assetHostOptions{
 			staticDir:       opts.StaticDir,
@@ -76,6 +77,7 @@ func NewHandler(opts Options) (http.Handler, error) {
 		allRoutes = append(allRoutes, ctx.Routes.All()...)
 		allNav = append(allNav, ctx.Navigation.Items()...)
 		allBanners = append(allBanners, ctx.Banners.all()...)
+		allReadiness = append(allReadiness, ctx.Readiness.All()...)
 	}
 
 	// 3. Validate all routes against ownership + conflicts.
@@ -127,7 +129,7 @@ func NewHandler(opts Options) (http.Handler, error) {
 	if opts.NotFoundHandler != nil {
 		r.NotFound(opts.NotFoundHandler.ServeHTTP)
 	}
-	opts.Catalog.replace(opts.Extensions, mounted)
+	opts.Catalog.replace(opts.Extensions, mounted, allReadiness)
 
 	// 5. Log the route table (observability).
 	logRouteTable(mounted, allNav)
