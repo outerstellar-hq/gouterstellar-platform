@@ -53,6 +53,18 @@ func TestCSRFIssuesSecureDefaultsAndRejectsMissingToken(t *testing.T) {
 		t.Fatalf("valid JSON status = %d", validJSONResponse.Code)
 	}
 
+	crossOrigin := httptest.NewRequest(http.MethodPost, "https://example.test/form", strings.NewReader(url.Values{
+		"csrf_token": {token},
+	}.Encode()))
+	crossOrigin.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	crossOrigin.Header.Set("Origin", "http://untrusted.example")
+	crossOrigin.AddCookie(cookies[0])
+	crossOriginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(crossOriginResponse, crossOrigin)
+	if crossOriginResponse.Code != http.StatusForbidden {
+		t.Fatalf("cross-origin status = %d", crossOriginResponse.Code)
+	}
+
 	post := httptest.NewRequest(http.MethodPost, "https://example.test/form", strings.NewReader(url.Values{}.Encode()))
 	post.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	post.Header.Set("Referer", "https://example.test/form")
