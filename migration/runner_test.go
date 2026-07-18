@@ -4,7 +4,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/golang-migrate/migrate/v4/database/stub"
+	_ "github.com/golang-migrate/migrate/v4/database/stub"
 )
 
 func TestRunnerAppliesEmbeddedMigrationsAndAcceptsNoChange(t *testing.T) {
@@ -12,11 +12,7 @@ func TestRunnerAppliesEmbeddedMigrationsAndAcceptsNoChange(t *testing.T) {
 		"migrations/000001_users.up.sql":   {Data: []byte("CREATE TABLE users (id int);")},
 		"migrations/000001_users.down.sql": {Data: []byte("DROP TABLE users;")},
 	}
-	driver, err := (&stub.Stub{}).Open("stub://")
-	if err != nil {
-		t.Fatal(err)
-	}
-	runner, err := New(files, "migrations", "stub", driver)
+	runner, err := New(files, "migrations", "stub://migration-test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,11 +26,17 @@ func TestRunnerAppliesEmbeddedMigrationsAndAcceptsNoChange(t *testing.T) {
 }
 
 func TestRunnerRejectsMissingDirectory(t *testing.T) {
-	driver, err := (&stub.Stub{}).Open("stub://")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := New(fstest.MapFS{}, "missing", "stub", driver); err == nil {
+	if _, err := New(fstest.MapFS{}, "missing", "stub://migration-test"); err == nil {
 		t.Fatal("missing migration directory was accepted")
+	}
+}
+
+func TestRunnerRequiresDatabaseURL(t *testing.T) {
+	files := fstest.MapFS{
+		"migrations/000001_users.up.sql":   {Data: []byte("CREATE TABLE users (id int);")},
+		"migrations/000001_users.down.sql": {Data: []byte("DROP TABLE users;")},
+	}
+	if _, err := New(files, "migrations", ""); err == nil {
+		t.Fatal("empty database URL was accepted")
 	}
 }
