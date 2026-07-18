@@ -155,6 +155,35 @@ func TestSessionsRevokeSubjectDeletesOnlyMatchingSessions(t *testing.T) {
 	assertStatus(kept, http.StatusNoContent)
 }
 
+func TestSessionsRevokeSubjectWithStoreUsesConsumerTransaction(t *testing.T) {
+	store := memstore.New()
+	sessions, err := NewSessions(store, PrincipalResolverFunc(func(_ context.Context, subject string) (Principal, error) {
+		return Principal{Subject: subject}, nil
+	}), SessionConfig{CookieName: "test_session", AllowInsecureCookies: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, subject := range []string{"user-1", "user-1", "user-2"} {
+		handler := sessions.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if err := sessions.SignIn(r.Context(), subject); err != nil {
+				t.Fatal(err)
+			}
+		}))
+		handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/login", nil))
+	}
+	all, err := store.All()
+	if err != nil {
+		t.Fatal(err)
+	}
+	transaction := &testRevocationStore{sessions: all}
+	if err := sessions.RevokeSubjectWithStore(context.Background(), "user-1", transaction); err != nil {
+		t.Fatal(err)
+	}
+	if len(transaction.deleted) != 2 || len(transaction.sessions) != 1 {
+		t.Fatalf("deleted=%d remaining=%d", len(transaction.deleted), len(transaction.sessions))
+	}
+}
+
 func TestPrincipalClaimsAreCopiedIntoContext(t *testing.T) {
 	claims := map[string]string{"email": "user@example.test"}
 	ctx := withPrincipal(context.Background(), Principal{Subject: "user-1", Claims: claims})
@@ -163,4 +192,19 @@ func TestPrincipalClaimsAreCopiedIntoContext(t *testing.T) {
 	if !ok || principal.Claims["email"] != "user@example.test" {
 		t.Fatalf("principal = %#v", principal)
 	}
+}
+
+type testRevocationStore struct {
+	sessions map[string][]byte
+	deleted  []string
+}
+
+func (s *testRevocationStore) All(context.Context) (map[string][]byte, error) {
+	return s.sessions, nil
+}
+
+func (s *testRevocationStore) Delete(_ context.Context, token string) error {
+	delete(s.sessions, token)
+	s.deleted = append(s.deleted, token)
+	return nil
 }

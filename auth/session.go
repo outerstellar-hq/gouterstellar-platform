@@ -46,6 +46,14 @@ func (f PrincipalResolverFunc) ResolvePrincipal(ctx context.Context, subject str
 	return f(ctx, subject)
 }
 
+// SessionRevocationStore is the minimal storage boundary needed to revoke
+// sessions. Consumers can implement it over an existing database transaction
+// so a privilege change and its session invalidation commit atomically.
+type SessionRevocationStore interface {
+	All(context.Context) (map[string][]byte, error)
+	Delete(context.Context, string) error
+}
+
 // SessionConfig centralizes session lifetime and cookie policy. Production
 // cookies are Secure by default; local HTTP development must opt out explicitly.
 type SessionConfig struct {
@@ -158,12 +166,22 @@ func (s *Sessions) SignOut(ctx context.Context) error {
 // deletes store keys directly because SCS iteration returns keys in their
 // stored form, which may already be hashed.
 func (s *Sessions) RevokeSubject(ctx context.Context, subject string) error {
+	return s.RevokeSubjectWithStore(ctx, subject, managerRevocationStore{sessions: s})
+}
+
+// RevokeSubjectWithStore deletes every active session for subject through
+// store. Use this when session invalidation must share a consumer-owned
+// database transaction with a password or authorization change.
+func (s *Sessions) RevokeSubjectWithStore(ctx context.Context, subject string, store SessionRevocationStore) error {
 	if strings.TrimSpace(subject) == "" {
 		return errors.New("session subject is required")
 	}
-	all, err := s.allSessions(ctx)
+	if store == nil {
+		return errors.New("session revocation store is required")
+	}
+	all, err := store.All(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("iterate sessions: %w", err)
 	}
 	for token, data := range all {
 		_, values, decodeErr := s.manager.Codec.Decode(data)
@@ -173,7 +191,7 @@ func (s *Sessions) RevokeSubject(ctx context.Context, subject string) error {
 		if values[sessionSubjectKey] != subject {
 			continue
 		}
-		if deleteErr := s.deleteStoredSession(ctx, token); deleteErr != nil {
+		if deleteErr := store.Delete(ctx, token); deleteErr != nil {
 			return fmt.Errorf("revoke subject session: %w", deleteErr)
 		}
 	}
@@ -210,6 +228,18 @@ func RequireRole(role string, next http.Handler) http.Handler {
 }
 
 type principalContextKey struct{}
+
+type managerRevocationStore struct {
+	sessions *Sessions
+}
+
+func (s managerRevocationStore) All(ctx context.Context) (map[string][]byte, error) {
+	return s.sessions.allSessions(ctx)
+}
+
+func (s managerRevocationStore) Delete(ctx context.Context, token string) error {
+	return s.sessions.deleteStoredSession(ctx, token)
+}
 
 func withPrincipal(ctx context.Context, principal Principal) context.Context {
 	principal.Roles = append([]string(nil), principal.Roles...)
