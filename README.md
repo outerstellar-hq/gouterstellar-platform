@@ -166,7 +166,9 @@ gouterstellar-platform -X-> consumer application
 
 Adding `package main`, application wiring, product-specific handlers,
 templates, assets, schemas, deployment configuration, or an in-tree plugin is a
-repository violation enforced by CI.
+repository violation. The repository-owned boundary check runs both locally and
+in CI, and its explicit package/root allow-lists make every new module an
+intentional architecture change.
 
 ## Development
 

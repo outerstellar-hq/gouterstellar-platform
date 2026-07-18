@@ -43,23 +43,8 @@ jobs:
         run: go mod tidy -diff
 
       - name: Verify library-only boundary
-        shell: bash
-        run: |
-          if [[ -n "$(go list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./...)" ]]; then
-            echo "Executable packages are not allowed in this library repository."
-            exit 1
-          fi
-          for forbidden in cmd internal extensions platform config static queries Dockerfile compose.yaml; do
-            if [[ -e "$forbidden" ]]; then
-              echo "Forbidden application-host path: $forbidden"
-              exit 1
-            fi
-          done
-          product_pattern='star''forge|star''line'
-          if git grep -n -i -E "$product_pattern" -- .; then
-            echo "Product-specific references are not allowed."
-            exit 1
-          fi
+        shell: pwsh
+        run: ./scripts/verify-library-boundary.ps1
 
       - name: Vet
         run: go vet ./...
