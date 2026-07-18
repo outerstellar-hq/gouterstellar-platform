@@ -1,8 +1,0 @@
-{{ define "content" }}
-<section class="reports-page" aria-labelledby="reports-heading">
-    <h1 id="reports-heading">Reports</h1>
-    <p>Live platform totals available to this extension.</p>
-    {{ if .BodyData.Request.User }}<p>Viewing as {{ .BodyData.Request.User.Username }}.</p>{{ end }}
-    {{ template "reports_metric" .BodyData }}
-</section>
-{{ end }}

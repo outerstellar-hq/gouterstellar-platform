@@ -42,23 +42,27 @@ jobs:
       - name: Check module files
         run: go mod tidy -diff
 
+      - name: Verify library-only boundary
+        shell: bash
+        run: |
+          if [[ -n "$(go list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./...)" ]]; then
+            echo "Executable packages are not allowed in this library repository."
+            exit 1
+          fi
+          for forbidden in cmd internal extensions platform config static queries Dockerfile compose.yaml; do
+            if [[ -e "$forbidden" ]]; then
+              echo "Forbidden application-host path: $forbidden"
+              exit 1
+            fi
+          done
+          product_pattern='star''forge|star''line'
+          if git grep -n -i -E "$product_pattern" -- .; then
+            echo "Product-specific references are not allowed."
+            exit 1
+          fi
+
       - name: Vet
         run: go vet ./...
 
       - name: Test
         run: go test ./... -count=1 -parallel=4 -timeout=10m
-
-      - name: Build commands
-        run: |
-          build_date="$(date -u +%F)"
-          short_sha="${GITHUB_SHA:0:12}"
-          ldflags="-X github.com/outerstellar-hq/gouterstellar-platform/platform/buildinfo.buildDate=${build_date} -X github.com/outerstellar-hq/gouterstellar-platform/platform/buildinfo.buildNumber=${GITHUB_RUN_NUMBER} -X github.com/outerstellar-hq/gouterstellar-platform/platform/buildinfo.commitSHA=${short_sha}"
-          go build -trimpath -ldflags="${ldflags}" ./cmd/...
-
-      - name: Build deployment image
-        run: |
-          docker build \
-            --build-arg BUILD_DATE="$(date -u +%F)" \
-            --build-arg BUILD_NUMBER="${GITHUB_RUN_NUMBER}" \
-            --build-arg COMMIT_SHA="${GITHUB_SHA:0:12}" \
-            --tag gouterstellar-platform:ci .
