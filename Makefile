@@ -17,11 +17,7 @@ fmt:
 	goimports -w -local github.com/outerstellar-hq/gouterstellar-platform .
 
 boundary:
-	@test -z "$$(go list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./...)"
-	@test ! -d cmd
-	@test ! -d internal
-	@test ! -d extensions
-	@test ! -d platform
+	pwsh -NoProfile -File scripts/verify-library-boundary.ps1
 
 check: boundary vet test lint
 
