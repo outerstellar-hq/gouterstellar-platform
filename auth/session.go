@@ -75,6 +75,7 @@ type SessionRevocationStore interface {
 // cookies are Secure by default; local HTTP development must opt out explicitly.
 type SessionConfig struct {
 	CookieName           string
+	SameSite             http.SameSite
 	Lifetime             time.Duration
 	IdleTimeout          time.Duration
 	PersistCookie        bool
@@ -107,6 +108,17 @@ func NewSessions(store scs.Store, resolver PrincipalResolver, config SessionConf
 	if config.IdleTimeout < 0 || config.IdleTimeout > config.Lifetime {
 		return nil, errors.New("session idle timeout must be between zero and lifetime")
 	}
+	if config.SameSite == 0 || config.SameSite == http.SameSiteDefaultMode {
+		config.SameSite = http.SameSiteLaxMode
+	}
+	if config.SameSite != http.SameSiteLaxMode &&
+		config.SameSite != http.SameSiteStrictMode &&
+		config.SameSite != http.SameSiteNoneMode {
+		return nil, errors.New("session SameSite must be Lax, Strict, or None")
+	}
+	if config.SameSite == http.SameSiteNoneMode && config.AllowInsecureCookies {
+		return nil, errors.New("SameSite=None requires secure session cookies")
+	}
 
 	manager := scs.New()
 	manager.Store = store
@@ -116,7 +128,7 @@ func NewSessions(store scs.Store, resolver PrincipalResolver, config SessionConf
 	manager.Cookie.Name = config.CookieName
 	manager.Cookie.HttpOnly = true
 	manager.Cookie.Path = "/"
-	manager.Cookie.SameSite = http.SameSiteStrictMode
+	manager.Cookie.SameSite = config.SameSite
 	manager.Cookie.Secure = !config.AllowInsecureCookies
 	manager.Cookie.Persist = config.PersistCookie
 	if config.ErrorHandler != nil {
