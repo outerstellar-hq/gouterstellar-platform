@@ -18,7 +18,6 @@ type CSRFConfig struct {
 	FieldName            string
 	MaxAge               time.Duration
 	AllowInsecureCookies bool
-	TrustedOrigins       []string
 	ErrorHandler         http.Handler
 }
 
@@ -51,9 +50,6 @@ func NewCSRF(config CSRFConfig) (func(http.Handler) http.Handler, error) {
 		csrf.Secure(!config.AllowInsecureCookies),
 		csrf.SameSite(csrf.SameSiteStrictMode),
 		csrf.MaxAge(int(maxAge.Seconds())),
-	}
-	if len(config.TrustedOrigins) > 0 {
-		options = append(options, csrf.TrustedOrigins(append([]string(nil), config.TrustedOrigins...)))
 	}
 	if config.ErrorHandler != nil {
 		options = append(options, csrf.ErrorHandler(config.ErrorHandler))
