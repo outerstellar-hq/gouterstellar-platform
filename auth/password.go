@@ -2,8 +2,10 @@
 package auth
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/alexedwards/argon2id"
 )
@@ -11,9 +13,13 @@ import (
 const (
 	defaultMinPasswordBytes = 12
 	defaultMaxPasswordBytes = 1024
-	maxArgonMemoryKiB       = 1024 * 1024
-	maxArgonIterations      = 10
+	maxArgonHashBytes       = 256
+	maxArgonMemoryKiB       = 256 * 1024
+	maxArgonIterations      = 6
 	maxArgonParallelism     = 16
+	maxArgonWorkKiB         = 512 * 1024
+	maxArgonSaltBytes       = 64
+	maxArgonKeyBytes        = 64
 )
 
 var (
@@ -80,11 +86,10 @@ func (p *Passwords) Hash(password string) (string, error) {
 // parameters before invoking Argon2, preventing a malformed database value
 // from turning login into an unbounded CPU or memory allocation.
 func (p *Passwords) Verify(hash, password string) (bool, error) {
-	params, _, _, err := argon2id.DecodeHash(hash)
-	if err != nil {
-		return false, fmt.Errorf("decode password hash: %w", err)
+	if err := p.validateCandidatePassword(password); err != nil {
+		return false, err
 	}
-	if err := validateArgonParams(*params); err != nil {
+	if _, err := decodeHash(hash); err != nil {
 		return false, err
 	}
 	matched, err := argon2id.ComparePasswordAndHash(password, hash)
@@ -97,11 +102,8 @@ func (p *Passwords) Verify(hash, password string) (bool, error) {
 // NeedsRehash reports whether a valid hash should be upgraded to the current
 // configured cost after the next successful login.
 func (p *Passwords) NeedsRehash(hash string) (bool, error) {
-	params, _, _, err := argon2id.DecodeHash(hash)
+	params, err := decodeHash(hash)
 	if err != nil {
-		return false, fmt.Errorf("decode password hash: %w", err)
-	}
-	if err := validateArgonParams(*params); err != nil {
 		return false, err
 	}
 	return *params != p.params, nil
@@ -117,12 +119,49 @@ func (p *Passwords) validatePassword(password string) error {
 	return nil
 }
 
+func (p *Passwords) validateCandidatePassword(password string) error {
+	if len(password) > p.maxBytes {
+		return fmt.Errorf("%w: maximum is %d bytes", ErrPasswordTooLong, p.maxBytes)
+	}
+	return nil
+}
+
+func decodeHash(hash string) (*argon2id.Params, error) {
+	if err := preflightHash(hash); err != nil {
+		return nil, err
+	}
+	params, _, _, err := argon2id.DecodeHash(hash)
+	if err != nil {
+		return nil, fmt.Errorf("decode password hash: %w", err)
+	}
+	if err := validateArgonParams(*params); err != nil {
+		return nil, err
+	}
+	return params, nil
+}
+
+func preflightHash(hash string) error {
+	if len(hash) > maxArgonHashBytes {
+		return fmt.Errorf("%w: encoded hash exceeds %d bytes", ErrUnsafeHash, maxArgonHashBytes)
+	}
+	parts := strings.Split(hash, "$")
+	if len(parts) != 6 {
+		return nil
+	}
+	if len(parts[4]) > base64.RawStdEncoding.EncodedLen(maxArgonSaltBytes) ||
+		len(parts[5]) > base64.RawStdEncoding.EncodedLen(maxArgonKeyBytes) {
+		return fmt.Errorf("%w: encoded salt or key exceeds verification limits", ErrUnsafeHash)
+	}
+	return nil
+}
+
 func validateArgonParams(params argon2id.Params) error {
 	if params.Memory == 0 || params.Memory > maxArgonMemoryKiB ||
 		params.Iterations == 0 || params.Iterations > maxArgonIterations ||
 		params.Parallelism == 0 || params.Parallelism > maxArgonParallelism ||
-		params.SaltLength < 16 || params.SaltLength > 64 ||
-		params.KeyLength < 16 || params.KeyLength > 64 {
+		uint64(params.Memory)*uint64(params.Iterations) > maxArgonWorkKiB ||
+		params.SaltLength < 16 || params.SaltLength > maxArgonSaltBytes ||
+		params.KeyLength < 16 || params.KeyLength > maxArgonKeyBytes {
 		return ErrUnsafeHash
 	}
 	return nil
