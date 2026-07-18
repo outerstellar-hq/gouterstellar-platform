@@ -15,9 +15,11 @@ func TestCSRFIssuesSecureDefaultsAndRejectsMissingToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if token := CSRFToken(r); token == "" {
+		token := CSRFToken(r)
+		if token == "" {
 			t.Fatal("missing token")
 		}
+		w.Header().Set("X-Test-CSRF-Token", token)
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	getResponse := httptest.NewRecorder()
@@ -26,9 +28,34 @@ func TestCSRFIssuesSecureDefaultsAndRejectsMissingToken(t *testing.T) {
 	if len(cookies) != 1 || !cookies[0].Secure || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteStrictMode {
 		t.Fatalf("cookies = %#v", cookies)
 	}
+	token := getResponse.Header().Get("X-Test-CSRF-Token")
+
+	validForm := httptest.NewRequest(http.MethodPost, "https://example.test/form", strings.NewReader(url.Values{
+		"csrf_token": {token},
+	}.Encode()))
+	validForm.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	validForm.Header.Set("Referer", "https://example.test/form")
+	validForm.AddCookie(cookies[0])
+	validFormResponse := httptest.NewRecorder()
+	handler.ServeHTTP(validFormResponse, validForm)
+	if validFormResponse.Code != http.StatusNoContent {
+		t.Fatalf("valid form status = %d", validFormResponse.Code)
+	}
+
+	validJSON := httptest.NewRequest(http.MethodPost, "https://example.test/data", strings.NewReader("{}"))
+	validJSON.Header.Set("Content-Type", "application/json")
+	validJSON.Header.Set("Referer", "https://example.test/form")
+	validJSON.Header.Set("X-CSRF-Token", token)
+	validJSON.AddCookie(cookies[0])
+	validJSONResponse := httptest.NewRecorder()
+	handler.ServeHTTP(validJSONResponse, validJSON)
+	if validJSONResponse.Code != http.StatusNoContent {
+		t.Fatalf("valid JSON status = %d", validJSONResponse.Code)
+	}
 
 	post := httptest.NewRequest(http.MethodPost, "https://example.test/form", strings.NewReader(url.Values{}.Encode()))
 	post.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	post.Header.Set("Referer", "https://example.test/form")
 	post.AddCookie(cookies[0])
 	postResponse := httptest.NewRecorder()
 	handler.ServeHTTP(postResponse, post)

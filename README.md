@@ -110,14 +110,23 @@ if err != nil {
     return err
 }
 
-handler := web.SecurityHeaders(web.SecurityHeadersConfig{HSTS: true})(
-    csrfMiddleware(applicationHandler),
-)
+browserRoutes := http.NewServeMux()
+browserRoutes.Handle("/", cookieAuthenticatedBrowserHandler)
+
+root := http.NewServeMux()
+root.Handle("/api/", bearerTokenAPIHandler)
+root.Handle("/", csrfMiddleware(browserRoutes))
+
+handler := web.SecurityHeaders(web.SecurityHeadersConfig{HSTS: true})(root)
 ```
 
-Use `web.CSRFToken(request)` for JSON clients or `web.CSRFField(request)` in
-server-rendered forms. Use `web.CSPNonce(request.Context())` in an inline script
-or style only when the configured CSP permits it.
+CSRF protects routes authenticated by ambient browser credentials such as
+session cookies. Do not wrap APIs authenticated exclusively by an
+`Authorization: Bearer` token; keep those routes on a separate router as above.
+Cookie-authenticated JSON requests send `web.CSRFToken(request)` in the
+`X-CSRF-Token` header. Server-rendered forms use `web.CSRFField(request)`. Use
+`web.CSPNonce(request.Context())` in an inline script or style only when the
+configured CSP permits it.
 
 For JSON endpoints, `web.DecodeJSON` combines the request size limit with one
 strict decode. Unknown fields, malformed trailing bytes, and a second JSON
