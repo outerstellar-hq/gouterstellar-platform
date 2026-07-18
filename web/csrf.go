@@ -22,7 +22,9 @@ type CSRFConfig struct {
 	ErrorHandler         http.Handler
 }
 
-// NewCSRF returns Gorilla CSRF middleware with platform security defaults.
+// NewCSRF returns Gorilla CSRF middleware with platform security defaults for
+// cookie-authenticated browser routes. Bearer-token APIs should use a separate
+// router without cookie-backed CSRF middleware.
 func NewCSRF(config CSRFConfig) (func(http.Handler) http.Handler, error) {
 	if len(config.AuthKey) < 32 {
 		return nil, errors.New("CSRF authentication key must contain at least 32 bytes")
