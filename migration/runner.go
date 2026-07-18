@@ -8,7 +8,6 @@ import (
 	"io/fs"
 
 	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 )
 
@@ -17,21 +16,21 @@ type Runner struct {
 	migrate *migrate.Migrate
 }
 
-// New validates an embedded migration directory and combines it with the
-// consumer's already-open database driver. This repository never supplies or
-// owns a schema.
-func New(files fs.FS, path, databaseName string, driver database.Driver) (*Runner, error) {
+// New validates an embedded migration directory and opens the database URL
+// through a driver registered by the consumer. This repository never supplies
+// a driver, schema, or database URL.
+func New(files fs.FS, path, databaseURL string) (*Runner, error) {
 	if files == nil {
 		return nil, errors.New("migration filesystem is required")
 	}
-	if path == "" || databaseName == "" || driver == nil {
-		return nil, errors.New("migration path, database name and driver are required")
+	if path == "" || databaseURL == "" {
+		return nil, errors.New("migration path and database URL are required")
 	}
 	source, err := iofs.New(files, path)
 	if err != nil {
 		return nil, fmt.Errorf("open embedded migrations: %w", err)
 	}
-	migrator, err := migrate.NewWithInstance("iofs", source, databaseName, driver)
+	migrator, err := migrate.NewWithSourceInstance("iofs", source, databaseURL)
 	if err != nil {
 		_ = source.Close()
 		return nil, fmt.Errorf("construct migrator: %w", err)

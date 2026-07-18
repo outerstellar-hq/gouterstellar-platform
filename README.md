@@ -151,9 +151,10 @@ other's language.
 
 ## Embedded migrations and tracing
 
-`migration.New` accepts an application-owned `fs.FS`, directory, and
-`golang-migrate` database driver. `Runner.Up` treats an already-current schema
-as success; the migration SQL stays in the consumer repository.
+`migration.New` accepts an application-owned `fs.FS`, directory, and database
+URL. The consumer registers its `golang-migrate` database driver through the
+driver's normal blank import. `Runner.Up` treats an already-current schema as
+success; the migration SQL and database URL stay in the consumer repository.
 
 `observability.NewTracing` constructs an OTLP tracer provider and returns its
 shutdown lifecycle without silently changing process globals. Consumers may
