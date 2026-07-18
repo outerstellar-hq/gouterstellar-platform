@@ -10,7 +10,7 @@ product schema, deployment image, product assets, or in-tree plugins.
 | --- | --- | --- |
 | `auth` | Argon2id passwords, opaque tokens, server-side sessions, principals, JWTs, TOTP | `alexedwards/argon2id`, `alexedwards/scs`, `golang-jwt/jwt`, `pquerna/otp` |
 | `durablefile` | complete, crash-resistant file replacement with explicit permissions | `natefinch/atomic`, Go standard library |
-| `web` | masked CSRF tokens, CSP nonces, security headers, body limits, sensitive-response caching | `gorilla/csrf`, `net/http` |
+| `web` | masked CSRF tokens, strict bounded JSON, CSP nonces, security headers, body limits, sensitive-response caching | `gorilla/csrf`, `net/http` |
 | `ui` | shared server-rendered application shell and composition contract | `html/template`, `embed` |
 | `i18n` | application-owned Java `.properties` catalog loading and lookup | Go standard library |
 | `migration` | application-owned embedded migration sets | `golang-migrate/migrate` with `iofs` |
@@ -90,6 +90,18 @@ handler := web.SecurityHeaders(web.SecurityHeadersConfig{HSTS: true})(
 Use `web.CSRFToken(request)` for JSON clients or `web.CSRFField(request)` in
 server-rendered forms. Use `web.CSPNonce(request.Context())` in an inline script
 or style only when the configured CSP permits it.
+
+For JSON endpoints, `web.DecodeJSON` combines the request size limit with one
+strict decode. Unknown fields, malformed trailing bytes, and a second JSON
+value are rejected instead of being silently ignored:
+
+```go
+var input createWorkerRequest
+if err := web.DecodeJSON(w, r, 32<<10, &input); err != nil {
+    http.Error(w, "invalid JSON body", http.StatusBadRequest)
+    return
+}
+```
 
 ## Shared UI shell
 
