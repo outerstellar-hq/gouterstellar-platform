@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel/attribute"
@@ -37,7 +38,7 @@ func TestHTTPClientPreservesCallerConfiguration(t *testing.T) {
 }
 
 func TestGRPCOptionsPropagateOneTraceWithoutGlobalInstallation(t *testing.T) {
-	recorder := tracetest.NewSpanRecorder()
+	recorder := newNotifyingSpanRecorder()
 	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
 	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
 	tracing := &Tracing{provider: provider}
@@ -69,20 +70,51 @@ func TestGRPCOptionsPropagateOneTraceWithoutGlobalInstallation(t *testing.T) {
 	}
 	parent.End()
 
-	var clientTraceID, serverTraceID trace.TraceID
-	for _, span := range recorder.Ended() {
-		switch span.SpanKind() {
-		case trace.SpanKindClient:
-			clientTraceID = span.SpanContext().TraceID()
-		case trace.SpanKindServer:
-			serverTraceID = span.SpanContext().TraceID()
-		}
-	}
-	if !clientTraceID.IsValid() || !serverTraceID.IsValid() {
-		t.Fatalf("missing client or server span: client=%s server=%s", clientTraceID, serverTraceID)
-	}
+	clientTraceID, serverTraceID := recorder.waitForGRPCSpans(t)
 	if clientTraceID != parentTraceID || serverTraceID != parentTraceID {
 		t.Fatalf("trace propagation failed: parent=%s client=%s server=%s", parentTraceID, clientTraceID, serverTraceID)
+	}
+}
+
+type notifyingSpanRecorder struct {
+	*tracetest.SpanRecorder
+	ended chan struct{}
+}
+
+func newNotifyingSpanRecorder() *notifyingSpanRecorder {
+	return &notifyingSpanRecorder{SpanRecorder: tracetest.NewSpanRecorder(), ended: make(chan struct{}, 16)}
+}
+
+func (r *notifyingSpanRecorder) OnEnd(span sdktrace.ReadOnlySpan) {
+	r.SpanRecorder.OnEnd(span)
+	select {
+	case r.ended <- struct{}{}:
+	default:
+	}
+}
+
+func (r *notifyingSpanRecorder) waitForGRPCSpans(t *testing.T) (trace.TraceID, trace.TraceID) {
+	t.Helper()
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	for {
+		var clientTraceID, serverTraceID trace.TraceID
+		for _, span := range r.Ended() {
+			switch span.SpanKind() {
+			case trace.SpanKindClient:
+				clientTraceID = span.SpanContext().TraceID()
+			case trace.SpanKindServer:
+				serverTraceID = span.SpanContext().TraceID()
+			}
+		}
+		if clientTraceID.IsValid() && serverTraceID.IsValid() {
+			return clientTraceID, serverTraceID
+		}
+		select {
+		case <-r.ended:
+		case <-timer.C:
+			t.Fatalf("missing client or server span: client=%s server=%s", clientTraceID, serverTraceID)
+		}
 	}
 }
 
