@@ -7,6 +7,7 @@ $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $modulePath = 'github.com/outerstellar-hq/gouterstellar-platform'
 $allowedPackages = @(
     "$modulePath/auth"
+    "$modulePath/durablefile"
     "$modulePath/i18n"
     "$modulePath/migration"
     "$modulePath/observability"
@@ -23,6 +24,7 @@ $allowedTopLevelEntries = @(
     'README.md'
     'auth'
     'docs'
+    'durablefile'
     'go.mod'
     'go.sum'
     'i18n'
