@@ -16,12 +16,15 @@ const sessionSubjectKey = "outerstellar.auth.subject"
 
 var ErrUnauthenticated = errors.New("authentication required")
 
+var ErrSessionIterationUnsupported = errors.New("session store does not support iteration")
+
 // Principal is the application-neutral identity made available to HTTP
 // handlers after a session has been resolved against the consumer's user
 // authority.
 type Principal struct {
 	Subject string
 	Roles   []string
+	Claims  map[string]string
 }
 
 // HasRole performs an exact, case-sensitive role check.
@@ -150,6 +153,33 @@ func (s *Sessions) SignOut(ctx context.Context) error {
 	return nil
 }
 
+// RevokeSubject deletes every active session for subject. This is intended for
+// password changes, account disablement, and other privilege resets. It
+// deletes store keys directly because SCS iteration returns keys in their
+// stored form, which may already be hashed.
+func (s *Sessions) RevokeSubject(ctx context.Context, subject string) error {
+	if strings.TrimSpace(subject) == "" {
+		return errors.New("session subject is required")
+	}
+	all, err := s.allSessions(ctx)
+	if err != nil {
+		return err
+	}
+	for token, data := range all {
+		_, values, decodeErr := s.manager.Codec.Decode(data)
+		if decodeErr != nil {
+			return fmt.Errorf("decode stored session: %w", decodeErr)
+		}
+		if values[sessionSubjectKey] != subject {
+			continue
+		}
+		if deleteErr := s.deleteStoredSession(ctx, token); deleteErr != nil {
+			return fmt.Errorf("revoke subject session: %w", deleteErr)
+		}
+	}
+	return nil
+}
+
 // PrincipalFromContext returns the principal resolved by Middleware.
 func PrincipalFromContext(ctx context.Context) (Principal, bool) {
 	principal, ok := ctx.Value(principalContextKey{}).(Principal)
@@ -183,5 +213,42 @@ type principalContextKey struct{}
 
 func withPrincipal(ctx context.Context, principal Principal) context.Context {
 	principal.Roles = append([]string(nil), principal.Roles...)
+	principal.Claims = cloneClaims(principal.Claims)
 	return context.WithValue(ctx, principalContextKey{}, principal)
+}
+
+func (s *Sessions) allSessions(ctx context.Context) (map[string][]byte, error) {
+	if store, ok := s.manager.Store.(scs.IterableCtxStore); ok {
+		all, err := store.AllCtx(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("iterate sessions: %w", err)
+		}
+		return all, nil
+	}
+	if store, ok := s.manager.Store.(scs.IterableStore); ok {
+		all, err := store.All()
+		if err != nil {
+			return nil, fmt.Errorf("iterate sessions: %w", err)
+		}
+		return all, nil
+	}
+	return nil, ErrSessionIterationUnsupported
+}
+
+func (s *Sessions) deleteStoredSession(ctx context.Context, token string) error {
+	if store, ok := s.manager.Store.(scs.CtxStore); ok {
+		return store.DeleteCtx(ctx, token)
+	}
+	return s.manager.Store.Delete(token)
+}
+
+func cloneClaims(claims map[string]string) map[string]string {
+	if len(claims) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(claims))
+	for name, value := range claims {
+		cloned[name] = value
+	}
+	return cloned
 }
