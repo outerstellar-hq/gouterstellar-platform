@@ -9,6 +9,7 @@ product schema, deployment image, product assets, or in-tree plugins.
 | Module | Shared responsibility | Proven implementation underneath |
 | --- | --- | --- |
 | `auth` | Argon2id passwords, opaque tokens, server-side sessions, principals, JWTs, TOTP | `alexedwards/argon2id`, `alexedwards/scs`, `golang-jwt/jwt`, `pquerna/otp` |
+| `durablefile` | complete, crash-resistant file replacement with explicit permissions | `natefinch/atomic`, Go standard library |
 | `web` | masked CSRF tokens, CSP nonces, security headers, body limits, sensitive-response caching | `gorilla/csrf`, `net/http` |
 | `ui` | shared server-rendered application shell and composition contract | `html/template`, `embed` |
 | `i18n` | application-owned Java `.properties` catalog loading and lookup | Go standard library |
@@ -149,6 +150,22 @@ Translation catalogs and supported-language policy remain application-owned.
 Locale-bound readers are immutable, so concurrent requests cannot change each
 other's language.
 
+## Durable files
+
+`durablefile.Write` and `durablefile.WriteReader` create missing parent
+directories, stage data beside its destination, apply explicit permissions,
+flush and close it, and then replace the destination atomically. On Unix the
+parent directory is also synced; on Windows the replacement delegates to
+`MoveFileEx` with write-through through `natefinch/atomic`.
+
+```go
+err := durablefile.Write(path, encodedState, 0o600, 0o700)
+```
+
+Use `durablefile.Replace` when a consumer must determine the final destination
+only after it has finished producing a temporary file, such as a content-hash
+cache. Source and destination must be on the same filesystem.
+
 ## Embedded migrations and tracing
 
 `migration.New` accepts an application-owned `fs.FS`, directory, and database
@@ -165,6 +182,7 @@ call `InstallGlobal` explicitly and use `observability.HTTP` or
 
 ```text
 consumer application -> gouterstellar-platform/auth
+consumer application -> gouterstellar-platform/durablefile
 consumer application -> gouterstellar-platform/web
 consumer application -> gouterstellar-platform/ui
 consumer application -> gouterstellar-platform/i18n
