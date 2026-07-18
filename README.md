@@ -84,8 +84,10 @@ rejected; adopting this contract intentionally signs out unversioned sessions.
 
 `SignIn` renews the session token before changing privilege. `SignOut` destroys
 the server-side session and expires the cookie. Production cookies are Secure
-by default. Local plain-HTTP development must opt into
-`AllowInsecureCookies` explicitly. The deprecated subject scan/delete helpers
+by default, and SameSite defaults to Lax so common top-level OAuth callbacks
+work without making cookies cross-site. Applications can explicitly select
+Strict or None; None requires Secure cookies. Local plain-HTTP development must
+opt into `AllowInsecureCookies` explicitly. The deprecated subject scan/delete helpers
 remain available only for best-effort storage cleanup; they are not an
 authoritative revocation mechanism because a concurrent session commit can
 miss their snapshot.

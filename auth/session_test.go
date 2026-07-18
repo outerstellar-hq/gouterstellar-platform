@@ -30,7 +30,8 @@ func TestSessionsSignInResolveAndAuthorize(t *testing.T) {
 	loginResponse := httptest.NewRecorder()
 	login.ServeHTTP(loginResponse, httptest.NewRequest(http.MethodPost, "/login", nil))
 	cookies := loginResponse.Result().Cookies()
-	if len(cookies) != 1 || cookies[0].Name != "test_session" || !cookies[0].HttpOnly || cookies[0].Secure {
+	if len(cookies) != 1 || cookies[0].Name != "test_session" || !cookies[0].HttpOnly || cookies[0].Secure ||
+		cookies[0].SameSite != http.SameSiteLaxMode {
 		t.Fatalf("unexpected cookies: %#v", cookies)
 	}
 
@@ -47,6 +48,39 @@ func TestSessionsSignInResolveAndAuthorize(t *testing.T) {
 	protected.ServeHTTP(response, request)
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("status = %d", response.Code)
+	}
+}
+
+func TestSessionsValidateAndApplySameSitePolicy(t *testing.T) {
+	resolver := PrincipalResolverFunc(func(_ context.Context, subject string) (Principal, error) {
+		return Principal{Subject: subject, SecurityVersion: testSecurityVersion}, nil
+	})
+	if _, err := NewSessions(memstore.New(), resolver, SessionConfig{
+		CookieName: "test_session", SameSite: http.SameSite(99),
+	}); err == nil {
+		t.Fatal("expected invalid SameSite error")
+	}
+	if _, err := NewSessions(memstore.New(), resolver, SessionConfig{
+		CookieName: "test_session", SameSite: http.SameSiteNoneMode, AllowInsecureCookies: true,
+	}); err == nil {
+		t.Fatal("expected insecure SameSite=None error")
+	}
+
+	sessions, err := NewSessions(memstore.New(), resolver, SessionConfig{
+		CookieName: "test_session", SameSite: http.SameSiteStrictMode, AllowInsecureCookies: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := sessions.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sessions.manager.Put(r.Context(), "value", "present")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", nil))
+	cookies := response.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].SameSite != http.SameSiteStrictMode {
+		t.Fatalf("unexpected cookies: %#v", cookies)
 	}
 }
 
