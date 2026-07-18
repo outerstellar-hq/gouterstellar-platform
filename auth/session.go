@@ -12,19 +12,34 @@ import (
 	"github.com/alexedwards/scs/v2"
 )
 
-const sessionSubjectKey = "outerstellar.auth.subject"
+const (
+	sessionSubjectKey         = "outerstellar.auth.subject"
+	sessionSecurityVersionKey = "outerstellar.auth.security_version"
+)
 
 var ErrUnauthenticated = errors.New("authentication required")
 
 var ErrSessionIterationUnsupported = errors.New("session store does not support iteration")
 
-// Principal is the application-neutral identity made available to HTTP
-// handlers after a session has been resolved against the consumer's user
-// authority.
+// SecurityVersion is an opaque application-owned credential and authorization
+// epoch. Applications rotate it atomically with security-sensitive changes.
+type SecurityVersion string
+
+// SessionIdentity is captured when credentials are verified and stored in the
+// new session. SecurityVersion must be the value observed during verification,
+// not a value re-read later during sign-in.
+type SessionIdentity struct {
+	Subject         string
+	SecurityVersion SecurityVersion
+}
+
+// Principal is the current application-neutral identity returned by the
+// consumer's user authority for every authenticated request.
 type Principal struct {
-	Subject string
-	Roles   []string
-	Claims  map[string]string
+	Subject         string
+	SecurityVersion SecurityVersion
+	Roles           []string
+	Claims          map[string]string
 }
 
 // HasRole performs an exact, case-sensitive role check.
@@ -46,9 +61,11 @@ func (f PrincipalResolverFunc) ResolvePrincipal(ctx context.Context, subject str
 	return f(ctx, subject)
 }
 
-// SessionRevocationStore is the minimal storage boundary needed to revoke
-// sessions. Consumers can implement it over an existing database transaction
-// so a privilege change and its session invalidation commit atomically.
+// SessionRevocationStore is the storage boundary for best-effort removal of
+// sessions visible in one snapshot.
+//
+// Deprecated: rotate Principal.SecurityVersion for authoritative revocation.
+// Snapshot iteration cannot exclude a concurrently committed session.
 type SessionRevocationStore interface {
 	All(context.Context) (map[string][]byte, error)
 	Delete(context.Context, string) error
@@ -118,10 +135,17 @@ func (s *Sessions) Middleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		securityVersion := SecurityVersion(s.manager.GetString(r.Context(), sessionSecurityVersionKey))
+		if securityVersion == "" {
+			if !s.destroyInvalidSession(w, r, errors.New("session security version is missing")) {
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
 		principal, err := s.resolver.ResolvePrincipal(r.Context(), subject)
 		if errors.Is(err, ErrUnauthenticated) {
-			if destroyErr := s.manager.Destroy(r.Context()); destroyErr != nil {
-				s.manager.ErrorFunc(w, r, fmt.Errorf("destroy invalid session: %w", destroyErr))
+			if !s.destroyInvalidSession(w, r, err) {
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -135,21 +159,33 @@ func (s *Sessions) Middleware(next http.Handler) http.Handler {
 			s.manager.ErrorFunc(w, r, errors.New("principal resolver returned a mismatched subject"))
 			return
 		}
+		if principal.SecurityVersion == "" || principal.SecurityVersion != securityVersion {
+			if !s.destroyInvalidSession(w, r, errors.New("session security version is stale")) {
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
 		next.ServeHTTP(w, r.WithContext(withPrincipal(r.Context(), principal)))
 	})
 	return s.manager.LoadAndSave(resolve)
 }
 
-// SignIn rotates the session token before recording the authenticated subject,
-// preventing session fixation across privilege changes.
-func (s *Sessions) SignIn(ctx context.Context, subject string) error {
-	if strings.TrimSpace(subject) == "" {
+// SignIn rotates the session token before recording the identity captured by
+// credential verification. The security version makes stale sessions fail
+// closed even when they are committed concurrently with a version rotation.
+func (s *Sessions) SignIn(ctx context.Context, identity SessionIdentity) error {
+	if strings.TrimSpace(identity.Subject) == "" {
 		return errors.New("session subject is required")
+	}
+	if identity.SecurityVersion == "" {
+		return errors.New("session security version is required")
 	}
 	if err := s.manager.RenewToken(ctx); err != nil {
 		return fmt.Errorf("renew session token: %w", err)
 	}
-	s.manager.Put(ctx, sessionSubjectKey, subject)
+	s.manager.Put(ctx, sessionSubjectKey, identity.Subject)
+	s.manager.Put(ctx, sessionSecurityVersionKey, string(identity.SecurityVersion))
 	return nil
 }
 
@@ -161,17 +197,20 @@ func (s *Sessions) SignOut(ctx context.Context) error {
 	return nil
 }
 
-// RevokeSubject deletes every active session for subject. This is intended for
-// password changes, account disablement, and other privilege resets. It
-// deletes store keys directly because SCS iteration returns keys in their
-// stored form, which may already be hashed.
+// RevokeSubject best-effort deletes matching sessions visible in one store
+// snapshot. It deletes store keys directly because SCS iteration returns keys
+// in their stored form, which may already be hashed.
+//
+// Deprecated: rotate Principal.SecurityVersion for authoritative revocation.
 func (s *Sessions) RevokeSubject(ctx context.Context, subject string) error {
 	return s.RevokeSubjectWithStore(ctx, subject, managerRevocationStore{sessions: s})
 }
 
-// RevokeSubjectWithStore deletes every active session for subject through
-// store. Use this when session invalidation must share a consumer-owned
-// database transaction with a password or authorization change.
+// RevokeSubjectWithStore best-effort deletes matching sessions visible in one
+// store snapshot. A transaction does not prevent a new token from being
+// committed after the snapshot.
+//
+// Deprecated: rotate Principal.SecurityVersion for authoritative revocation.
 func (s *Sessions) RevokeSubjectWithStore(ctx context.Context, subject string, store SessionRevocationStore) error {
 	if strings.TrimSpace(subject) == "" {
 		return errors.New("session subject is required")
@@ -245,6 +284,14 @@ func withPrincipal(ctx context.Context, principal Principal) context.Context {
 	principal.Roles = append([]string(nil), principal.Roles...)
 	principal.Claims = cloneClaims(principal.Claims)
 	return context.WithValue(ctx, principalContextKey{}, principal)
+}
+
+func (s *Sessions) destroyInvalidSession(w http.ResponseWriter, r *http.Request, cause error) bool {
+	if err := s.manager.Destroy(r.Context()); err != nil {
+		s.manager.ErrorFunc(w, r, fmt.Errorf("destroy invalid session after %v: %w", cause, err))
+		return false
+	}
+	return true
 }
 
 func (s *Sessions) allSessions(ctx context.Context) (map[string][]byte, error) {

@@ -11,16 +11,18 @@ import (
 	"github.com/alexedwards/scs/v2/memstore"
 )
 
+const testSecurityVersion SecurityVersion = "version-1"
+
 func TestSessionsSignInResolveAndAuthorize(t *testing.T) {
 	sessions, err := NewSessions(memstore.New(), PrincipalResolverFunc(func(_ context.Context, subject string) (Principal, error) {
-		return Principal{Subject: subject, Roles: []string{"admin"}}, nil
+		return Principal{Subject: subject, SecurityVersion: testSecurityVersion, Roles: []string{"admin"}}, nil
 	}), SessionConfig{CookieName: "test_session", AllowInsecureCookies: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	login := sessions.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := sessions.SignIn(r.Context(), "user-1"); err != nil {
+		if err := sessions.SignIn(r.Context(), testSessionIdentity("user-1")); err != nil {
 			t.Fatal(err)
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -48,6 +50,38 @@ func TestSessionsSignInResolveAndAuthorize(t *testing.T) {
 	}
 }
 
+func TestSessionsSignInRotatesExistingToken(t *testing.T) {
+	sessions, err := NewSessions(memstore.New(), PrincipalResolverFunc(func(_ context.Context, subject string) (Principal, error) {
+		return Principal{Subject: subject, SecurityVersion: testSecurityVersion}, nil
+	}), SessionConfig{CookieName: "test_session", AllowInsecureCookies: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	start := sessions.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sessions.manager.Put(r.Context(), "cart", "item")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	startResponse := httptest.NewRecorder()
+	start.ServeHTTP(startResponse, httptest.NewRequest(http.MethodGet, "/", nil))
+	original := startResponse.Result().Cookies()[0]
+
+	login := sessions.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := sessions.SignIn(r.Context(), testSessionIdentity("user-1")); err != nil {
+			t.Fatal(err)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	request := httptest.NewRequest(http.MethodPost, "/login", nil)
+	request.AddCookie(original)
+	loginResponse := httptest.NewRecorder()
+	login.ServeHTTP(loginResponse, request)
+	rotated := loginResponse.Result().Cookies()[0]
+	if original.Value == rotated.Value {
+		t.Fatal("sign-in did not rotate the session token")
+	}
+}
+
 func TestSessionsFailClosedAndClearDisabledPrincipal(t *testing.T) {
 	sessions, err := NewSessions(memstore.New(), PrincipalResolverFunc(func(context.Context, string) (Principal, error) {
 		return Principal{}, ErrUnauthenticated
@@ -57,7 +91,7 @@ func TestSessionsFailClosedAndClearDisabledPrincipal(t *testing.T) {
 	}
 
 	login := sessions.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := sessions.SignIn(r.Context(), "disabled-user"); err != nil {
+		if err := sessions.SignIn(r.Context(), testSessionIdentity("disabled-user")); err != nil {
 			t.Fatal(err)
 		}
 	}))
@@ -98,7 +132,7 @@ func TestSessionsInfrastructureFailureDoesNotReachHandler(t *testing.T) {
 	}
 
 	login := sessions.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := sessions.SignIn(r.Context(), "user-1"); err != nil {
+		if err := sessions.SignIn(r.Context(), testSessionIdentity("user-1")); err != nil {
 			t.Fatal(err)
 		}
 	}))
@@ -115,10 +149,111 @@ func TestSessionsInfrastructureFailureDoesNotReachHandler(t *testing.T) {
 	}
 }
 
+func TestSessionsSecurityVersionRejectsExistingAndDelayedStaleSessions(t *testing.T) {
+	currentVersion := SecurityVersion("version-1")
+	sessions, err := NewSessions(memstore.New(), PrincipalResolverFunc(func(_ context.Context, subject string) (Principal, error) {
+		return Principal{Subject: subject, SecurityVersion: currentVersion}, nil
+	}), SessionConfig{CookieName: "test_session", AllowInsecureCookies: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	issue := func(identity SessionIdentity) *http.Cookie {
+		handler := sessions.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if err := sessions.SignIn(r.Context(), identity); err != nil {
+				t.Fatal(err)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/login", nil))
+		return response.Result().Cookies()[0]
+	}
+	assertStatus := func(cookie *http.Cookie, want int) *httptest.ResponseRecorder {
+		request := httptest.NewRequest(http.MethodGet, "/", nil)
+		request.AddCookie(cookie)
+		response := httptest.NewRecorder()
+		sessions.Middleware(RequireAuthenticated(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		}))).ServeHTTP(response, request)
+		if response.Code != want {
+			t.Fatalf("status=%d want=%d", response.Code, want)
+		}
+		return response
+	}
+
+	original := issue(SessionIdentity{Subject: "user-1", SecurityVersion: currentVersion})
+	assertStatus(original, http.StatusNoContent)
+
+	staleVersion := currentVersion
+	currentVersion = "version-2"
+	staleResponse := assertStatus(original, http.StatusUnauthorized)
+	if cookies := staleResponse.Result().Cookies(); len(cookies) != 1 || cookies[0].MaxAge >= 0 {
+		t.Fatalf("stale session cookie was not cleared: %#v", cookies)
+	}
+
+	delayed := issue(SessionIdentity{Subject: "user-1", SecurityVersion: staleVersion})
+	assertStatus(delayed, http.StatusUnauthorized)
+	current := issue(SessionIdentity{Subject: "user-1", SecurityVersion: currentVersion})
+	assertStatus(current, http.StatusNoContent)
+}
+
+func TestSessionsMissingSecurityVersionFailsClosed(t *testing.T) {
+	currentVersion := testSecurityVersion
+	sessions, err := NewSessions(memstore.New(), PrincipalResolverFunc(func(_ context.Context, subject string) (Principal, error) {
+		return Principal{Subject: subject, SecurityVersion: currentVersion}, nil
+	}), SessionConfig{CookieName: "test_session", AllowInsecureCookies: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sessions.SignIn(context.Background(), SessionIdentity{Subject: "user-1"}); err == nil {
+		t.Fatal("expected missing security version error")
+	}
+
+	issue := sessions.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := sessions.manager.RenewToken(r.Context()); err != nil {
+			t.Fatal(err)
+		}
+		sessions.manager.Put(r.Context(), sessionSubjectKey, "user-1")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	response := httptest.NewRecorder()
+	issue.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/legacy-login", nil))
+	cookie := response.Result().Cookies()[0]
+
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.AddCookie(cookie)
+	protectedResponse := httptest.NewRecorder()
+	sessions.Middleware(RequireAuthenticated(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))).ServeHTTP(
+		protectedResponse, request,
+	)
+	if protectedResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("unversioned session status = %d", protectedResponse.Code)
+	}
+
+	currentVersion = ""
+	versioned := sessions.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := sessions.SignIn(r.Context(), testSessionIdentity("user-1")); err != nil {
+			t.Fatal(err)
+		}
+	}))
+	versionedResponse := httptest.NewRecorder()
+	versioned.ServeHTTP(versionedResponse, httptest.NewRequest(http.MethodPost, "/login", nil))
+	request = httptest.NewRequest(http.MethodGet, "/", nil)
+	request.AddCookie(versionedResponse.Result().Cookies()[0])
+	protectedResponse = httptest.NewRecorder()
+	sessions.Middleware(RequireAuthenticated(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))).ServeHTTP(
+		protectedResponse, request,
+	)
+	if protectedResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("missing current version status = %d", protectedResponse.Code)
+	}
+}
+
 func TestSessionsRevokeSubjectDeletesOnlyMatchingSessions(t *testing.T) {
 	store := memstore.New()
 	sessions, err := NewSessions(store, PrincipalResolverFunc(func(_ context.Context, subject string) (Principal, error) {
-		return Principal{Subject: subject}, nil
+		return Principal{Subject: subject, SecurityVersion: testSecurityVersion}, nil
 	}), SessionConfig{CookieName: "test_session", AllowInsecureCookies: true})
 	if err != nil {
 		t.Fatal(err)
@@ -126,7 +261,7 @@ func TestSessionsRevokeSubjectDeletesOnlyMatchingSessions(t *testing.T) {
 
 	issue := func(subject string) *http.Cookie {
 		handler := sessions.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if err := sessions.SignIn(r.Context(), subject); err != nil {
+			if err := sessions.SignIn(r.Context(), testSessionIdentity(subject)); err != nil {
 				t.Fatal(err)
 			}
 		}))
@@ -158,14 +293,14 @@ func TestSessionsRevokeSubjectDeletesOnlyMatchingSessions(t *testing.T) {
 func TestSessionsRevokeSubjectWithStoreUsesConsumerTransaction(t *testing.T) {
 	store := memstore.New()
 	sessions, err := NewSessions(store, PrincipalResolverFunc(func(_ context.Context, subject string) (Principal, error) {
-		return Principal{Subject: subject}, nil
+		return Principal{Subject: subject, SecurityVersion: testSecurityVersion}, nil
 	}), SessionConfig{CookieName: "test_session", AllowInsecureCookies: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, subject := range []string{"user-1", "user-1", "user-2"} {
 		handler := sessions.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if err := sessions.SignIn(r.Context(), subject); err != nil {
+			if err := sessions.SignIn(r.Context(), testSessionIdentity(subject)); err != nil {
 				t.Fatal(err)
 			}
 		}))
@@ -192,6 +327,10 @@ func TestPrincipalClaimsAreCopiedIntoContext(t *testing.T) {
 	if !ok || principal.Claims["email"] != "user@example.test" {
 		t.Fatalf("principal = %#v", principal)
 	}
+}
+
+func testSessionIdentity(subject string) SessionIdentity {
+	return SessionIdentity{Subject: subject, SecurityVersion: testSecurityVersion}
 }
 
 type testRevocationStore struct {

@@ -51,7 +51,11 @@ sessions, err := auth.NewSessions(store, auth.PrincipalResolverFunc(
         if err != nil {
             return auth.Principal{}, err
         }
-        return auth.Principal{Subject: user.ID, Roles: user.Roles}, nil
+        return auth.Principal{
+            Subject:         user.ID,
+            SecurityVersion: auth.SecurityVersion(user.SecurityVersion),
+            Roles:           user.Roles,
+        }, nil
     },
 ), auth.SessionConfig{CookieName: "example_session"})
 if err != nil {
@@ -61,11 +65,30 @@ if err != nil {
 handler := sessions.Middleware(auth.RequireAuthenticated(applicationHandler))
 ```
 
-Call `sessions.SignIn(request.Context(), user.ID)` only from a handler already
-inside `sessions.Middleware`; it renews the session token before changing
-privilege. `SignOut` destroys the server-side session and expires the cookie.
-Production cookies are Secure by default. Local plain-HTTP development must opt
-into `AllowInsecureCookies` explicitly.
+Call `SignIn` only from a handler already inside `sessions.Middleware`. Pass the
+security version captured in the same read that verified the credentials:
+
+```go
+err = sessions.SignIn(request.Context(), auth.SessionIdentity{
+    Subject:         user.ID,
+    SecurityVersion: auth.SecurityVersion(user.SecurityVersion),
+})
+```
+
+The application owns this opaque value and rotates it in the same transaction
+as a password reset, account compromise response, or global sign-out. A random
+128-bit-or-larger value avoids reusing an old version. Every request compares
+the stored version with the current principal, so an old session committed
+concurrently with the rotation still fails closed. Missing versions are also
+rejected; adopting this contract intentionally signs out unversioned sessions.
+
+`SignIn` renews the session token before changing privilege. `SignOut` destroys
+the server-side session and expires the cookie. Production cookies are Secure
+by default. Local plain-HTTP development must opt into
+`AllowInsecureCookies` explicitly. The deprecated subject scan/delete helpers
+remain available only for best-effort storage cleanup; they are not an
+authoritative revocation mechanism because a concurrent session commit can
+miss their snapshot.
 
 `auth.JWTs` is intended for short-lived API bearer tokens. It requires a
 256-bit HMAC secret, issuer, audience, expiry, and a fixed HS256 allow-list.
