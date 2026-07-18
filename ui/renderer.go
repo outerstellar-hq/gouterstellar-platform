@@ -58,6 +58,7 @@ func (r *Renderer) Render(w io.Writer, shell Shell, data any) error {
 	if err := shell.Validate(); err != nil {
 		return err
 	}
+	shell.Labels = shell.Labels.withDefaults()
 	if err := r.templates.ExecuteTemplate(w, "shared-shell", Page{Shell: shell, Data: data}); err != nil {
 		return fmt.Errorf("render shared UI shell: %w", err)
 	}
