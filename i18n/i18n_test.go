@@ -1,6 +1,8 @@
 package i18n
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"testing/fstest"
 )
@@ -21,20 +23,22 @@ func TestTranslatorUsesApplicationCatalogAndFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := translator.Translate("greeting", "Alex"); got != "Hello Alex" {
+	defaultLocalizer := translator.Default()
+	if got := defaultLocalizer.Translate("greeting", "Alex"); got != "Hello Alex" {
 		t.Fatalf("Translate() = %q", got)
 	}
-	if err := translator.SetLocale("de"); err != nil {
+	german, err := translator.ForLocale("de")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if got := translator.Translate("greeting", "Alex"); got != "Hallo Alex" {
+	if got := german.Translate("greeting", "Alex"); got != "Hallo Alex" {
 		t.Fatalf("Translate() = %q", got)
 	}
-	if got := translator.TranslateForLocale("de", "version", "3.6.11", 4); got != "Version 3.6.11 has 4 messages" {
+	if got := german.Translate("version", "3.6.11", 4); got != "Version 3.6.11 has 4 messages" {
 		t.Fatalf("fallback translation = %q", got)
 	}
-	if translator.Locale() != "de" {
-		t.Fatal("TranslateForLocale changed the active locale")
+	if german.Locale() != "de" || defaultLocalizer.Locale() != "en" {
+		t.Fatal("localizer changed locale")
 	}
 }
 
@@ -50,7 +54,7 @@ func TestNewRejectsIncompleteCatalog(t *testing.T) {
 	}
 }
 
-func TestSetLocaleRejectsUnsupportedLocale(t *testing.T) {
+func TestForLocaleRejectsUnsupportedLocale(t *testing.T) {
 	translator, err := New(Options{
 		FS:            fstest.MapFS{"en.properties": {Data: []byte("ok=yes\n")}},
 		DefaultLocale: "en",
@@ -59,8 +63,51 @@ func TestSetLocaleRejectsUnsupportedLocale(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := translator.SetLocale("fr"); err == nil {
-		t.Fatal("SetLocale() accepted an unsupported locale")
+	if _, err := translator.ForLocale("fr"); err == nil {
+		t.Fatal("ForLocale() accepted an unsupported locale")
+	}
+}
+
+func TestLocalizersKeepConcurrentRequestsIsolated(t *testing.T) {
+	translator, err := New(Options{
+		FS: fstest.MapFS{
+			"en.properties": {Data: []byte("greeting=Hello\n")},
+			"de.properties": {Data: []byte("greeting=Hallo\n")},
+		},
+		DefaultLocale: "en",
+		Languages:     []Language{{Code: "en"}, {Code: "de"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	english := translator.Default()
+	german, err := translator.ForLocale("de")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const translationsPerRequest = 1_000
+	errors := make(chan error, 2)
+	var requests sync.WaitGroup
+	for _, request := range []struct {
+		localizer Localizer
+		want      string
+	}{{english, "Hello"}, {german, "Hallo"}} {
+		requests.Add(1)
+		go func() {
+			defer requests.Done()
+			for range translationsPerRequest {
+				if got := request.localizer.Translate("greeting"); got != request.want {
+					errors <- fmt.Errorf("locale %q translated greeting as %q", request.localizer.Locale(), got)
+					return
+				}
+			}
+		}()
+	}
+	requests.Wait()
+	close(errors)
+	for err := range errors {
+		t.Error(err)
 	}
 }
 
