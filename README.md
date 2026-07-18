@@ -159,6 +159,11 @@ err = renderer.Render(w, ui.Shell{
     ProductName: "Example",
     BrandURL:    "/",
     Stylesheets: []string{"/static/app.css"},
+    Labels: ui.ShellLabels{
+        SkipToContent:      translations.Text("shell.skip_to_content"),
+        PrimaryNavigation: translations.Text("shell.primary_navigation"),
+        SignOut:            translations.Text("shell.sign_out"),
+    },
     Header:      ui.Header{Title: "Workers"},
 }, pageData)
 ```

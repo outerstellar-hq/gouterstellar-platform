@@ -46,6 +46,32 @@ func TestSharedShellCannotBeOverriddenByConsumer(t *testing.T) {
 	}
 }
 
+func TestRendererUsesConsumerLocalizedChromeLabels(t *testing.T) {
+	renderer, err := NewRenderer(Options{
+		Templates: fstest.MapFS{"page.html": &fstest.MapFile{Data: []byte(`{{define "application-content"}}Inhalt{{end}}`)}},
+		Patterns:  []string{"*.html"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rendered bytes.Buffer
+	err = renderer.Render(&rendered, Shell{
+		Title: "Seite", ProductName: "Beispiel",
+		User: &User{DisplayName: "Benutzer", ProfileURL: "/profil", LogoutURL: "/abmelden"},
+		Labels: ShellLabels{
+			SkipToContent: "Zum Inhalt springen", PrimaryNavigation: "Hauptnavigation", SignOut: "Abmelden",
+		},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Zum Inhalt springen", `aria-label="Hauptnavigation"`, ">Abmelden</button>"} {
+		if !strings.Contains(rendered.String(), want) {
+			t.Errorf("localized shell missing %q", want)
+		}
+	}
+}
+
 func TestShellRejectsCrossOriginNavigation(t *testing.T) {
 	err := (Shell{Title: "Example", ProductName: "Example", Navigation: []NavigationGroup{{Items: []NavigationItem{{Label: "Bad", URL: "https://example.com"}}}}}).Validate()
 	if err == nil {

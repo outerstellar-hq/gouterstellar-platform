@@ -18,8 +18,30 @@ type Shell struct {
 	Status             *Status
 	Navigation         []NavigationGroup
 	User               *User
+	Labels             ShellLabels
 	Header             Header
 	Footer             Footer
+}
+
+// ShellLabels contains consumer-localizable text owned by the shared chrome.
+// Empty fields use English defaults.
+type ShellLabels struct {
+	SkipToContent     string
+	PrimaryNavigation string
+	SignOut           string
+}
+
+func (l ShellLabels) withDefaults() ShellLabels {
+	if l.SkipToContent == "" {
+		l.SkipToContent = "Skip to content"
+	}
+	if l.PrimaryNavigation == "" {
+		l.PrimaryNavigation = "Primary navigation"
+	}
+	if l.SignOut == "" {
+		l.SignOut = "Sign out"
+	}
+	return l
 }
 
 type Status struct {
