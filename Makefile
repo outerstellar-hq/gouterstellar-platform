@@ -13,8 +13,8 @@ vet:
 	go vet ./...
 
 fmt:
-	gofumpt -w ui i18n
-	goimports -w -local github.com/outerstellar-hq/gouterstellar-platform ui i18n
+	gofumpt -w .
+	goimports -w -local github.com/outerstellar-hq/gouterstellar-platform .
 
 boundary:
 	@test -z "$$(go list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./...)"

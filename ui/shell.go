@@ -62,8 +62,10 @@ type User struct {
 // HiddenField carries application-owned form state such as a CSRF token.
 type HiddenField struct{ Name, Value string }
 
-type Header struct{ Context, Title, Status string }
-type Footer struct{ Primary, Secondary string }
+type (
+	Header struct{ Context, Title, Status string }
+	Footer struct{ Primary, Secondary string }
+)
 
 func (s Shell) Validate() error {
 	if strings.TrimSpace(s.Title) == "" {

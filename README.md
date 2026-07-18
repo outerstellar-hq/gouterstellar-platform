@@ -1,17 +1,96 @@
 # gouterstellar-platform
 
-Reusable Go libraries for Outerstellar applications. This repository does not
-build or host an application: it has no executable, routes, deployment image,
-database schema, product assets, or in-tree product modules.
+Reusable Go libraries for independently deployed Outerstellar applications.
+This repository is not an application host: it has no executable, routes,
+product schema, deployment image, product assets, or in-tree plugins.
 
-## Libraries
+## Library catalog
 
-### `ui`
+| Module | Shared responsibility | Proven implementation underneath |
+| --- | --- | --- |
+| `auth` | Argon2id passwords, opaque tokens, server-side sessions, principals, JWTs, TOTP | `alexedwards/argon2id`, `alexedwards/scs`, `golang-jwt/jwt`, `pquerna/otp` |
+| `web` | masked CSRF tokens, CSP nonces, security headers, body limits, sensitive-response caching | `gorilla/csrf`, `net/http` |
+| `ui` | shared server-rendered application shell and composition contract | `html/template`, `embed` |
+| `i18n` | application-owned Java `.properties` catalog loading and lookup | Go standard library |
+| `migration` | application-owned embedded migration sets | `golang-migrate/migrate` with `iofs` |
+| `observability` | OTLP tracing construction and HTTP instrumentation | OpenTelemetry Go |
 
-`ui` owns the shared server-rendered application shell: document structure,
-navigation, account chrome, page header, footer, accessibility landmarks, and
-the template composition contract. Consumer repositories own their page
-templates, handlers, data, routes, authentication, and CSS.
+The platform modules are deliberately not reimplementations of those upstream
+projects. They add the shared conventions callers otherwise repeat: bounded
+password verification, password-cost upgrade detection, session rotation,
+current-principal resolution, secure cookie defaults, strict JWT claim and
+algorithm checks, one TOTP profile, safe CSRF defaults, embedded migration
+loading, and explicit tracing lifecycle.
+
+Use an upstream package directly when no platform policy is needed. In
+particular, applications should use `pgx` for PostgreSQL queries and
+transactions, a maintained SCS store for session persistence, and a mature
+authorization engine such as Casbin when their policy exceeds simple roles.
+
+## Authentication
+
+Applications retain their own user model and database. The shared session
+module stores a stable string subject, then asks the application to resolve
+that subject on every request so disabled accounts and changed roles take
+effect immediately.
+
+```go
+passwords, err := auth.NewPasswords(auth.PasswordConfig{})
+if err != nil {
+    return err
+}
+hash, err := passwords.Hash(password)
+
+sessions, err := auth.NewSessions(store, auth.PrincipalResolverFunc(
+    func(ctx context.Context, subject string) (auth.Principal, error) {
+        user, err := users.FindCurrent(ctx, subject)
+        if errors.Is(err, ErrUserDisabled) {
+            return auth.Principal{}, auth.ErrUnauthenticated
+        }
+        if err != nil {
+            return auth.Principal{}, err
+        }
+        return auth.Principal{Subject: user.ID, Roles: user.Roles}, nil
+    },
+), auth.SessionConfig{CookieName: "example_session"})
+if err != nil {
+    return err
+}
+
+handler := sessions.Middleware(auth.RequireAuthenticated(applicationHandler))
+```
+
+Call `sessions.SignIn(request.Context(), user.ID)` only from a handler already
+inside `sessions.Middleware`; it renews the session token before changing
+privilege. `SignOut` destroys the server-side session and expires the cookie.
+Production cookies are Secure by default. Local plain-HTTP development must opt
+into `AllowInsecureCookies` explicitly.
+
+`auth.JWTs` is intended for short-lived API bearer tokens. It requires a
+256-bit HMAC secret, issuer, audience, expiry, and a fixed HS256 allow-list.
+Browser login should normally use server-side sessions instead.
+
+## HTTP security
+
+```go
+csrfMiddleware, err := web.NewCSRF(web.CSRFConfig{
+    AuthKey:    csrfAuthenticationKey,
+    CookieName: "example_csrf",
+})
+if err != nil {
+    return err
+}
+
+handler := web.SecurityHeaders(web.SecurityHeadersConfig{HSTS: true})(
+    csrfMiddleware(applicationHandler),
+)
+```
+
+Use `web.CSRFToken(request)` for JSON clients or `web.CSRFField(request)` in
+server-rendered forms. Use `web.CSPNonce(request.Context())` in an inline script
+or style only when the configured CSP permits it.
+
+## Shared UI shell
 
 ```go
 //go:embed templates/*.html
@@ -30,15 +109,11 @@ err = renderer.Render(w, ui.Shell{
     ProductName: "Example",
     BrandURL:    "/",
     Stylesheets: []string{"/static/app.css"},
-    Navigation: []ui.NavigationGroup{{
-        Label: "Control",
-        Items: []ui.NavigationItem{{Label: "Workers", URL: "/workers", Active: true}},
-    }},
-    Header: ui.Header{Title: "Workers"},
+    Header:      ui.Header{Title: "Workers"},
 }, pageData)
 ```
 
-The consumer template set must define exactly one integration seam:
+The consumer template set defines the integration seam:
 
 ```gotemplate
 {{define "application-content"}}
@@ -47,15 +122,10 @@ The consumer template set must define exactly one integration seam:
 ```
 
 The shared shell is parsed after consumer templates, so consumers cannot
-accidentally replace its reserved definitions. Navigation, brand, profile,
-logout, and stylesheet URLs must be same-origin absolute paths.
+replace its reserved definitions. Product pages, handlers, data, routes, and
+CSS remain in the consumer.
 
-### `i18n`
-
-`i18n` loads application-owned Java `.properties` bundles from any `fs.FS`.
-The application declares its languages and default locale; the library does not
-hardcode product language policy. Construction fails when a declared bundle is
-missing or invalid.
+## Internationalization
 
 ```go
 translator, err := i18n.New(i18n.Options{
@@ -69,20 +139,34 @@ translator, err := i18n.New(i18n.Options{
 })
 ```
 
-## Dependency boundary
+Translation catalogs and supported-language policy remain application-owned.
 
-The direction is intentionally one-way:
+## Embedded migrations and tracing
+
+`migration.New` accepts an application-owned `fs.FS`, directory, and
+`golang-migrate` database driver. `Runner.Up` treats an already-current schema
+as success; the migration SQL stays in the consumer repository.
+
+`observability.NewTracing` constructs an OTLP tracer provider and returns its
+shutdown lifecycle without silently changing process globals. Consumers may
+call `InstallGlobal` explicitly and use `observability.HTTP` or
+`observability.HTTPClient` at their HTTP seams.
+
+## Repository seam
 
 ```text
+consumer application -> gouterstellar-platform/auth
+consumer application -> gouterstellar-platform/web
 consumer application -> gouterstellar-platform/ui
 consumer application -> gouterstellar-platform/i18n
+consumer application -> gouterstellar-platform/migration
+consumer application -> gouterstellar-platform/observability
 gouterstellar-platform -X-> consumer application
 ```
 
-Product implementations belong in their own repositories. Adding `package
-main`, an application host, product-specific templates/assets, deployment
-configuration, or an in-tree plugin is a boundary violation. CI checks this
-rule in addition to tests and static analysis.
+Adding `package main`, application wiring, product-specific handlers,
+templates, assets, schemas, deployment configuration, or an in-tree plugin is a
+repository violation enforced by CI.
 
 ## Development
 
@@ -92,14 +176,8 @@ Requires Go 1.26.2 or newer.
 make check
 ```
 
-The equivalent commands are:
-
-```bash
-go mod verify
-go mod tidy -diff
-go vet ./...
-go test ./... -count=1
-```
+The full gate verifies module checksums, module-file tidiness, the library-only
+seam, vet, tests, and lint.
 
 ## License
 
