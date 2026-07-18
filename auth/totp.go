@@ -10,6 +10,12 @@ import (
 	"github.com/pquerna/otp/totp"
 )
 
+const (
+	minTOTPPeriodSeconds = 15
+	maxTOTPPeriodSeconds = 60
+	maxTOTPSkew          = 2
+)
+
 // TOTPConfig defines one RFC 6238 profile shared by enrollment and validation.
 type TOTPConfig struct {
 	Issuer    string
@@ -49,7 +55,25 @@ func NewTOTP(config TOTPConfig) (*TOTP, error) {
 	if config.Digits != otp.DigitsSix && config.Digits != otp.DigitsEight {
 		return nil, errors.New("TOTP digits must be six or eight")
 	}
+	if config.Period < minTOTPPeriodSeconds || config.Period > maxTOTPPeriodSeconds {
+		return nil, fmt.Errorf("TOTP period must be between %d and %d seconds", minTOTPPeriodSeconds, maxTOTPPeriodSeconds)
+	}
+	if config.Skew > maxTOTPSkew {
+		return nil, fmt.Errorf("TOTP skew must not exceed %d periods", maxTOTPSkew)
+	}
+	if !supportedTOTPAlgorithm(config.Algorithm) {
+		return nil, errors.New("TOTP algorithm must be SHA1, SHA256, or SHA512")
+	}
 	return &TOTP{config: config}, nil
+}
+
+func supportedTOTPAlgorithm(algorithm otp.Algorithm) bool {
+	switch algorithm {
+	case otp.AlgorithmSHA1, otp.AlgorithmSHA256, otp.AlgorithmSHA512:
+		return true
+	default:
+		return false
+	}
 }
 
 // Enroll generates a new secret and otpauth URL for an account label.
