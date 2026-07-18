@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/exaring/otelpgx"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -16,6 +18,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
+	"google.golang.org/grpc"
 )
 
 // TracingConfig defines a service resource and OTLP/HTTP exporter. An empty
@@ -93,9 +96,7 @@ func (t *Tracing) Provider() *sdktrace.TracerProvider {
 // This explicit call keeps process-global policy out of construction.
 func (t *Tracing) InstallGlobal() {
 	otel.SetTracerProvider(t.provider)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-		propagation.TraceContext{}, propagation.Baggage{},
-	))
+	otel.SetTextMapPropagator(textMapPropagator())
 }
 
 // Shutdown flushes and closes the exporter.
@@ -124,4 +125,39 @@ func HTTPClient(base *http.Client) *http.Client {
 	}
 	client.Transport = otelhttp.NewTransport(transport)
 	return &client
+}
+
+// GRPCServerOption instruments a gRPC server with this tracing provider and
+// W3C trace-context propagation. It does not require InstallGlobal.
+func (t *Tracing) GRPCServerOption() grpc.ServerOption {
+	return grpc.StatsHandler(otelgrpc.NewServerHandler(
+		otelgrpc.WithTracerProvider(t.provider),
+		otelgrpc.WithPropagators(textMapPropagator()),
+	))
+}
+
+// GRPCClientOption instruments a gRPC client with this tracing provider and
+// W3C trace-context propagation. It does not require InstallGlobal.
+func (t *Tracing) GRPCClientOption() grpc.DialOption {
+	return grpc.WithStatsHandler(otelgrpc.NewClientHandler(
+		otelgrpc.WithTracerProvider(t.provider),
+		otelgrpc.WithPropagators(textMapPropagator()),
+	))
+}
+
+// PostgreSQLTracer returns PGX instrumentation bound to this tracing provider.
+// SQL text and parameters are excluded, and query span names contain only the
+// operation, avoiding sensitive values and unbounded statement cardinality.
+func (t *Tracing) PostgreSQLTracer() *otelpgx.Tracer {
+	return otelpgx.NewTracer(
+		otelpgx.WithTracerProvider(t.provider),
+		otelpgx.WithDisableSQLStatementInAttributes(),
+		otelpgx.WithTrimSQLInSpanName(),
+	)
+}
+
+func textMapPropagator() propagation.TextMapPropagator {
+	return propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{}, propagation.Baggage{},
+	)
 }

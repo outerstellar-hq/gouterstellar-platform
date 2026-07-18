@@ -14,7 +14,7 @@ product schema, deployment image, product assets, or in-tree plugins.
 | `ui` | shared server-rendered application shell and composition contract | `html/template`, `embed` |
 | `i18n` | application-owned Java `.properties` catalog loading and lookup | Go standard library |
 | `migration` | application-owned embedded migration sets | `golang-migrate/migrate` with `iofs` |
-| `observability` | OTLP tracing construction and HTTP instrumentation | OpenTelemetry Go |
+| `observability` | OTLP tracing plus HTTP, gRPC, and safe PGX instrumentation | OpenTelemetry Go, `exaring/otelpgx` |
 
 The platform modules are deliberately not reimplementations of those upstream
 projects. They add the shared conventions callers otherwise repeat: bounded
@@ -188,7 +188,20 @@ success; the migration SQL and database URL stay in the consumer repository.
 `observability.NewTracing` constructs an OTLP tracer provider and returns its
 shutdown lifecycle without silently changing process globals. Consumers may
 call `InstallGlobal` explicitly and use `observability.HTTP` or
-`observability.HTTPClient` at their HTTP seams.
+`observability.HTTPClient` at their HTTP seams. The returned tracing lifecycle
+also supplies explicit gRPC options and safe PGX instrumentation:
+
+```go
+server := grpc.NewServer(tracing.GRPCServerOption())
+connection, err := grpc.NewClient(target, credentials, tracing.GRPCClientOption())
+
+poolConfig.ConnConfig.Tracer = tracing.PostgreSQLTracer()
+```
+
+The gRPC options use W3C trace context without depending on global installation.
+The PostgreSQL tracer omits SQL text and parameters and reduces query span names
+to their operation, while connection/pool construction and database metrics
+remain consumer-owned.
 
 ## Repository seam
 
