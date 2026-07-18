@@ -52,6 +52,9 @@ func NewJWTs(config JWTConfig) (*JWTs, error) {
 	if config.Lifetime < minJWTLifetime || config.Lifetime > maxJWTLifetime {
 		return nil, fmt.Errorf("JWT lifetime must be between %s and %s", minJWTLifetime, maxJWTLifetime)
 	}
+	if config.Lifetime%time.Second != 0 {
+		return nil, errors.New("JWT lifetime must use whole-second precision")
+	}
 	if config.Leeway < 0 || config.Leeway > maxJWTLeeway {
 		return nil, fmt.Errorf("JWT leeway must be between zero and %s", maxJWTLeeway)
 	}

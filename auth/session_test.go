@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alexedwards/scs/v2/memstore"
 )
@@ -59,6 +60,11 @@ func TestSessionsValidateAndApplySameSitePolicy(t *testing.T) {
 		CookieName: "test_session", SameSite: http.SameSite(99),
 	}); err == nil {
 		t.Fatal("expected invalid SameSite error")
+	}
+	if _, err := NewSessions(memstore.New(), resolver, SessionConfig{
+		CookieName: "test_session", Lifetime: -time.Second,
+	}); err == nil {
+		t.Fatal("expected negative lifetime error")
 	}
 	if _, err := NewSessions(memstore.New(), resolver, SessionConfig{
 		CookieName: "test_session", SameSite: http.SameSiteNoneMode, AllowInsecureCookies: true,

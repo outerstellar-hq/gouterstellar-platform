@@ -102,7 +102,10 @@ func NewSessions(store scs.Store, resolver PrincipalResolver, config SessionConf
 	if strings.TrimSpace(config.CookieName) == "" {
 		return nil, errors.New("session cookie name is required")
 	}
-	if config.Lifetime <= 0 {
+	if config.Lifetime < 0 {
+		return nil, errors.New("session lifetime cannot be negative")
+	}
+	if config.Lifetime == 0 {
 		config.Lifetime = 12 * time.Hour
 	}
 	if config.IdleTimeout < 0 || config.IdleTimeout > config.Lifetime {
