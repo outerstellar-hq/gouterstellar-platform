@@ -56,6 +56,11 @@ func TestJWTsRejectsUnsafeTimeProfile(t *testing.T) {
 			config.Lifetime = maxJWTLifetime + time.Second
 			return config
 		}(),
+		"fractional lifetime": func() JWTConfig {
+			config := base
+			config.Lifetime = 1500 * time.Millisecond
+			return config
+		}(),
 		"negative leeway": func() JWTConfig {
 			config := base
 			config.Leeway = -time.Second

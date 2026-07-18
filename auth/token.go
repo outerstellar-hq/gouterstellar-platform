@@ -9,7 +9,10 @@ import (
 	"fmt"
 )
 
-const defaultTokenBytes = 32
+const (
+	defaultTokenBytes   = 32
+	maxTokenPrefixBytes = 64
+)
 
 // TokenPair separates a bearer credential from the digest safe to persist.
 type TokenPair struct {
@@ -20,12 +23,30 @@ type TokenPair struct {
 // NewToken creates an opaque, URL-safe bearer token. Only Digest should be
 // stored; Plaintext should be returned to the caller exactly once.
 func NewToken(prefix string) (TokenPair, error) {
+	if !validTokenPrefix(prefix) {
+		return TokenPair{}, fmt.Errorf("token prefix must contain at most %d RFC 3986 unreserved ASCII characters", maxTokenPrefixBytes)
+	}
 	random := make([]byte, defaultTokenBytes)
 	if _, err := rand.Read(random); err != nil {
 		return TokenPair{}, fmt.Errorf("generate token: %w", err)
 	}
 	plaintext := prefix + base64.RawURLEncoding.EncodeToString(random)
 	return TokenPair{Plaintext: plaintext, Digest: TokenDigest(plaintext)}, nil
+}
+
+func validTokenPrefix(prefix string) bool {
+	if len(prefix) > maxTokenPrefixBytes {
+		return false
+	}
+	for i := range len(prefix) {
+		char := prefix[i]
+		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') || char == '-' || char == '.' || char == '_' || char == '~' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // TokenDigest returns the SHA-256 digest used for exact token lookup.
