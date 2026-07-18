@@ -93,7 +93,10 @@ authoritative revocation mechanism because a concurrent session commit can
 miss their snapshot.
 
 `auth.JWTs` is intended for short-lived API bearer tokens. It requires a
-256-bit HMAC secret, issuer, audience, expiry, and a fixed HS256 allow-list.
+256-bit HMAC secret, issuer, audience, issued-at, expiry, and a fixed HS256
+allow-list. Lifetime is bounded to 15 minutes and clock leeway to one minute;
+verification also rejects a correctly signed token whose declared lifetime
+exceeds the configured profile.
 Browser login should normally use server-side sessions instead.
 
 ## HTTP security
