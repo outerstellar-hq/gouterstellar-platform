@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 var (
@@ -34,13 +33,17 @@ type Options struct {
 	Languages     []Language
 }
 
-// Translator is safe for concurrent reads and locale changes.
+// Translator is an immutable application catalog safe for concurrent use.
 type Translator struct {
-	mu            sync.RWMutex
-	locale        string
 	defaultLocale string
 	languages     []Language
 	translations  map[string]map[string]string
+}
+
+// Localizer resolves translations for one immutable locale.
+type Localizer struct {
+	translator *Translator
+	locale     string
 }
 
 // New validates and eagerly loads the complete application catalog.
@@ -78,57 +81,43 @@ func New(opts Options) (*Translator, error) {
 	}
 
 	return &Translator{
-		locale:        opts.DefaultLocale,
 		defaultLocale: opts.DefaultLocale,
 		languages:     languages,
 		translations:  translations,
 	}, nil
 }
 
-// SetLocale changes the locale used by Translate.
-func (t *Translator) SetLocale(locale string) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+// ForLocale returns an immutable locale-bound reader.
+func (t *Translator) ForLocale(locale string) (Localizer, error) {
 	if _, supported := t.translations[locale]; !supported {
-		return fmt.Errorf("unsupported locale %q", locale)
+		return Localizer{}, fmt.Errorf("unsupported locale %q", locale)
 	}
-	t.locale = locale
-	return nil
+	return Localizer{translator: t, locale: locale}, nil
 }
 
-// Locale returns the locale currently used by Translate.
-func (t *Translator) Locale() string {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.locale
+// Default returns a reader bound to the configured fallback locale.
+func (t *Translator) Default() Localizer {
+	return Localizer{translator: t, locale: t.defaultLocale}
 }
 
 // Languages returns an independent copy of the application catalog metadata.
 func (t *Translator) Languages() []Language {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return append([]Language(nil), t.languages...)
 }
 
-// Translate resolves a key in the active locale and then in the default locale.
-func (t *Translator) Translate(key string, params ...any) string {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.translate(t.locale, key, key, params)
+// Locale returns the locale fixed to this reader.
+func (l Localizer) Locale() string {
+	return l.locale
+}
+
+// Translate resolves a key in this locale and then in the default locale.
+func (l Localizer) Translate(key string, params ...any) string {
+	return l.translator.translate(l.locale, key, key, params)
 }
 
 // TranslateOrDefault uses defaultValue when neither locale contains key.
-func (t *Translator) TranslateOrDefault(key, defaultValue string, params ...any) string {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.translate(t.locale, key, defaultValue, params)
-}
-
-// TranslateForLocale resolves a key without changing the active locale.
-func (t *Translator) TranslateForLocale(locale, key string, params ...any) string {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.translate(locale, key, key, params)
+func (l Localizer) TranslateOrDefault(key, defaultValue string, params ...any) string {
+	return l.translator.translate(l.locale, key, defaultValue, params)
 }
 
 func (t *Translator) translate(locale, key, fallback string, params []any) string {

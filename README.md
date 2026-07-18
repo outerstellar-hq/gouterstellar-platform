@@ -137,9 +137,17 @@ translator, err := i18n.New(i18n.Options{
         {Code: "de", DisplayName: "German", NativeName: "Deutsch"},
     },
 })
+
+german, err := translator.ForLocale("de")
+if err != nil {
+    return err
+}
+label := german.Translate("navigation.workers")
 ```
 
 Translation catalogs and supported-language policy remain application-owned.
+Locale-bound readers are immutable, so concurrent requests cannot change each
+other's language.
 
 ## Embedded migrations and tracing
 
