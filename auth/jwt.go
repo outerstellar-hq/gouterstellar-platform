@@ -8,6 +8,12 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+const (
+	minJWTLifetime = time.Second
+	maxJWTLifetime = 15 * time.Minute
+	maxJWTLeeway   = time.Minute
+)
+
 // JWTConfig defines a deliberately narrow HMAC token profile. Issuer,
 // audience, expiry and signing method are mandatory and verified on parse.
 type JWTConfig struct {
@@ -43,11 +49,11 @@ func NewJWTs(config JWTConfig) (*JWTs, error) {
 	if len(config.Secret) < 32 {
 		return nil, errors.New("JWT secret must contain at least 32 bytes")
 	}
-	if config.Lifetime <= 0 {
-		return nil, errors.New("JWT lifetime must be positive")
+	if config.Lifetime < minJWTLifetime || config.Lifetime > maxJWTLifetime {
+		return nil, fmt.Errorf("JWT lifetime must be between %s and %s", minJWTLifetime, maxJWTLifetime)
 	}
-	if config.Leeway < 0 {
-		return nil, errors.New("JWT leeway cannot be negative")
+	if config.Leeway < 0 || config.Leeway > maxJWTLeeway {
+		return nil, fmt.Errorf("JWT leeway must be between zero and %s", maxJWTLeeway)
 	}
 	if config.Now == nil {
 		config.Now = time.Now
@@ -104,6 +110,13 @@ func (j *JWTs) Verify(encoded string) (Claims, error) {
 	}
 	if !token.Valid || claims.Subject == "" {
 		return Claims{}, errors.New("verify JWT: invalid claims")
+	}
+	if claims.IssuedAt == nil || claims.ExpiresAt == nil {
+		return Claims{}, errors.New("verify JWT: issued-at and expiration are required")
+	}
+	lifetime := claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time)
+	if lifetime <= 0 || lifetime > j.lifetime {
+		return Claims{}, errors.New("verify JWT: token lifetime exceeds configured profile")
 	}
 	claims.Roles = append([]string(nil), claims.Roles...)
 	return claims, nil
