@@ -2,13 +2,18 @@
 
 package durablefile
 
-import "os"
+import (
+	"errors"
+	"os"
+)
 
-func syncDirectory(path string) error {
+func syncDirectory(path string) (err error) {
 	directory, err := os.Open(path)
 	if err != nil {
 		return err
 	}
-	defer directory.Close()
+	defer func() {
+		err = errors.Join(err, directory.Close())
+	}()
 	return directory.Sync()
 }
