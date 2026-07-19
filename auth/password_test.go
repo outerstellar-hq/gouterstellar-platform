@@ -29,6 +29,10 @@ func TestPasswordsRoundTripAndRehash(t *testing.T) {
 	if err != nil || needsRehash {
 		t.Fatalf("needsRehash=%v err=%v", needsRehash, err)
 	}
+	verification, err := passwords.VerifyWithRehash(hash, "correct horse battery staple")
+	if err != nil || !verification.Matched || verification.NeedsRehash {
+		t.Fatalf("verification=%+v err=%v", verification, err)
+	}
 }
 
 func TestPasswordsPolicyAndVerificationLimits(t *testing.T) {
@@ -99,5 +103,14 @@ func TestPasswordsDetectsOldCost(t *testing.T) {
 	needsRehash, err := passwords.NeedsRehash(hash)
 	if err != nil || !needsRehash {
 		t.Fatalf("needsRehash=%v err=%v", needsRehash, err)
+	}
+
+	verification, err := passwords.VerifyWithRehash(hash, "correct horse battery staple")
+	if err != nil || !verification.Matched || !verification.NeedsRehash {
+		t.Fatalf("verification=%+v err=%v", verification, err)
+	}
+	verification, err = passwords.VerifyWithRehash(hash, "incorrect password")
+	if err != nil || verification.Matched || verification.NeedsRehash {
+		t.Fatalf("verification=%+v err=%v", verification, err)
 	}
 }
