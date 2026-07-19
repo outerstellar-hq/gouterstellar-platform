@@ -108,14 +108,44 @@ func (t *Tracing) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// HTTP instruments a handler with standard server spans and propagation.
+// HTTP instruments a handler with this tracing provider and W3C propagation.
+// It does not require InstallGlobal.
+func (t *Tracing) HTTP(operation string, next http.Handler) http.Handler {
+	return otelhttp.NewHandler(
+		next,
+		operation,
+		otelhttp.WithTracerProvider(t.provider),
+		otelhttp.WithPropagators(textMapPropagator()),
+	)
+}
+
+// HTTPClient returns a shallow copy of base whose transport creates outbound
+// spans with this tracing provider and W3C propagation. Nil uses
+// http.DefaultClient as the source configuration. It does not require
+// InstallGlobal.
+func (t *Tracing) HTTPClient(base *http.Client) *http.Client {
+	return instrumentHTTPClient(
+		base,
+		otelhttp.WithTracerProvider(t.provider),
+		otelhttp.WithPropagators(textMapPropagator()),
+	)
+}
+
+// HTTP instruments a handler through the process-global OpenTelemetry state.
+//
+// Deprecated: use (*Tracing).HTTP so provider ownership is explicit.
 func HTTP(operation string, next http.Handler) http.Handler {
 	return otelhttp.NewHandler(next, operation)
 }
 
-// HTTPClient returns a shallow copy of base whose transport creates outbound
-// HTTP spans. Nil uses http.DefaultClient as the source configuration.
+// HTTPClient instruments a client through process-global OpenTelemetry state.
+//
+// Deprecated: use (*Tracing).HTTPClient so provider ownership is explicit.
 func HTTPClient(base *http.Client) *http.Client {
+	return instrumentHTTPClient(base)
+}
+
+func instrumentHTTPClient(base *http.Client, options ...otelhttp.Option) *http.Client {
 	if base == nil {
 		base = http.DefaultClient
 	}
@@ -124,7 +154,7 @@ func HTTPClient(base *http.Client) *http.Client {
 	if transport == nil {
 		transport = http.DefaultTransport
 	}
-	client.Transport = otelhttp.NewTransport(transport)
+	client.Transport = otelhttp.NewTransport(transport, options...)
 	return &client
 }
 

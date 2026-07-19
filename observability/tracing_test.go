@@ -2,8 +2,10 @@ package observability
 
 import (
 	"context"
+	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -43,10 +45,62 @@ func TestNewTracingHonorsZeroSampleRatio(t *testing.T) {
 }
 
 func TestHTTPClientPreservesCallerConfiguration(t *testing.T) {
+	provider := sdktrace.NewTracerProvider()
+	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+	tracing := &Tracing{provider: provider}
 	base := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	client := HTTPClient(base)
+	client := tracing.HTTPClient(base)
 	if client == base || client.Transport == nil || client.CheckRedirect == nil {
 		t.Fatalf("client = %#v", client)
+	}
+}
+
+func TestHTTPAdaptersPropagateOneTraceWithoutGlobalInstallation(t *testing.T) {
+	recorder := tracetest.NewSpanRecorder()
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+	tracing := &Tracing{provider: provider}
+
+	serverTraceID := make(chan trace.TraceID, 1)
+	server := httptest.NewServer(tracing.HTTP("test.server", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serverTraceID <- trace.SpanContextFromContext(r.Context()).TraceID()
+		w.WriteHeader(http.StatusNoContent)
+	})))
+	t.Cleanup(server.Close)
+
+	ctx, parent := provider.Tracer("test").Start(context.Background(), "parent")
+	parentTraceID := parent.SpanContext().TraceID()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := tracing.HTTPClient(nil).Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.Copy(io.Discard, response.Body)
+	if err := response.Body.Close(); err != nil {
+		t.Fatal(err)
+	}
+	parent.End()
+
+	if got := <-serverTraceID; got != parentTraceID {
+		t.Fatalf("server trace ID = %s, want %s", got, parentTraceID)
+	}
+	var clientFound, serverFound bool
+	for _, span := range recorder.Ended() {
+		if span.SpanContext().TraceID() != parentTraceID {
+			continue
+		}
+		switch span.SpanKind() {
+		case trace.SpanKindClient:
+			clientFound = true
+		case trace.SpanKindServer:
+			serverFound = true
+		}
+	}
+	if !clientFound || !serverFound {
+		t.Fatalf("instance provider spans: client=%v server=%v", clientFound, serverFound)
 	}
 }
 

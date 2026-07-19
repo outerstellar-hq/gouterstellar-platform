@@ -230,23 +230,26 @@ driver's normal blank import. `Runner.Up` treats an already-current schema as
 success; the migration SQL and database URL stay in the consumer repository.
 
 `observability.NewTracing` constructs an OTLP tracer provider and returns its
-shutdown lifecycle without silently changing process globals. Consumers may
-call `InstallGlobal` explicitly and use `observability.HTTP` or
-`observability.HTTPClient` at their HTTP seams. The returned tracing lifecycle
-also supplies explicit gRPC options and safe PGX instrumentation:
+shutdown lifecycle without silently changing process globals. The returned
+tracing lifecycle supplies provider-bound HTTP, gRPC, and PostgreSQL adapters.
+`InstallGlobal` remains an explicit option for dependencies that require global
+OpenTelemetry state; the platform adapters do not require it:
 
 `TracingConfig.SampleRatio` is explicit: zero samples no new root spans and one
 samples all new root spans. The library never silently turns a zero sampling
 budget into full export.
 
 ```go
+handler := tracing.HTTP("http.server", applicationHandler)
+client := tracing.HTTPClient(nil)
+
 server := grpc.NewServer(tracing.GRPCServerOption())
 connection, err := grpc.NewClient(target, credentials, tracing.GRPCClientOption())
 
 poolConfig.ConnConfig.Tracer = tracing.PostgreSQLTracer()
 ```
 
-The gRPC options use W3C trace context without depending on global installation.
+The HTTP and gRPC adapters use W3C trace context without depending on global installation.
 The PostgreSQL tracer omits SQL text and parameters and reduces query span names
 to their operation, while connection/pool construction and database metrics
 remain consumer-owned.
