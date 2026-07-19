@@ -108,6 +108,9 @@ func (s Shell) Validate() error {
 		}
 	}
 	if s.User != nil {
+		if err := validateSameOriginPath("avatar", s.User.AvatarURL, true); err != nil {
+			return err
+		}
 		if err := validateSameOriginPath("profile", s.User.ProfileURL, false); err != nil {
 			return err
 		}

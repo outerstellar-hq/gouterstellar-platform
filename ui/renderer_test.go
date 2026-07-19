@@ -83,6 +83,7 @@ func TestShellRejectsCrossOriginChromeURLs(t *testing.T) {
 	for name, shell := range map[string]Shell{
 		"brand":      {Title: "Example", ProductName: "Example", BrandURL: "https://example.com"},
 		"stylesheet": {Title: "Example", ProductName: "Example", Stylesheets: []string{"//example.com/app.css"}},
+		"avatar":     {Title: "Example", ProductName: "Example", User: &User{AvatarURL: "https://example.com/avatar.png", ProfileURL: "/profile", LogoutURL: "/logout"}},
 		"profile":    {Title: "Example", ProductName: "Example", User: &User{ProfileURL: "https://example.com", LogoutURL: "/logout"}},
 		"logout":     {Title: "Example", ProductName: "Example", User: &User{ProfileURL: "/profile", LogoutURL: "logout"}},
 	} {
