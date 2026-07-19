@@ -63,14 +63,19 @@ func NoStore(next http.Handler) http.Handler {
 	})
 }
 
-// MaxBodyBytes rejects oversized request bodies through net/http's bounded
-// reader. A non-positive limit is a programmer error and panics at setup.
+// MaxBodyBytes rejects a declared oversized body before the next handler and
+// retains a bounded reader for requests with missing or inaccurate lengths. A
+// non-positive limit is a programmer error and panics at setup.
 func MaxBodyBytes(limit int64) func(http.Handler) http.Handler {
 	if limit <= 0 {
 		panic("web: body limit must be positive")
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.ContentLength > limit {
+				http.Error(w, http.StatusText(http.StatusRequestEntityTooLarge), http.StatusRequestEntityTooLarge)
+				return
+			}
 			r.Body = http.MaxBytesReader(w, r.Body, limit)
 			next.ServeHTTP(w, r)
 		})

@@ -64,3 +64,22 @@ func TestMaxBodyBytesBoundsHandlerReads(t *testing.T) {
 		})
 	}
 }
+
+func TestMaxBodyBytesRejectsDeclaredOversizeBeforeHandler(t *testing.T) {
+	called := false
+	handler := MaxBodyBytes(4)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("12345"))
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if called {
+		t.Fatal("oversized request reached the next handler")
+	}
+	if response.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusRequestEntityTooLarge)
+	}
+}
