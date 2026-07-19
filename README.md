@@ -304,15 +304,20 @@ intentional architecture change.
 
 ## Development
 
-Requires Go 1.26.2 or newer and golangci-lint 2.12.2.
+Requires Go 1.26.2 or newer.
+
+The Go test suite enforces the library-only seam without Make, PowerShell, or a
+repository-specific executable. Run the complete local Go gate directly:
 
 ```bash
-make check
+go mod verify
+go mod tidy -diff
+go vet ./...
+go test ./... -count=1
 ```
 
-The local full gate verifies module checksums, module-file tidiness, the
-library-only seam, vet, tests, and lint. CI runs the same platform checks on
-Linux and Windows and adds the Go race detector on Linux.
+CI runs the same Go checks on Linux and Windows, plus golangci-lint and the Go
+race detector on Linux.
 
 ## License
 

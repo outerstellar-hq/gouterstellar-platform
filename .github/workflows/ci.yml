@@ -51,14 +51,10 @@ jobs:
       - name: Check module files
         run: go mod tidy -diff
 
-      - name: Verify library-only boundary
-        shell: pwsh
-        run: ./scripts/verify-library-boundary.ps1
-
       - name: Vet
         run: go vet ./...
 
-      - name: Test
+      - name: Test and verify library-only boundary
         run: go test ./... -count=1 -parallel=4 -timeout=10m
 
   lint:

@@ -20,9 +20,11 @@ This repository is a set of application-neutral Go libraries.
   platform module only when it enforces shared policy or removes integration
   complexity; do not add pass-through wrappers.
 
-Before delivery, run `make check` in this repository. Consumer adoption and
-integration verification belong to a separately scoped task in the consumer's
-own repository; never cross that repository boundary as part of platform work.
+Before delivery, run `go mod verify`, `go mod tidy -diff`, `go vet ./...`, and
+`go test ./... -count=1` in this repository. The Go test suite enforces the
+library-only boundary. Consumer adoption and integration verification belong
+to a separately scoped task in the consumer's own repository; never cross that
+repository boundary as part of platform work.
 
 ## Agent skills
 
