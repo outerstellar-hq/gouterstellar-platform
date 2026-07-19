@@ -45,9 +45,6 @@ func NewTracing(ctx context.Context, config TracingConfig) (*Tracing, error) {
 	if config.ServiceName == "" {
 		return nil, errors.New("tracing service name is required")
 	}
-	if config.SampleRatio == 0 {
-		config.SampleRatio = 1
-	}
 	if config.SampleRatio < 0 || config.SampleRatio > 1 {
 		return nil, errors.New("tracing sample ratio must be between zero and one")
 	}
@@ -76,7 +73,11 @@ func NewTracing(ctx context.Context, config TracingConfig) (*Tracing, error) {
 	}
 	serviceResource, err := resource.Merge(resource.Default(), resource.NewWithAttributes(semconv.SchemaURL, attributes...))
 	if err != nil {
-		return nil, fmt.Errorf("create tracing resource: %w", err)
+		resourceErr := fmt.Errorf("create tracing resource: %w", err)
+		if shutdownErr := exporter.Shutdown(ctx); shutdownErr != nil {
+			return nil, errors.Join(resourceErr, fmt.Errorf("shutdown trace exporter after resource failure: %w", shutdownErr))
+		}
+		return nil, resourceErr
 	}
 
 	provider := sdktrace.NewTracerProvider(
