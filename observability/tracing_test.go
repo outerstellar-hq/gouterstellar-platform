@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -101,6 +102,48 @@ func TestHTTPAdaptersPropagateOneTraceWithoutGlobalInstallation(t *testing.T) {
 	}
 	if !clientFound || !serverFound {
 		t.Fatalf("instance provider spans: client=%v server=%v", clientFound, serverFound)
+	}
+}
+
+func TestGlobalTracingCompatibilityAdaptersPropagateOneTrace(t *testing.T) {
+	previousProvider := otel.GetTracerProvider()
+	previousPropagator := otel.GetTextMapPropagator()
+	recorder := tracetest.NewSpanRecorder()
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previousProvider)
+		otel.SetTextMapPropagator(previousPropagator)
+		_ = provider.Shutdown(context.Background())
+	})
+	tracing := &Tracing{provider: provider}
+	tracing.InstallGlobal()
+	if otel.GetTracerProvider() != provider {
+		t.Fatal("InstallGlobal did not install the tracing provider")
+	}
+
+	serverTraceID := make(chan trace.TraceID, 1)
+	server := httptest.NewServer(HTTP("test.global.server", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serverTraceID <- trace.SpanContextFromContext(r.Context()).TraceID()
+		w.WriteHeader(http.StatusNoContent)
+	})))
+	t.Cleanup(server.Close)
+
+	ctx, parent := provider.Tracer("test").Start(context.Background(), "parent")
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := HTTPClient(nil).Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := response.Body.Close(); err != nil {
+		t.Fatal(err)
+	}
+	parent.End()
+
+	if got := <-serverTraceID; got != parent.SpanContext().TraceID() {
+		t.Fatalf("server trace ID = %s, want %s", got, parent.SpanContext().TraceID())
 	}
 }
 

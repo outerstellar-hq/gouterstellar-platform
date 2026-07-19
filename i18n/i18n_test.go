@@ -41,6 +41,9 @@ func TestTranslatorUsesApplicationCatalogAndFallback(t *testing.T) {
 	if german.Locale() != "de" || defaultLocalizer.Locale() != "en" {
 		t.Fatal("localizer changed locale")
 	}
+	if got := german.TranslateOrDefault("missing", "Fallback {0}", "Alex"); got != "Fallback Alex" {
+		t.Fatalf("default-value translation = %q", got)
+	}
 }
 
 func TestNewRejectsIncompleteCatalog(t *testing.T) {

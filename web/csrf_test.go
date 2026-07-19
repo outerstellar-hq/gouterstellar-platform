@@ -20,6 +20,9 @@ func TestCSRFIssuesSecureDefaultsAndRejectsMissingToken(t *testing.T) {
 		if token == "" {
 			t.Fatal("missing token")
 		}
+		if field := string(CSRFField(r)); !strings.Contains(field, `name="csrf_token"`) || !strings.Contains(field, token) {
+			t.Fatalf("CSRF field = %q", field)
+		}
 		w.Header().Set("X-Test-CSRF-Token", token)
 		w.WriteHeader(http.StatusNoContent)
 	}))

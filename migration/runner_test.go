@@ -20,6 +20,10 @@ func TestRunnerAppliesEmbeddedMigrationsAndAcceptsNoChange(t *testing.T) {
 	if err := runner.Up(); err != nil {
 		t.Fatal(err)
 	}
+	version, dirty, err := runner.Version()
+	if err != nil || version != 1 || dirty {
+		t.Fatalf("version=%d dirty=%v err=%v", version, dirty, err)
+	}
 	if err := runner.Up(); err != nil {
 		t.Fatalf("second up: %v", err)
 	}
