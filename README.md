@@ -54,6 +54,16 @@ if verification.Matched && verification.NeedsRehash {
     // Persist replacementHash with the successful login transaction.
 }
 
+tokenHasher, err := auth.NewTokenHasher(tokenPepper)
+if err != nil {
+    return err
+}
+resetToken, err := tokenHasher.NewToken("reset_")
+if err != nil {
+    return err
+}
+// Return resetToken.Plaintext once; persist only resetToken.Digest.
+
 sessions, err := auth.NewSessions(store, auth.PrincipalResolverFunc(
     func(ctx context.Context, subject string) (auth.Principal, error) {
         user, err := users.FindCurrent(ctx, subject)

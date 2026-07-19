@@ -47,4 +47,15 @@ func TestTokenHasherIsKeyed(t *testing.T) {
 	if bytes.Equal(first.Digest("token"), second.Digest("token")) {
 		t.Fatal("different peppers produced the same digest")
 	}
+
+	token, err := first.NewToken("example_")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(token.Digest, first.Digest(token.Plaintext)) {
+		t.Fatal("generated digest does not match the configured hasher")
+	}
+	if bytes.Equal(token.Digest, TokenDigest(token.Plaintext)) {
+		t.Fatal("keyed token generation returned the unkeyed digest")
+	}
 }
