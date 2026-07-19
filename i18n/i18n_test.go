@@ -2,6 +2,7 @@ package i18n
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"testing/fstest"
@@ -51,6 +52,65 @@ func TestNewRejectsIncompleteCatalog(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("New() accepted a missing declared locale")
+	}
+}
+
+func TestNewNormalizesConfiguredLocaleCodes(t *testing.T) {
+	translator, err := New(Options{
+		FS:            fstest.MapFS{"en.properties": {Data: []byte("ok=yes\n")}},
+		DefaultLocale: " en ",
+		Languages:     []Language{{Code: " en ", DisplayName: "English"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if translator.Default().Locale() != "en" {
+		t.Fatalf("default locale = %q", translator.Default().Locale())
+	}
+	if languages := translator.Languages(); len(languages) != 1 || languages[0].Code != "en" {
+		t.Fatalf("languages = %#v", languages)
+	}
+}
+
+func TestNewRejectsInconsistentMessageContracts(t *testing.T) {
+	tests := map[string]struct {
+		english string
+		german  string
+		want    string
+	}{
+		"indexed placeholder": {english: "greeting=Hello {0}\n", german: "greeting=Hallo\n", want: "different parameter contract"},
+		"printf verb":         {english: "count=Count %d\n", german: "count=Anzahl %s\n", want: "different parameter contract"},
+		"unsupported verb":    {english: "greeting=Hello %1$s\n", german: "greeting=Hallo %1$s\n", want: "unsupported format verb"},
+		"unescaped percent":   {english: "progress=100% complete for %s\n", german: "progress=100%% fertig für %s\n", want: "unescaped percent"},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := New(Options{
+				FS: fstest.MapFS{
+					"en.properties": {Data: []byte(test.english)},
+					"de.properties": {Data: []byte(test.german)},
+				},
+				DefaultLocale: "en",
+				Languages:     []Language{{Code: "en"}, {Code: "de"}},
+			})
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("error = %v, want text %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestNewAllowsLiteralPercentWithoutFormatting(t *testing.T) {
+	translator, err := New(Options{
+		FS:            fstest.MapFS{"en.properties": {Data: []byte("completion=100% complete\n")}},
+		DefaultLocale: "en",
+		Languages:     []Language{{Code: "en"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := translator.Default().Translate("completion"); got != "100% complete" {
+		t.Fatalf("translation = %q", got)
 	}
 }
 
