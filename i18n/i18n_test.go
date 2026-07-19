@@ -120,3 +120,13 @@ func TestParsePropertiesDecodesEscapes(t *testing.T) {
 		t.Fatalf("unexpected properties: %#v", properties)
 	}
 }
+
+func TestParsePropertiesSupportsJavaSeparatorsAndContinuations(t *testing.T) {
+	parsed, err := parseProperties([]byte("space separated\ncontinued = first\\\n  second\nliteral = ${HOME}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed["space"] != "separated" || parsed["continued"] != "firstsecond" || parsed["literal"] != "${HOME}" {
+		t.Fatalf("unexpected properties: %#v", parsed)
+	}
+}

@@ -3,13 +3,14 @@
 package i18n
 
 import (
-	"bufio"
 	"fmt"
 	"io/fs"
 	"path"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/magiconair/properties"
 )
 
 var (
@@ -144,57 +145,12 @@ func loadBundle(fsys fs.FS, basePath, locale string) (map[string]string, error) 
 }
 
 func parseProperties(data []byte) (map[string]string, error) {
-	properties := make(map[string]string)
-	scanner := bufio.NewScanner(strings.NewReader(string(data)))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "!") {
-			continue
-		}
-		separator := strings.IndexAny(line, "=:")
-		if separator < 0 {
-			continue
-		}
-		key := strings.TrimSpace(line[:separator])
-		properties[key] = decodePropertyValue(strings.TrimSpace(line[separator+1:]))
-	}
-	if err := scanner.Err(); err != nil {
+	loader := properties.Loader{Encoding: properties.UTF8, DisableExpansion: true}
+	parsed, err := loader.LoadBytes(data)
+	if err != nil {
 		return nil, fmt.Errorf("parse properties: %w", err)
 	}
-	return properties, nil
-}
-
-func decodePropertyValue(value string) string {
-	var decoded strings.Builder
-	for i := 0; i < len(value); i++ {
-		if value[i] != '\\' || i+1 >= len(value) {
-			decoded.WriteByte(value[i])
-			continue
-		}
-		i++
-		switch value[i] {
-		case 'u':
-			if i+4 < len(value) {
-				if codepoint, err := strconv.ParseUint(value[i+1:i+5], 16, 16); err == nil {
-					decoded.WriteRune(rune(codepoint))
-					i += 4
-					continue
-				}
-			}
-			decoded.WriteString(`\u`)
-		case 't':
-			decoded.WriteByte('\t')
-		case 'n':
-			decoded.WriteByte('\n')
-		case 'r':
-			decoded.WriteByte('\r')
-		case 'f':
-			decoded.WriteByte('\f')
-		default:
-			decoded.WriteByte(value[i])
-		}
-	}
-	return decoded.String()
+	return parsed.Map(), nil
 }
 
 func injectParams(message string, params []any) string {

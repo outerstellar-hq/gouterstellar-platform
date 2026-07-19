@@ -12,7 +12,7 @@ product schema, deployment image, product assets, or in-tree plugins.
 | `durablefile` | complete, crash-resistant file replacement with explicit Unix modes | `natefinch/atomic`, Go standard library |
 | `web` | masked CSRF tokens, strict bounded JSON, CSP nonces, security headers, body limits, sensitive-response caching | `gorilla/csrf`, `net/http` |
 | `ui` | shared server-rendered application shell and composition contract | `html/template`, `embed` |
-| `i18n` | application-owned Java `.properties` catalog loading and lookup | Go standard library |
+| `i18n` | application-owned Java `.properties` catalog loading and lookup | `magiconair/properties` |
 | `migration` | application-owned embedded migration sets | `golang-migrate/migrate` with `iofs` |
 | `observability` | OTLP tracing plus HTTP, gRPC, and safe PGX instrumentation | OpenTelemetry Go, `exaring/otelpgx` |
 
