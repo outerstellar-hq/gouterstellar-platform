@@ -128,6 +128,7 @@ func replace(source, destination string, directoryMode os.FileMode, syncDir dire
 		return fmt.Errorf("create parent directory for %q: %w", destination, err)
 	}
 
+	// #nosec G304 -- Replace is a filesystem primitive; the caller explicitly owns source and destination.
 	file, err := os.OpenFile(source, os.O_RDWR, 0)
 	if err != nil {
 		return fmt.Errorf("open source file %q: %w", source, err)
