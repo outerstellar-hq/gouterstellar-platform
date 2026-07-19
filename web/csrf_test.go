@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCSRFIssuesSecureDefaultsAndRejectsMissingToken(t *testing.T) {
@@ -79,5 +80,26 @@ func TestCSRFIssuesSecureDefaultsAndRejectsMissingToken(t *testing.T) {
 func TestCSRFRejectsWeakKey(t *testing.T) {
 	if _, err := NewCSRF(CSRFConfig{AuthKey: []byte("weak")}); err == nil {
 		t.Fatal("weak key was accepted")
+	}
+}
+
+func TestCSRFRejectsUnrepresentableMaxAge(t *testing.T) {
+	authKey := bytes.Repeat([]byte{7}, 32)
+	for name, maxAge := range map[string]time.Duration{
+		"subsecond":  time.Millisecond,
+		"fractional": 1500 * time.Millisecond,
+		"too large":  maxCSRFMaxAge + time.Second,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := NewCSRF(CSRFConfig{AuthKey: authKey, MaxAge: maxAge}); err == nil {
+				t.Fatalf("max age %s was accepted", maxAge)
+			}
+		})
+	}
+}
+
+func TestCSRFAcceptsLargestPortableMaxAge(t *testing.T) {
+	if _, err := NewCSRF(CSRFConfig{AuthKey: bytes.Repeat([]byte{7}, 32), MaxAge: maxCSRFMaxAge}); err != nil {
+		t.Fatal(err)
 	}
 }
