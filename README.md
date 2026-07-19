@@ -218,6 +218,11 @@ their application-specific ACL policy.
 err := durablefile.Write(path, encodedState, 0o600, 0o700)
 ```
 
+If replacement succeeds but a following directory sync fails, the destination
+already contains the new data and the library returns a
+`*durablefile.CommittedError`. Consumers can detect that outcome with
+`errors.As`; the error still unwraps to the underlying sync failure.
+
 Use `durablefile.Replace` when a consumer must determine the final destination
 only after it has finished producing a temporary file, such as a content-hash
 cache. Source and destination must be on the same filesystem.
