@@ -23,15 +23,22 @@ type TokenPair struct {
 // NewToken creates an opaque, URL-safe bearer token. Only Digest should be
 // stored; Plaintext should be returned to the caller exactly once.
 func NewToken(prefix string) (TokenPair, error) {
+	plaintext, err := newTokenPlaintext(prefix)
+	if err != nil {
+		return TokenPair{}, err
+	}
+	return TokenPair{Plaintext: plaintext, Digest: TokenDigest(plaintext)}, nil
+}
+
+func newTokenPlaintext(prefix string) (string, error) {
 	if !validTokenPrefix(prefix) {
-		return TokenPair{}, fmt.Errorf("token prefix must contain at most %d RFC 3986 unreserved ASCII characters", maxTokenPrefixBytes)
+		return "", fmt.Errorf("token prefix must contain at most %d RFC 3986 unreserved ASCII characters", maxTokenPrefixBytes)
 	}
 	random := make([]byte, defaultTokenBytes)
 	if _, err := rand.Read(random); err != nil {
-		return TokenPair{}, fmt.Errorf("generate token: %w", err)
+		return "", fmt.Errorf("generate token: %w", err)
 	}
-	plaintext := prefix + base64.RawURLEncoding.EncodeToString(random)
-	return TokenPair{Plaintext: plaintext, Digest: TokenDigest(plaintext)}, nil
+	return prefix + base64.RawURLEncoding.EncodeToString(random), nil
 }
 
 func validTokenPrefix(prefix string) bool {
@@ -68,6 +75,17 @@ func NewTokenHasher(pepper []byte) (*TokenHasher, error) {
 		return nil, errors.New("token pepper must contain at least 32 bytes")
 	}
 	return &TokenHasher{key: append([]byte(nil), pepper...)}, nil
+}
+
+// NewToken creates an opaque bearer token and its matching keyed digest. Use
+// this method instead of the package-level NewToken when the application has
+// configured a token pepper.
+func (h *TokenHasher) NewToken(prefix string) (TokenPair, error) {
+	plaintext, err := newTokenPlaintext(prefix)
+	if err != nil {
+		return TokenPair{}, err
+	}
+	return TokenPair{Plaintext: plaintext, Digest: h.Digest(plaintext)}, nil
 }
 
 // Digest returns an HMAC-SHA-256 digest suitable for indexed storage.
