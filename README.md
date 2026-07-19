@@ -213,8 +213,10 @@ label := german.Translate("navigation.workers")
 ```
 
 Translation catalogs and supported-language policy remain application-owned.
-Locale-bound readers are immutable, so concurrent requests cannot change each
-other's language.
+Catalog loading normalizes configured locale codes and rejects translated
+messages whose `{0}` or `%s`/`%d` parameter contract differs from the default
+locale. Locale-bound readers are immutable, so concurrent requests cannot
+change each other's language.
 
 ## Durable files
 
