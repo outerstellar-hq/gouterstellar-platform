@@ -29,6 +29,19 @@ func TestNewTracingValidatesConfiguration(t *testing.T) {
 	}
 }
 
+func TestNewTracingHonorsZeroSampleRatio(t *testing.T) {
+	tracing, err := NewTracing(context.Background(), TracingConfig{ServiceName: "example", SampleRatio: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = tracing.Shutdown(context.Background()) })
+	_, span := tracing.Provider().Tracer("test").Start(context.Background(), "not-recorded")
+	defer span.End()
+	if span.IsRecording() {
+		t.Fatal("zero sample ratio recorded a span")
+	}
+}
+
 func TestHTTPClientPreservesCallerConfiguration(t *testing.T) {
 	base := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	client := HTTPClient(base)

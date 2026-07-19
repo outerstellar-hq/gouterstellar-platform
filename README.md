@@ -235,6 +235,10 @@ call `InstallGlobal` explicitly and use `observability.HTTP` or
 `observability.HTTPClient` at their HTTP seams. The returned tracing lifecycle
 also supplies explicit gRPC options and safe PGX instrumentation:
 
+`TracingConfig.SampleRatio` is explicit: zero samples no new root spans and one
+samples all new root spans. The library never silently turns a zero sampling
+budget into full export.
+
 ```go
 server := grpc.NewServer(tracing.GRPCServerOption())
 connection, err := grpc.NewClient(target, credentials, tracing.GRPCClientOption())
