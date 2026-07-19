@@ -44,6 +44,14 @@ type Passwords struct {
 	params   argon2id.Params
 }
 
+// PasswordVerification is the complete result of checking a login password.
+// NeedsRehash is true only when Matched is true and the stored hash uses a
+// different safe Argon2id profile from the configured profile.
+type PasswordVerification struct {
+	Matched     bool
+	NeedsRehash bool
+}
+
 // NewPasswords validates config before any expensive password work begins.
 func NewPasswords(config PasswordConfig) (*Passwords, error) {
 	if config.MinBytes == 0 {
@@ -86,17 +94,29 @@ func (p *Passwords) Hash(password string) (string, error) {
 // parameters before invoking Argon2, preventing a malformed database value
 // from turning login into an unbounded CPU or memory allocation.
 func (p *Passwords) Verify(hash, password string) (bool, error) {
+	verification, err := p.VerifyWithRehash(hash, password)
+	return verification.Matched, err
+}
+
+// VerifyWithRehash verifies a login password and reports whether its stored
+// hash should be replaced after successful authentication. It decodes and
+// validates the stored parameters once for both decisions.
+func (p *Passwords) VerifyWithRehash(hash, password string) (PasswordVerification, error) {
 	if err := p.validateCandidatePassword(password); err != nil {
-		return false, err
+		return PasswordVerification{}, err
 	}
-	if _, err := decodeHash(hash); err != nil {
-		return false, err
+	params, err := decodeHash(hash)
+	if err != nil {
+		return PasswordVerification{}, err
 	}
 	matched, err := argon2id.ComparePasswordAndHash(password, hash)
 	if err != nil {
-		return false, fmt.Errorf("verify password: %w", err)
+		return PasswordVerification{}, fmt.Errorf("verify password: %w", err)
 	}
-	return matched, nil
+	return PasswordVerification{
+		Matched:     matched,
+		NeedsRehash: matched && *params != p.params,
+	}, nil
 }
 
 // NeedsRehash reports whether a valid hash should be upgraded to the current

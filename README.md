@@ -42,6 +42,18 @@ if err != nil {
 }
 hash, err := passwords.Hash(password)
 
+verification, err := passwords.VerifyWithRehash(hash, loginPassword)
+if err != nil {
+    return err
+}
+if verification.Matched && verification.NeedsRehash {
+    replacementHash, err := passwords.Hash(loginPassword)
+    if err != nil {
+        return err
+    }
+    // Persist replacementHash with the successful login transaction.
+}
+
 sessions, err := auth.NewSessions(store, auth.PrincipalResolverFunc(
     func(ctx context.Context, subject string) (auth.Principal, error) {
         user, err := users.FindCurrent(ctx, subject)
