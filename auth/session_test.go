@@ -404,13 +404,21 @@ func TestSessionsRevokeSubjectWithStoreUsesConsumerTransaction(t *testing.T) {
 	}
 }
 
-func TestPrincipalClaimsAreCopiedIntoContext(t *testing.T) {
+func TestPrincipalMutableFieldsAreIsolatedFromContext(t *testing.T) {
+	roles := []string{"admin"}
 	claims := map[string]string{"email": "user@example.test"}
-	ctx := withPrincipal(context.Background(), Principal{Subject: "user-1", Claims: claims})
+	ctx := withPrincipal(context.Background(), Principal{Subject: "user-1", Roles: roles, Claims: claims})
+	roles[0] = "mutated-before-read"
 	claims["email"] = "mutated@example.test"
 	principal, ok := PrincipalFromContext(ctx)
-	if !ok || principal.Claims["email"] != "user@example.test" {
+	if !ok || principal.Roles[0] != "admin" || principal.Claims["email"] != "user@example.test" {
 		t.Fatalf("principal = %#v", principal)
+	}
+	principal.Roles[0] = "mutated-after-read"
+	principal.Claims["email"] = "mutated-after-read@example.test"
+	second, ok := PrincipalFromContext(ctx)
+	if !ok || second.Roles[0] != "admin" || second.Claims["email"] != "user@example.test" {
+		t.Fatalf("context principal was mutated through returned value: %#v", second)
 	}
 }
 

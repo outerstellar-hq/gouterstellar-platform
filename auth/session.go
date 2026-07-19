@@ -252,9 +252,15 @@ func (s *Sessions) RevokeSubjectWithStore(ctx context.Context, subject string, s
 	return nil
 }
 
-// PrincipalFromContext returns the principal resolved by Middleware.
+// PrincipalFromContext returns an independent copy of the principal resolved
+// by Middleware so callers cannot mutate request-authoritative roles or claims.
 func PrincipalFromContext(ctx context.Context) (Principal, bool) {
 	principal, ok := ctx.Value(principalContextKey{}).(Principal)
+	if !ok {
+		return Principal{}, false
+	}
+	principal.Roles = append([]string(nil), principal.Roles...)
+	principal.Claims = cloneClaims(principal.Claims)
 	return principal, ok
 }
 
