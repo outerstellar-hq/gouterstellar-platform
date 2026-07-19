@@ -33,16 +33,28 @@ func TestRendererRequiresConsumerContent(t *testing.T) {
 
 func TestSharedShellCannotBeOverriddenByConsumer(t *testing.T) {
 	consumer := fstest.MapFS{"page.html": &fstest.MapFile{Data: []byte(`{{define "application-content"}}content{{end}}{{define "shared-shell"}}consumer override{{end}}`)}}
-	renderer, err := NewRenderer(Options{Templates: consumer, Patterns: []string{"page.html"}})
+	if _, err := NewRenderer(Options{Templates: consumer, Patterns: []string{"page.html"}}); err == nil {
+		t.Fatal("consumer shared template name was accepted")
+	}
+}
+
+func TestExecuteTemplateOnlyRendersApplicationOwnedNames(t *testing.T) {
+	renderer, err := NewRenderer(Options{
+		Templates: fstest.MapFS{"page.html": &fstest.MapFile{Data: []byte(`{{define "application-content"}}content{{end}}{{define "fragment"}}fragment {{.}}{{end}}`)}},
+		Patterns:  []string{"page.html"},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	var rendered bytes.Buffer
-	if err := renderer.Render(&rendered, Shell{Title: "Page", ProductName: "Product"}, nil); err != nil {
+	if err := renderer.ExecuteTemplate(&rendered, "fragment", "value"); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(rendered.String(), "consumer override") || !strings.Contains(rendered.String(), "<!doctype html>") {
-		t.Fatalf("consumer replaced shared shell: %s", rendered.String())
+	if rendered.String() != "fragment value" {
+		t.Fatalf("fragment = %q", rendered.String())
+	}
+	if err := renderer.ExecuteTemplate(&rendered, "shared-shell", nil); err == nil {
+		t.Fatal("shared template executed through application seam")
 	}
 }
 
@@ -82,6 +94,8 @@ func TestShellRejectsCrossOriginNavigation(t *testing.T) {
 func TestShellRejectsCrossOriginChromeURLs(t *testing.T) {
 	for name, shell := range map[string]Shell{
 		"brand":      {Title: "Example", ProductName: "Example", BrandURL: "https://example.com"},
+		"backslash":  {Title: "Example", ProductName: "Example", BrandURL: `/\untrusted.example/path`},
+		"encoded":    {Title: "Example", ProductName: "Example", BrandURL: `/%2f%2funtrusted.example/path`},
 		"stylesheet": {Title: "Example", ProductName: "Example", Stylesheets: []string{"//example.com/app.css"}},
 		"avatar":     {Title: "Example", ProductName: "Example", User: &User{AvatarURL: "https://example.com/avatar.png", ProfileURL: "/profile", LogoutURL: "/logout"}},
 		"profile":    {Title: "Example", ProductName: "Example", User: &User{ProfileURL: "https://example.com", LogoutURL: "/logout"}},
