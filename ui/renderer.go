@@ -22,7 +22,8 @@ type Options struct {
 
 // Renderer is an immutable parsed template set safe for concurrent rendering.
 type Renderer struct {
-	templates *template.Template
+	templates            *template.Template
+	applicationTemplates map[string]struct{}
 }
 
 // NewRenderer parses the consumer's content templates and then installs the
@@ -36,18 +37,28 @@ func NewRenderer(opts Options) (*Renderer, error) {
 	if len(opts.Patterns) == 0 {
 		return nil, fmt.Errorf("at least one application template pattern is required")
 	}
-	parsed, err := template.New("shared-ui").Funcs(opts.Functions).ParseFS(opts.Templates, opts.Patterns...)
+	parsed, err := template.New("application-templates").Funcs(opts.Functions).ParseFS(opts.Templates, opts.Patterns...)
 	if err != nil {
 		return nil, fmt.Errorf("parse application templates: %w", err)
 	}
 	if parsed.Lookup("application-content") == nil {
 		return nil, fmt.Errorf("application templates must define %q", "application-content")
 	}
+	applicationTemplates := make(map[string]struct{}, len(parsed.Templates()))
+	for _, candidate := range parsed.Templates() {
+		if candidate.Tree == nil {
+			continue
+		}
+		if strings.HasPrefix(candidate.Name(), "shared-") {
+			return nil, fmt.Errorf("application template name %q is reserved by the shared UI", candidate.Name())
+		}
+		applicationTemplates[candidate.Name()] = struct{}{}
+	}
 	parsed, err = parsed.ParseFS(shellTemplates, "templates/shell.html")
 	if err != nil {
 		return nil, fmt.Errorf("parse shared UI shell: %w", err)
 	}
-	return &Renderer{templates: parsed}, nil
+	return &Renderer{templates: parsed, applicationTemplates: applicationTemplates}, nil
 }
 
 // Render executes application data inside the shared shell.
@@ -73,7 +84,7 @@ func (r *Renderer) ExecuteTemplate(w io.Writer, name string, data any) error {
 	if strings.TrimSpace(name) == "" {
 		return fmt.Errorf("template name is required")
 	}
-	if r.templates.Lookup(name) == nil {
+	if _, owned := r.applicationTemplates[name]; !owned {
 		return fmt.Errorf("unknown application template %q", name)
 	}
 	return r.templates.ExecuteTemplate(w, name, data)

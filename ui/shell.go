@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -152,7 +153,9 @@ func validateSameOriginPath(kind, value string, allowEmpty bool) error {
 	if allowEmpty && value == "" {
 		return nil
 	}
-	if !strings.HasPrefix(value, "/") || strings.HasPrefix(value, "//") {
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.IsAbs() || parsed.Host != "" || parsed.User != nil || parsed.Opaque != "" ||
+		!strings.HasPrefix(parsed.Path, "/") || strings.HasPrefix(parsed.Path, "//") || strings.Contains(parsed.Path, `\`) {
 		return fmt.Errorf("UI shell %s URL must be a same-origin absolute path", kind)
 	}
 	return nil
