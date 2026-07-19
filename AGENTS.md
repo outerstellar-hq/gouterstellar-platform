@@ -23,3 +23,20 @@ This repository is a set of application-neutral Go libraries.
 Before delivery, run `make check` in this repository. Consumer adoption and
 integration verification belong to a separately scoped task in the consumer's
 own repository; never cross that repository boundary as part of platform work.
+
+## Agent skills
+
+### Issue tracker
+
+Architecture and implementation work is tracked in GitHub Issues. See
+`docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the standard five-role triage vocabulary. See
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repository with root domain documentation and ADRs in
+`docs/adr/`. See `docs/agents/domain.md`.
