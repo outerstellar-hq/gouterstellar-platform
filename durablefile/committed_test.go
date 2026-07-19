@@ -24,6 +24,9 @@ func TestWriteReaderReportsCommittedSyncFailure(t *testing.T) {
 	if !errors.Is(err, syncFailure) {
 		t.Fatalf("error = %v, want wrapped %v", err, syncFailure)
 	}
+	if got := committedError.Error(); !strings.Contains(got, "replacement") || !strings.Contains(got, syncFailure.Error()) {
+		t.Fatalf("committed error text = %q", got)
+	}
 	content, readErr := os.ReadFile(path)
 	if readErr != nil {
 		t.Fatal(readErr)

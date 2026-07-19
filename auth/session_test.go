@@ -122,6 +122,51 @@ func TestSessionsSignInRotatesExistingToken(t *testing.T) {
 	}
 }
 
+func TestSessionsSignOutDestroysAuthenticatedSession(t *testing.T) {
+	sessions, err := NewSessions(memstore.New(), PrincipalResolverFunc(func(_ context.Context, subject string) (Principal, error) {
+		return Principal{Subject: subject, SecurityVersion: testSecurityVersion}, nil
+	}), SessionConfig{CookieName: "test_session", AllowInsecureCookies: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	login := sessions.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := sessions.SignIn(r.Context(), testSessionIdentity("user-1")); err != nil {
+			t.Fatal(err)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	loginResponse := httptest.NewRecorder()
+	login.ServeHTTP(loginResponse, httptest.NewRequest(http.MethodPost, "/login", nil))
+	sessionCookie := loginResponse.Result().Cookies()[0]
+
+	logout := sessions.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := sessions.SignOut(r.Context()); err != nil {
+			t.Fatal(err)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	logoutRequest := httptest.NewRequest(http.MethodPost, "/logout", nil)
+	logoutRequest.AddCookie(sessionCookie)
+	logoutResponse := httptest.NewRecorder()
+	logout.ServeHTTP(logoutResponse, logoutRequest)
+	cleared := logoutResponse.Result().Cookies()
+	if len(cleared) != 1 || cleared[0].MaxAge >= 0 {
+		t.Fatalf("session cookie was not expired: %#v", cleared)
+	}
+
+	protected := sessions.Middleware(RequireAuthenticated(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("destroyed session remained authenticated")
+	})))
+	staleRequest := httptest.NewRequest(http.MethodGet, "/", nil)
+	staleRequest.AddCookie(sessionCookie)
+	staleResponse := httptest.NewRecorder()
+	protected.ServeHTTP(staleResponse, staleRequest)
+	if staleResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", staleResponse.Code, http.StatusUnauthorized)
+	}
+}
+
 func TestSessionsFailClosedAndClearDisabledPrincipal(t *testing.T) {
 	sessions, err := NewSessions(memstore.New(), PrincipalResolverFunc(func(context.Context, string) (Principal, error) {
 		return Principal{}, ErrUnauthenticated
