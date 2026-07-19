@@ -14,6 +14,26 @@ import (
 
 var replaceMutex sync.Mutex
 
+// CommittedError reports a durability failure after the destination has
+// already been replaced. The new destination is visible, but its survival
+// across an immediate system crash is not guaranteed.
+//
+// Callers can distinguish this outcome with errors.As. Unwrap exposes the
+// underlying sync failure to errors.Is and errors.As.
+type CommittedError struct {
+	err error
+}
+
+func (err *CommittedError) Error() string {
+	return err.err.Error()
+}
+
+func (err *CommittedError) Unwrap() error {
+	return err.err
+}
+
+type directorySync func(string) error
+
 // Write writes data to path using a same-directory temporary file. It creates
 // missing parent directories with directoryMode and makes the replacement
 // visible only after the temporary file has been flushed and closed.
@@ -25,10 +45,14 @@ func Write(path string, data []byte, fileMode, directoryMode os.FileMode) error 
 // partial file. A read, flush, close, or replacement failure leaves the
 // previous destination unchanged.
 //
-// If syncing the parent directory fails after replacement, the returned error
-// states that the new file is visible but its survival across an immediate
-// system crash is not guaranteed.
+// If syncing a directory fails after replacement, the returned error is a
+// *CommittedError: the new file is visible but its survival across an
+// immediate system crash is not guaranteed.
 func WriteReader(path string, reader io.Reader, fileMode, directoryMode os.FileMode) (err error) {
+	return writeReader(path, reader, fileMode, directoryMode, syncDirectory)
+}
+
+func writeReader(path string, reader io.Reader, fileMode, directoryMode os.FileMode, syncDir directorySync) (err error) {
 	if err := validate(path, fileMode, directoryMode); err != nil {
 		return err
 	}
@@ -73,19 +97,24 @@ func WriteReader(path string, reader io.Reader, fileMode, directoryMode os.FileM
 	if err := replaceSynced(temporaryPath, path); err != nil {
 		return err
 	}
-	if err := syncDirectory(directory); err != nil {
-		return fmt.Errorf("replacement of %q succeeded but syncing its directory failed: %w", path, err)
+	if err := syncDir(directory); err != nil {
+		return committed(fmt.Errorf("replacement of %q succeeded but syncing its directory failed: %w", path, err))
 	}
-	if err := syncCreatedDirectoryParents(createdDirectories); err != nil {
-		return fmt.Errorf("replacement of %q succeeded but syncing a created directory parent failed: %w", path, err)
+	if err := syncCreatedDirectoryParents(createdDirectories, syncDir); err != nil {
+		return committed(fmt.Errorf("replacement of %q succeeded but syncing a created directory parent failed: %w", path, err))
 	}
 	return nil
 }
 
 // Replace flushes a closed source file and atomically replaces destination
 // with it. Source and destination must be on the same filesystem. Missing
-// destination directories are created with directoryMode.
+// destination directories are created with directoryMode. A directory sync
+// failure after replacement is returned as a *CommittedError.
 func Replace(source, destination string, directoryMode os.FileMode) error {
+	return replace(source, destination, directoryMode, syncDirectory)
+}
+
+func replace(source, destination string, directoryMode os.FileMode, syncDir directorySync) error {
 	if source == "" {
 		return fmt.Errorf("source path is required")
 	}
@@ -114,17 +143,17 @@ func Replace(source, destination string, directoryMode os.FileMode) error {
 	if err := replaceSynced(source, destination); err != nil {
 		return err
 	}
-	if err := syncDirectory(directory); err != nil {
-		return fmt.Errorf("replacement of %q succeeded but syncing its directory failed: %w", destination, err)
+	if err := syncDir(directory); err != nil {
+		return committed(fmt.Errorf("replacement of %q succeeded but syncing its directory failed: %w", destination, err))
 	}
 	sourceDirectory := filepath.Dir(source)
 	if !sameDirectory(sourceDirectory, directory) {
-		if err := syncDirectory(sourceDirectory); err != nil {
-			return fmt.Errorf("replacement of %q succeeded but syncing source directory %q failed: %w", destination, sourceDirectory, err)
+		if err := syncDir(sourceDirectory); err != nil {
+			return committed(fmt.Errorf("replacement of %q succeeded but syncing source directory %q failed: %w", destination, sourceDirectory, err))
 		}
 	}
-	if err := syncCreatedDirectoryParents(createdDirectories); err != nil {
-		return fmt.Errorf("replacement of %q succeeded but syncing a created directory parent failed: %w", destination, err)
+	if err := syncCreatedDirectoryParents(createdDirectories, syncDir); err != nil {
+		return committed(fmt.Errorf("replacement of %q succeeded but syncing a created directory parent failed: %w", destination, err))
 	}
 	return nil
 }
@@ -150,19 +179,23 @@ func createParentDirectories(directory string, mode os.FileMode) ([]string, erro
 	return missing, nil
 }
 
-func syncCreatedDirectoryParents(created []string) error {
+func syncCreatedDirectoryParents(created []string, syncDir directorySync) error {
 	synced := make(map[string]struct{}, len(created))
 	for _, directory := range created {
 		parent := filepath.Dir(directory)
 		if _, ok := synced[parent]; ok {
 			continue
 		}
-		if err := syncDirectory(parent); err != nil {
+		if err := syncDir(parent); err != nil {
 			return err
 		}
 		synced[parent] = struct{}{}
 	}
 	return nil
+}
+
+func committed(err error) error {
+	return &CommittedError{err: err}
 }
 
 func sameDirectory(first, second string) bool {
