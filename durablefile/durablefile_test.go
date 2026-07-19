@@ -71,6 +71,15 @@ func TestWriteReaderPreservesDestinationAndCleansTemporaryFileOnReadError(t *tes
 	}
 }
 
+func TestWriteReaderRejectsNilReader(t *testing.T) {
+	t.Parallel()
+
+	err := durablefile.WriteReader(filepath.Join(t.TempDir(), "state"), nil, 0o600, 0o700)
+	if err == nil || !strings.Contains(err.Error(), "reader is required") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestConcurrentWritesExposeOneCompleteValue(t *testing.T) {
 	t.Parallel()
 
