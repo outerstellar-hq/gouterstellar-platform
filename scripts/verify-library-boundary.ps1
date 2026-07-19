@@ -14,6 +14,25 @@ $allowedPackages = @(
     "$modulePath/ui"
     "$modulePath/web"
 )
+$allowedDirectModules = @(
+    'github.com/alexedwards/argon2id'
+    'github.com/alexedwards/scs/v2'
+    'github.com/exaring/otelpgx'
+    'github.com/golang-jwt/jwt/v5'
+    'github.com/golang-migrate/migrate/v4'
+    'github.com/gorilla/csrf'
+    'github.com/jackc/pgx/v5'
+    'github.com/magiconair/properties'
+    'github.com/natefinch/atomic'
+    'github.com/pquerna/otp'
+    'go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc'
+    'go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp'
+    'go.opentelemetry.io/otel'
+    'go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp'
+    'go.opentelemetry.io/otel/sdk'
+    'go.opentelemetry.io/otel/trace'
+    'google.golang.org/grpc'
+)
 $allowedTopLevelEntries = @(
     '.github'
     '.gitignore'
@@ -77,6 +96,15 @@ try {
         $failures.Add("public package allow-list changed:`n  $($rendered -join "`n  ")")
     }
 
+    $actualDirectModules = @(Invoke-Checked go list '-m' '-f' '{{if and (not .Main) (not .Indirect)}}{{.Path}}{{end}}' 'all') |
+        Where-Object { $_ } |
+        Sort-Object
+    $moduleDifference = @(Compare-Object ($allowedDirectModules | Sort-Object) $actualDirectModules)
+    if ($moduleDifference.Count -gt 0) {
+        $rendered = $moduleDifference | ForEach-Object { "$($_.SideIndicator) $($_.InputObject)" }
+        $failures.Add("direct dependency allow-list changed:`n  $($rendered -join "`n  ")")
+    }
+
     $trackedFiles = @(Invoke-Checked git ls-files '--cached' '--others' '--exclude-standard')
     $topLevelEntries = $trackedFiles |
         ForEach-Object { ($_ -split '/')[0] } |
@@ -93,12 +121,30 @@ try {
         }
     }
 
+    $forbiddenPaths = $trackedFiles | Where-Object {
+        $_ -match '(^|/)(cmd|config|deployments?|extensions?|plugins?|queries|static)(/|$)'
+    }
+    if ($forbiddenPaths) {
+        $failures.Add("application-host paths are forbidden:`n  $($forbiddenPaths -join "`n  ")")
+    }
+
     $forbiddenArtifacts = $trackedFiles | Where-Object {
         $_ -match '(^|/)(Dockerfile[^/]*|compose[^/]*\.ya?ml)$' -or
-        $_ -match '\.(sql|toml)$'
+        $_ -match '(^|/)(deploy|deployment|server|startup)([._-][^/]*)?\.(ya?ml|json|toml|ps1|sh|cmd|bat|service)$' -or
+        $_ -match '(^|/)(plugin|extension|host|server|application|startup|wire)([_-][^/]*)?\.(go|ps1|sh|cmd|bat|ya?ml|json|toml)$' -or
+        $_ -match '(\.pb|_generated|\.gen|_gen)\.go$' -or
+        $_ -match '\.(sql|toml|exe|dll|so|dylib|jar|class|wasm|a|o|obj)$'
     }
     if ($forbiddenArtifacts) {
         $failures.Add("application or deployment artifacts are forbidden:`n  $($forbiddenArtifacts -join "`n  ")")
+    }
+
+    $consumerAssets = $trackedFiles | Where-Object {
+        $_ -match '\.(html|css|jsx?|tsx?|png|jpe?g|gif|webp|svg|ico|woff2?|ttf|otf)$' -and
+        $_ -ne 'ui/templates/shell.html'
+    }
+    if ($consumerAssets) {
+        $failures.Add("consumer-owned templates and assets are forbidden:`n  $($consumerAssets -join "`n  ")")
     }
 
     $productPattern = ('star' + 'forge') + '|' + ('star' + 'line')
@@ -112,7 +158,7 @@ try {
 
     if ($failures.Count -gt 0) {
         foreach ($failure in $failures) {
-            Write-Error $failure
+            Write-Error $failure -ErrorAction Continue
         }
         exit 1
     }

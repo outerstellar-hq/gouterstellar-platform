@@ -272,14 +272,15 @@ intentional architecture change.
 
 ## Development
 
-Requires Go 1.26.2 or newer.
+Requires Go 1.26.2 or newer and golangci-lint 2.12.2.
 
 ```bash
 make check
 ```
 
-The full gate verifies module checksums, module-file tidiness, the library-only
-seam, vet, tests, and lint.
+The local full gate verifies module checksums, module-file tidiness, the
+library-only seam, vet, tests, and lint. CI runs the same platform checks on
+Linux and Windows and adds the Go race detector on Linux.
 
 ## License
 

@@ -1,13 +1,20 @@
-.PHONY: test lint lint-full vet fmt boundary check security
+.PHONY: modules test race lint lint-full vet fmt boundary check security
+
+modules:
+	go mod verify
+	go mod tidy -diff
 
 test:
 	go test ./... -count=1
 
+race:
+	go test -race ./... -count=1
+
 lint:
-	golangci-lint run ./...
+	golangci-lint run --timeout=5m ./...
 
 lint-full:
-	golangci-lint run --enable-all ./...
+	golangci-lint run --default=all --timeout=5m ./...
 
 vet:
 	go vet ./...
@@ -19,7 +26,7 @@ fmt:
 boundary:
 	pwsh -NoProfile -File scripts/verify-library-boundary.ps1
 
-check: boundary vet test lint
+check: modules boundary vet test lint
 
 security:
 	gosec ./...

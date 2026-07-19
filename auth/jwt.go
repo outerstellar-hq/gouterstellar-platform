@@ -117,7 +117,7 @@ func (j *JWTs) Verify(encoded string) (Claims, error) {
 	if claims.IssuedAt == nil || claims.ExpiresAt == nil {
 		return Claims{}, errors.New("verify JWT: issued-at and expiration are required")
 	}
-	lifetime := claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time)
+	lifetime := claims.ExpiresAt.Sub(claims.IssuedAt.Time)
 	if lifetime <= 0 || lifetime > j.lifetime {
 		return Claims{}, errors.New("verify JWT: token lifetime exceeds configured profile")
 	}
