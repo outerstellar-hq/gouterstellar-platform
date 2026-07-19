@@ -9,7 +9,7 @@ product schema, deployment image, product assets, or in-tree plugins.
 | Module | Shared responsibility | Proven implementation underneath |
 | --- | --- | --- |
 | `auth` | Argon2id passwords, opaque tokens, server-side sessions, principals, JWTs, TOTP | `alexedwards/argon2id`, `alexedwards/scs`, `golang-jwt/jwt`, `pquerna/otp` |
-| `durablefile` | complete, crash-resistant file replacement with explicit permissions | `natefinch/atomic`, Go standard library |
+| `durablefile` | complete, crash-resistant file replacement with explicit Unix modes | `natefinch/atomic`, Go standard library |
 | `web` | masked CSRF tokens, strict bounded JSON, CSP nonces, security headers, body limits, sensitive-response caching | `gorilla/csrf`, `net/http` |
 | `ui` | shared server-rendered application shell and composition contract | `html/template`, `embed` |
 | `i18n` | application-owned Java `.properties` catalog loading and lookup | Go standard library |
@@ -207,10 +207,12 @@ other's language.
 ## Durable files
 
 `durablefile.Write` and `durablefile.WriteReader` create missing parent
-directories, stage data beside its destination, apply explicit permissions,
-flush and close it, and then replace the destination atomically. On Unix the
-parent directory is also synced; on Windows the replacement delegates to
-`MoveFileEx` with write-through through `natefinch/atomic`.
+directories, stage data beside its destination, apply explicit Unix permission
+modes, flush and close it, and then replace the destination atomically. On Unix
+the affected directory entries are synced; on Windows replacement delegates to
+`MoveFileEx` with write-through through `natefinch/atomic`. Go permission bits
+do not configure Windows ACLs, so consumers writing secrets there must apply
+their application-specific ACL policy.
 
 ```go
 err := durablefile.Write(path, encodedState, 0o600, 0o700)

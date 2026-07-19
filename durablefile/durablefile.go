@@ -32,9 +32,13 @@ func WriteReader(path string, reader io.Reader, fileMode, directoryMode os.FileM
 	if err := validate(path, fileMode, directoryMode); err != nil {
 		return err
 	}
+	if reader == nil {
+		return fmt.Errorf("source reader is required")
+	}
 
 	directory := filepath.Dir(path)
-	if err := os.MkdirAll(directory, directoryMode); err != nil {
+	createdDirectories, err := createParentDirectories(directory, directoryMode)
+	if err != nil {
 		return fmt.Errorf("create parent directory for %q: %w", path, err)
 	}
 
@@ -72,6 +76,9 @@ func WriteReader(path string, reader io.Reader, fileMode, directoryMode os.FileM
 	if err := syncDirectory(directory); err != nil {
 		return fmt.Errorf("replacement of %q succeeded but syncing its directory failed: %w", path, err)
 	}
+	if err := syncCreatedDirectoryParents(createdDirectories); err != nil {
+		return fmt.Errorf("replacement of %q succeeded but syncing a created directory parent failed: %w", path, err)
+	}
 	return nil
 }
 
@@ -87,7 +94,8 @@ func Replace(source, destination string, directoryMode os.FileMode) error {
 	}
 
 	directory := filepath.Dir(destination)
-	if err := os.MkdirAll(directory, directoryMode); err != nil {
+	createdDirectories, err := createParentDirectories(directory, directoryMode)
+	if err != nil {
 		return fmt.Errorf("create parent directory for %q: %w", destination, err)
 	}
 
@@ -109,7 +117,58 @@ func Replace(source, destination string, directoryMode os.FileMode) error {
 	if err := syncDirectory(directory); err != nil {
 		return fmt.Errorf("replacement of %q succeeded but syncing its directory failed: %w", destination, err)
 	}
+	sourceDirectory := filepath.Dir(source)
+	if !sameDirectory(sourceDirectory, directory) {
+		if err := syncDirectory(sourceDirectory); err != nil {
+			return fmt.Errorf("replacement of %q succeeded but syncing source directory %q failed: %w", destination, sourceDirectory, err)
+		}
+	}
+	if err := syncCreatedDirectoryParents(createdDirectories); err != nil {
+		return fmt.Errorf("replacement of %q succeeded but syncing a created directory parent failed: %w", destination, err)
+	}
 	return nil
+}
+
+func createParentDirectories(directory string, mode os.FileMode) ([]string, error) {
+	var missing []string
+	for current := filepath.Clean(directory); ; current = filepath.Dir(current) {
+		_, err := os.Stat(current)
+		if err == nil {
+			break
+		}
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+		missing = append(missing, current)
+		if parent := filepath.Dir(current); parent == current {
+			break
+		}
+	}
+	if err := os.MkdirAll(directory, mode); err != nil {
+		return nil, err
+	}
+	return missing, nil
+}
+
+func syncCreatedDirectoryParents(created []string) error {
+	synced := make(map[string]struct{}, len(created))
+	for _, directory := range created {
+		parent := filepath.Dir(directory)
+		if _, ok := synced[parent]; ok {
+			continue
+		}
+		if err := syncDirectory(parent); err != nil {
+			return err
+		}
+		synced[parent] = struct{}{}
+	}
+	return nil
+}
+
+func sameDirectory(first, second string) bool {
+	firstAbsolute, firstErr := filepath.Abs(first)
+	secondAbsolute, secondErr := filepath.Abs(second)
+	return firstErr == nil && secondErr == nil && filepath.Clean(firstAbsolute) == filepath.Clean(secondAbsolute)
 }
 
 func replaceSynced(source, destination string) error {
