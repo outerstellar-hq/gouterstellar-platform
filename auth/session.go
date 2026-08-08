@@ -19,8 +19,6 @@ const (
 
 var ErrUnauthenticated = errors.New("authentication required")
 
-var ErrSessionIterationUnsupported = errors.New("session store does not support iteration")
-
 // SecurityVersion is an opaque application-owned credential and authorization
 // epoch. Applications rotate it atomically with security-sensitive changes.
 type SecurityVersion string
@@ -33,18 +31,39 @@ type SessionIdentity struct {
 	SecurityVersion SecurityVersion
 }
 
-// Principal is the current application-neutral identity returned by the
+// Principal is the immutable application-neutral identity returned by the
 // consumer's user authority for every authenticated request.
 type Principal struct {
 	Subject         string
 	SecurityVersion SecurityVersion
-	Roles           []string
-	Claims          map[string]string
+	roles           []string
+	claims          map[string]string
+}
+
+// NewPrincipal constructs an immutable principal and copies caller-owned
+// roles and claims before the value crosses the session seam.
+func NewPrincipal(subject string, securityVersion SecurityVersion, roles []string, claims map[string]string) Principal {
+	return Principal{
+		Subject:         subject,
+		SecurityVersion: securityVersion,
+		roles:           cloneRoles(roles),
+		claims:          cloneClaims(claims),
+	}
 }
 
 // HasRole performs an exact, case-sensitive role check.
 func (p Principal) HasRole(role string) bool {
-	return slices.Contains(p.Roles, role)
+	return slices.Contains(p.roles, role)
+}
+
+// Roles returns an independent copy of the principal's roles.
+func (p Principal) Roles() []string {
+	return cloneRoles(p.roles)
+}
+
+// Claims returns an independent copy of the principal's claims.
+func (p Principal) Claims() map[string]string {
+	return cloneClaims(p.claims)
 }
 
 // PrincipalResolver loads current identity and authorization state. Consumers
@@ -59,16 +78,6 @@ type PrincipalResolverFunc func(context.Context, string) (Principal, error)
 
 func (f PrincipalResolverFunc) ResolvePrincipal(ctx context.Context, subject string) (Principal, error) {
 	return f(ctx, subject)
-}
-
-// SessionRevocationStore is the storage boundary for best-effort removal of
-// sessions visible in one snapshot.
-//
-// Deprecated: rotate Principal.SecurityVersion for authoritative revocation.
-// Snapshot iteration cannot exclude a concurrently committed session.
-type SessionRevocationStore interface {
-	All(context.Context) (map[string][]byte, error)
-	Delete(context.Context, string) error
 }
 
 // SessionConfig centralizes session lifetime and cookie policy. Production
@@ -212,55 +221,12 @@ func (s *Sessions) SignOut(ctx context.Context) error {
 	return nil
 }
 
-// RevokeSubject best-effort deletes matching sessions visible in one store
-// snapshot. It deletes store keys directly because SCS iteration returns keys
-// in their stored form, which may already be hashed.
-//
-// Deprecated: rotate Principal.SecurityVersion for authoritative revocation.
-func (s *Sessions) RevokeSubject(ctx context.Context, subject string) error {
-	return s.RevokeSubjectWithStore(ctx, subject, managerRevocationStore{sessions: s})
-}
-
-// RevokeSubjectWithStore best-effort deletes matching sessions visible in one
-// store snapshot. A transaction does not prevent a new token from being
-// committed after the snapshot.
-//
-// Deprecated: rotate Principal.SecurityVersion for authoritative revocation.
-func (s *Sessions) RevokeSubjectWithStore(ctx context.Context, subject string, store SessionRevocationStore) error {
-	if strings.TrimSpace(subject) == "" {
-		return errors.New("session subject is required")
-	}
-	if store == nil {
-		return errors.New("session revocation store is required")
-	}
-	all, err := store.All(ctx)
-	if err != nil {
-		return fmt.Errorf("iterate sessions: %w", err)
-	}
-	for token, data := range all {
-		_, values, decodeErr := s.manager.Codec.Decode(data)
-		if decodeErr != nil {
-			return fmt.Errorf("decode stored session: %w", decodeErr)
-		}
-		if values[sessionSubjectKey] != subject {
-			continue
-		}
-		if deleteErr := store.Delete(ctx, token); deleteErr != nil {
-			return fmt.Errorf("revoke subject session: %w", deleteErr)
-		}
-	}
-	return nil
-}
-
-// PrincipalFromContext returns an independent copy of the principal resolved
-// by Middleware so callers cannot mutate request-authoritative roles or claims.
+// PrincipalFromContext returns the immutable principal resolved by Middleware.
 func PrincipalFromContext(ctx context.Context) (Principal, bool) {
 	principal, ok := ctx.Value(principalContextKey{}).(Principal)
 	if !ok {
 		return Principal{}, false
 	}
-	principal.Roles = append([]string(nil), principal.Roles...)
-	principal.Claims = cloneClaims(principal.Claims)
 	return principal, ok
 }
 
@@ -289,21 +255,9 @@ func RequireRole(role string, next http.Handler) http.Handler {
 
 type principalContextKey struct{}
 
-type managerRevocationStore struct {
-	sessions *Sessions
-}
-
-func (s managerRevocationStore) All(ctx context.Context) (map[string][]byte, error) {
-	return s.sessions.allSessions(ctx)
-}
-
-func (s managerRevocationStore) Delete(ctx context.Context, token string) error {
-	return s.sessions.deleteStoredSession(ctx, token)
-}
-
 func withPrincipal(ctx context.Context, principal Principal) context.Context {
-	principal.Roles = append([]string(nil), principal.Roles...)
-	principal.Claims = cloneClaims(principal.Claims)
+	principal.roles = cloneRoles(principal.roles)
+	principal.claims = cloneClaims(principal.claims)
 	return context.WithValue(ctx, principalContextKey{}, principal)
 }
 
@@ -315,31 +269,6 @@ func (s *Sessions) destroyInvalidSession(w http.ResponseWriter, r *http.Request,
 	return true
 }
 
-func (s *Sessions) allSessions(ctx context.Context) (map[string][]byte, error) {
-	if store, ok := s.manager.Store.(scs.IterableCtxStore); ok {
-		all, err := store.AllCtx(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("iterate sessions: %w", err)
-		}
-		return all, nil
-	}
-	if store, ok := s.manager.Store.(scs.IterableStore); ok {
-		all, err := store.All()
-		if err != nil {
-			return nil, fmt.Errorf("iterate sessions: %w", err)
-		}
-		return all, nil
-	}
-	return nil, ErrSessionIterationUnsupported
-}
-
-func (s *Sessions) deleteStoredSession(ctx context.Context, token string) error {
-	if store, ok := s.manager.Store.(scs.CtxStore); ok {
-		return store.DeleteCtx(ctx, token)
-	}
-	return s.manager.Store.Delete(token)
-}
-
 func cloneClaims(claims map[string]string) map[string]string {
 	if len(claims) == 0 {
 		return nil
@@ -349,4 +278,8 @@ func cloneClaims(claims map[string]string) map[string]string {
 		cloned[name] = value
 	}
 	return cloned
+}
+
+func cloneRoles(roles []string) []string {
+	return append([]string(nil), roles...)
 }

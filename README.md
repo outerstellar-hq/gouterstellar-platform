@@ -73,11 +73,12 @@ sessions, err := auth.NewSessions(store, auth.PrincipalResolverFunc(
         if err != nil {
             return auth.Principal{}, err
         }
-        return auth.Principal{
-            Subject:         user.ID,
-            SecurityVersion: auth.SecurityVersion(user.SecurityVersion),
-            Roles:           user.Roles,
-        }, nil
+        return auth.NewPrincipal(
+            user.ID,
+            auth.SecurityVersion(user.SecurityVersion),
+            user.Roles,
+            nil,
+        ), nil
     },
 ), auth.SessionConfig{CookieName: "example_session"})
 if err != nil {
@@ -109,10 +110,9 @@ the server-side session and expires the cookie. Production cookies are Secure
 by default, and SameSite defaults to Lax so common top-level OAuth callbacks
 work without making cookies cross-site. Applications can explicitly select
 Strict or None; None requires Secure cookies. Local plain-HTTP development must
-opt into `AllowInsecureCookies` explicitly. The deprecated subject scan/delete helpers
-remain available only for best-effort storage cleanup; they are not an
-authoritative revocation mechanism because a concurrent session commit can
-miss their snapshot.
+opt into `AllowInsecureCookies` explicitly. Rotate the application-owned
+security version atomically with security-sensitive changes; request-time
+principal resolution rejects every session carrying the stale version.
 
 `auth.JWTs` is intended for short-lived API bearer tokens. It requires a
 256-bit HMAC secret, issuer, audience, issued-at, expiry, and a fixed HS256
@@ -262,7 +262,8 @@ success; the migration SQL and database URL stay in the consumer repository.
 shutdown lifecycle without silently changing process globals. The returned
 tracing lifecycle supplies provider-bound HTTP, gRPC, and PostgreSQL adapters.
 `InstallGlobal` remains an explicit option for dependencies that require global
-OpenTelemetry state; the platform adapters do not require it:
+OpenTelemetry state; the provider-bound methods are the supported adapter path
+and do not require global installation:
 
 `TracingConfig.SampleRatio` is explicit: zero samples no new root spans and one
 samples all new root spans. The library never silently turns a zero sampling

@@ -131,20 +131,6 @@ func (t *Tracing) HTTPClient(base *http.Client) *http.Client {
 	)
 }
 
-// HTTP instruments a handler through the process-global OpenTelemetry state.
-//
-// Deprecated: use (*Tracing).HTTP so provider ownership is explicit.
-func HTTP(operation string, next http.Handler) http.Handler {
-	return otelhttp.NewHandler(next, operation)
-}
-
-// HTTPClient instruments a client through process-global OpenTelemetry state.
-//
-// Deprecated: use (*Tracing).HTTPClient so provider ownership is explicit.
-func HTTPClient(base *http.Client) *http.Client {
-	return instrumentHTTPClient(base)
-}
-
 func instrumentHTTPClient(base *http.Client, options ...otelhttp.Option) *http.Client {
 	if base == nil {
 		base = http.DefaultClient
