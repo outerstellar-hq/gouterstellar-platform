@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"sync"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
@@ -13,8 +14,13 @@ import (
 
 // Runner applies one consumer-owned migration set through golang-migrate.
 type Runner struct {
+	mu      sync.Mutex
 	migrate *migrate.Migrate
+	closed  bool
 }
+
+// ErrClosed reports an operation attempted after Runner.Close.
+var ErrClosed = errors.New("migration runner is closed")
 
 // New validates an embedded migration directory and opens the database URL
 // through a driver registered by the consumer. This repository never supplies
@@ -40,6 +46,11 @@ func New(files fs.FS, path, databaseURL string) (*Runner, error) {
 
 // Up applies all pending migrations. An already-current schema is success.
 func (r *Runner) Up() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return ErrClosed
+	}
 	if err := r.migrate.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("apply migrations: %w", err)
 	}
@@ -48,6 +59,11 @@ func (r *Runner) Up() error {
 
 // Version reports the current version and dirty state.
 func (r *Runner) Version() (uint, bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return 0, false, ErrClosed
+	}
 	version, dirty, err := r.migrate.Version()
 	if err != nil {
 		return 0, false, fmt.Errorf("read migration version: %w", err)
@@ -57,6 +73,12 @@ func (r *Runner) Version() (uint, bool, error) {
 
 // Close releases source and database resources owned by golang-migrate.
 func (r *Runner) Close() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return nil
+	}
+	r.closed = true
 	sourceErr, databaseErr := r.migrate.Close()
 	return errors.Join(sourceErr, databaseErr)
 }

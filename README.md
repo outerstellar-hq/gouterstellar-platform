@@ -225,7 +225,9 @@ label := german.Translate("navigation.workers")
 Translation catalogs and supported-language policy remain application-owned.
 Catalog loading normalizes configured locale codes and rejects translated
 messages whose `{0}` or `%s`/`%d` parameter contract differs from the default
-locale. Locale-bound readers are immutable, so concurrent requests cannot
+locale. Messages are compiled while the catalog loads, so locale-bound readers
+perform deterministic lookup and rendering without reparsing message syntax on
+each request. Locale-bound readers are immutable, so concurrent requests cannot
 change each other's language.
 
 ## Durable files
@@ -247,6 +249,10 @@ already contains the new data and the library returns a
 `*durablefile.CommittedError`. Consumers can detect that outcome with
 `errors.As`; the error still unwraps to the underlying sync failure.
 
+Both write entry points share one replacement transaction and coordinate only
+operations targeting the same destination, so unrelated durable files do not
+wait on one process-wide replacement lock.
+
 Use `durablefile.Replace` when a consumer must determine the final destination
 only after it has finished producing a temporary file, such as a content-hash
 cache. Source and destination must be on the same filesystem.
@@ -256,7 +262,9 @@ cache. Source and destination must be on the same filesystem.
 `migration.New` accepts an application-owned `fs.FS`, directory, and database
 URL. The consumer registers its `golang-migrate` database driver through the
 driver's normal blank import. `Runner.Up` treats an already-current schema as
-success; the migration SQL and database URL stay in the consumer repository.
+success, serializes lifecycle operations, and rejects use after `Close` with
+`migration.ErrClosed`; the migration SQL and database URL stay in the consumer
+repository.
 
 `observability.NewTracing` constructs an OTLP tracer provider and returns its
 shutdown lifecycle without silently changing process globals. The returned
