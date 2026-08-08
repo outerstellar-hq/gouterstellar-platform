@@ -41,7 +41,7 @@ type Options struct {
 type Translator struct {
 	defaultLocale string
 	languages     []Language
-	translations  map[string]map[string]string
+	translations  map[string]map[string]compiledMessage
 }
 
 // Localizer resolves translations for one immutable locale.
@@ -53,6 +53,19 @@ type Localizer struct {
 type messageSignature struct {
 	indexed []int
 	verbs   []byte
+}
+
+type messagePlaceholder struct {
+	start int
+	end   int
+	index int
+}
+
+type compiledMessage struct {
+	template     string
+	placeholders []messagePlaceholder
+	signature    messageSignature
+	formatted    bool
 }
 
 // New validates and eagerly loads the complete application catalog.
@@ -68,7 +81,7 @@ func New(opts Options) (*Translator, error) {
 		return nil, fmt.Errorf("at least one language is required")
 	}
 
-	translations := make(map[string]map[string]string, len(opts.Languages))
+	rawTranslations := make(map[string]map[string]string, len(opts.Languages))
 	languages := append([]Language(nil), opts.Languages...)
 	defaultFound := false
 	for index := range languages {
@@ -78,20 +91,21 @@ func New(opts Options) (*Translator, error) {
 			return nil, fmt.Errorf("invalid language code %q", language.Code)
 		}
 		language.Code = code
-		if _, exists := translations[code]; exists {
+		if _, exists := rawTranslations[code]; exists {
 			return nil, fmt.Errorf("duplicate language code %q", code)
 		}
 		bundle, err := loadBundle(opts.FS, opts.BasePath, code)
 		if err != nil {
 			return nil, err
 		}
-		translations[code] = bundle
+		rawTranslations[code] = bundle
 		defaultFound = defaultFound || code == defaultLocale
 	}
 	if !defaultFound {
 		return nil, fmt.Errorf("default locale %q is not declared", defaultLocale)
 	}
-	if err := validateCatalog(languages, defaultLocale, translations); err != nil {
+	translations, err := compileCatalog(languages, defaultLocale, rawTranslations)
+	if err != nil {
 		return nil, err
 	}
 
@@ -137,13 +151,13 @@ func (l Localizer) TranslateOrDefault(key, defaultValue string, params ...any) s
 
 func (t *Translator) translate(locale, key, fallback string, params []any) string {
 	if bundle, ok := t.translations[locale]; ok {
-		if value, found := bundle[key]; found {
-			return injectParams(value, params)
+		if message, found := bundle[key]; found {
+			return message.render(params)
 		}
 	}
 	if bundle := t.translations[t.defaultLocale]; bundle != nil {
-		if value, found := bundle[key]; found {
-			return injectParams(value, params)
+		if message, found := bundle[key]; found {
+			return message.render(params)
 		}
 	}
 	return injectParams(fallback, params)
@@ -167,29 +181,65 @@ func parseProperties(data []byte) (map[string]string, error) {
 	return parsed.Map(), nil
 }
 
-func validateCatalog(languages []Language, defaultLocale string, translations map[string]map[string]string) error {
-	defaultSignatures := make(map[string]messageSignature, len(translations[defaultLocale]))
-	for key, message := range translations[defaultLocale] {
-		signature, err := parseMessageSignature(message)
-		if err != nil {
-			return fmt.Errorf("validate locale %q key %q: %w", defaultLocale, key, err)
-		}
-		defaultSignatures[key] = signature
+func compileCatalog(languages []Language, defaultLocale string, translations map[string]map[string]string) (map[string]map[string]compiledMessage, error) {
+	compiled := make(map[string]map[string]compiledMessage, len(translations))
+	defaultMessages, err := compileBundle(defaultLocale, translations[defaultLocale])
+	if err != nil {
+		return nil, err
 	}
+	compiled[defaultLocale] = defaultMessages
 
 	for _, language := range languages {
-		for key, message := range translations[language.Code] {
-			signature, err := parseMessageSignature(message)
-			if err != nil {
-				return fmt.Errorf("validate locale %q key %q: %w", language.Code, key, err)
-			}
-			defaultSignature, comparable := defaultSignatures[key]
-			if comparable && !sameMessageSignature(signature, defaultSignature) {
-				return fmt.Errorf("locale %q key %q has a different parameter contract from default locale %q", language.Code, key, defaultLocale)
+		if language.Code == defaultLocale {
+			continue
+		}
+		messages, err := compileBundle(language.Code, translations[language.Code])
+		if err != nil {
+			return nil, err
+		}
+		for key, message := range messages {
+			defaultMessage, comparable := defaultMessages[key]
+			if comparable && !sameMessageSignature(message.signature, defaultMessage.signature) {
+				return nil, fmt.Errorf("locale %q key %q has a different parameter contract from default locale %q", language.Code, key, defaultLocale)
 			}
 		}
+		compiled[language.Code] = messages
 	}
-	return nil
+	return compiled, nil
+}
+
+func compileBundle(locale string, translations map[string]string) (map[string]compiledMessage, error) {
+	compiled := make(map[string]compiledMessage, len(translations))
+	for key, message := range translations {
+		compiledMessage, err := compileMessage(message)
+		if err != nil {
+			return nil, fmt.Errorf("validate locale %q key %q: %w", locale, key, err)
+		}
+		compiled[key] = compiledMessage
+	}
+	return compiled, nil
+}
+
+func compileMessage(message string) (compiledMessage, error) {
+	signature, err := parseMessageSignature(message)
+	if err != nil {
+		return compiledMessage{}, err
+	}
+	matches := placeholderRE.FindAllStringSubmatchIndex(message, -1)
+	placeholders := make([]messagePlaceholder, 0, len(matches))
+	for _, match := range matches {
+		index, err := strconv.Atoi(message[match[2]:match[3]])
+		if err != nil {
+			return compiledMessage{}, fmt.Errorf("parse placeholder %q: %w", message[match[0]:match[1]], err)
+		}
+		placeholders = append(placeholders, messagePlaceholder{start: match[0], end: match[1], index: index})
+	}
+	return compiledMessage{
+		template:     message,
+		placeholders: placeholders,
+		signature:    signature,
+		formatted:    javaFormatRE.MatchString(message),
+	}, nil
 }
 
 func parseMessageSignature(message string) (messageSignature, error) {
@@ -232,6 +282,29 @@ func parseMessageSignature(message string) (messageSignature, error) {
 
 func sameMessageSignature(first, second messageSignature) bool {
 	return slices.Equal(first.indexed, second.indexed) && slices.Equal(first.verbs, second.verbs)
+}
+
+func (message compiledMessage) render(params []any) string {
+	if len(params) == 0 {
+		return message.template
+	}
+	var result strings.Builder
+	result.Grow(len(message.template))
+	last := 0
+	for _, placeholder := range message.placeholders {
+		result.WriteString(message.template[last:placeholder.start])
+		if placeholder.index >= len(params) {
+			result.WriteString(message.template[placeholder.start:placeholder.end])
+		} else {
+			result.WriteString(fmt.Sprint(params[placeholder.index]))
+		}
+		last = placeholder.end
+	}
+	result.WriteString(message.template[last:])
+	if message.formatted {
+		return fmt.Sprintf(result.String(), params...)
+	}
+	return result.String()
 }
 
 func injectParams(message string, params []any) string {

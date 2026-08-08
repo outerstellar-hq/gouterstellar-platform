@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"errors"
 	"testing"
 	"testing/fstest"
 
@@ -42,5 +43,28 @@ func TestRunnerRequiresDatabaseURL(t *testing.T) {
 	}
 	if _, err := New(files, "migrations", ""); err == nil {
 		t.Fatal("empty database URL was accepted")
+	}
+}
+
+func TestRunnerOwnsClosedLifecycle(t *testing.T) {
+	files := fstest.MapFS{
+		"migrations/000001_users.up.sql":   {Data: []byte("CREATE TABLE users (id int);")},
+		"migrations/000001_users.down.sql": {Data: []byte("DROP TABLE users;")},
+	}
+	runner, err := New(files, "migrations", "stub://migration-lifecycle")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runner.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := runner.Close(); err != nil {
+		t.Fatalf("second close: %v", err)
+	}
+	if err := runner.Up(); !errors.Is(err, ErrClosed) {
+		t.Fatalf("up after close = %v, want ErrClosed", err)
+	}
+	if _, _, err := runner.Version(); !errors.Is(err, ErrClosed) {
+		t.Fatalf("version after close = %v, want ErrClosed", err)
 	}
 }

@@ -7,12 +7,24 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/natefinch/atomic"
 )
 
-var replaceMutex sync.Mutex
+type destinationLockRegistry struct {
+	mu    sync.Mutex
+	locks map[string]*destinationLock
+}
+
+type destinationLock struct {
+	mu   sync.Mutex
+	refs int
+}
+
+var destinationLocks = destinationLockRegistry{locks: make(map[string]*destinationLock)}
 
 // CommittedError reports a durability failure after the destination has
 // already been replaced. The new destination is visible, but its survival
@@ -94,16 +106,14 @@ func writeReader(path string, reader io.Reader, fileMode, directoryMode os.FileM
 	}
 	temporary = nil
 
-	if err := replaceSynced(temporaryPath, path); err != nil {
-		return err
-	}
-	if err := syncDir(directory); err != nil {
-		return committed(fmt.Errorf("replacement of %q succeeded but syncing its directory failed: %w", path, err))
-	}
-	if err := syncCreatedDirectoryParents(createdDirectories, syncDir); err != nil {
-		return committed(fmt.Errorf("replacement of %q succeeded but syncing a created directory parent failed: %w", path, err))
-	}
-	return nil
+	return replacementTransaction{
+		source:             temporaryPath,
+		destination:        path,
+		sourceDirectory:    directory,
+		destinationDir:     directory,
+		createdDirectories: createdDirectories,
+		syncDir:            syncDir,
+	}.commit()
 }
 
 // Replace flushes a closed source file and atomically replaces destination
@@ -141,20 +151,42 @@ func replace(source, destination string, directoryMode os.FileMode, syncDir dire
 		return fmt.Errorf("close source file %q: %w", source, err)
 	}
 
-	if err := replaceSynced(source, destination); err != nil {
+	return replacementTransaction{
+		source:             source,
+		destination:        destination,
+		sourceDirectory:    filepath.Dir(source),
+		destinationDir:     directory,
+		createdDirectories: createdDirectories,
+		syncDir:            syncDir,
+	}.commit()
+}
+
+type replacementTransaction struct {
+	source             string
+	destination        string
+	sourceDirectory    string
+	destinationDir     string
+	createdDirectories []string
+	syncDir            directorySync
+}
+
+func (transaction replacementTransaction) commit() error {
+	release := lockDestination(transaction.destination)
+	defer release()
+
+	if err := replaceAtomically(transaction.source, transaction.destination); err != nil {
 		return err
 	}
-	if err := syncDir(directory); err != nil {
-		return committed(fmt.Errorf("replacement of %q succeeded but syncing its directory failed: %w", destination, err))
+	if err := transaction.syncDir(transaction.destinationDir); err != nil {
+		return committed(fmt.Errorf("replacement of %q succeeded but syncing its directory failed: %w", transaction.destination, err))
 	}
-	sourceDirectory := filepath.Dir(source)
-	if !sameDirectory(sourceDirectory, directory) {
-		if err := syncDir(sourceDirectory); err != nil {
-			return committed(fmt.Errorf("replacement of %q succeeded but syncing source directory %q failed: %w", destination, sourceDirectory, err))
+	if !sameDirectory(transaction.sourceDirectory, transaction.destinationDir) {
+		if err := transaction.syncDir(transaction.sourceDirectory); err != nil {
+			return committed(fmt.Errorf("replacement of %q succeeded but syncing source directory %q failed: %w", transaction.destination, transaction.sourceDirectory, err))
 		}
 	}
-	if err := syncCreatedDirectoryParents(createdDirectories, syncDir); err != nil {
-		return committed(fmt.Errorf("replacement of %q succeeded but syncing a created directory parent failed: %w", destination, err))
+	if err := syncCreatedDirectoryParents(transaction.createdDirectories, transaction.syncDir); err != nil {
+		return committed(fmt.Errorf("replacement of %q succeeded but syncing a created directory parent failed: %w", transaction.destination, err))
 	}
 	return nil
 }
@@ -205,14 +237,41 @@ func sameDirectory(first, second string) bool {
 	return firstErr == nil && secondErr == nil && filepath.Clean(firstAbsolute) == filepath.Clean(secondAbsolute)
 }
 
-func replaceSynced(source, destination string) error {
-	replaceMutex.Lock()
-	defer replaceMutex.Unlock()
-
+func replaceAtomically(source, destination string) error {
 	if err := atomic.ReplaceFile(source, destination); err != nil {
 		return fmt.Errorf("replace %q with %q: %w", destination, source, err)
 	}
 	return nil
+}
+
+func lockDestination(path string) func() {
+	key, err := filepath.Abs(path)
+	if err != nil {
+		key = filepath.Clean(path)
+	}
+	if runtime.GOOS == "windows" {
+		key = strings.ToLower(key)
+	}
+
+	destinationLocks.mu.Lock()
+	lock := destinationLocks.locks[key]
+	if lock == nil {
+		lock = &destinationLock{}
+		destinationLocks.locks[key] = lock
+	}
+	lock.refs++
+	destinationLocks.mu.Unlock()
+
+	lock.mu.Lock()
+	return func() {
+		lock.mu.Unlock()
+		destinationLocks.mu.Lock()
+		lock.refs--
+		if lock.refs == 0 {
+			delete(destinationLocks.locks, key)
+		}
+		destinationLocks.mu.Unlock()
+	}
 }
 
 func validate(path string, fileMode, directoryMode os.FileMode) error {
