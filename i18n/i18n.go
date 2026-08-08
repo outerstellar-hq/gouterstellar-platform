@@ -296,7 +296,7 @@ func (message compiledMessage) render(params []any) string {
 		if placeholder.index >= len(params) {
 			result.WriteString(message.template[placeholder.start:placeholder.end])
 		} else {
-			result.WriteString(fmt.Sprint(params[placeholder.index]))
+			_, _ = fmt.Fprint(&result, params[placeholder.index])
 		}
 		last = placeholder.end
 	}
