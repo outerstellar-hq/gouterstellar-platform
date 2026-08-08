@@ -144,7 +144,11 @@ func checkDirectModules(t *testing.T, root string) {
 	if err != nil {
 		t.Fatalf("open go.mod: %v", err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			t.Errorf("close go.mod: %v", err)
+		}
+	}()
 
 	var modules []string
 	inBlock := false
