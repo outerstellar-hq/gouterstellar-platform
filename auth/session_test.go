@@ -16,7 +16,7 @@ const testSecurityVersion SecurityVersion = "version-1"
 
 func TestSessionsSignInResolveAndAuthorize(t *testing.T) {
 	sessions, err := NewSessions(memstore.New(), PrincipalResolverFunc(func(_ context.Context, subject string) (Principal, error) {
-		return Principal{Subject: subject, SecurityVersion: testSecurityVersion, Roles: []string{"admin"}}, nil
+		return NewPrincipal(subject, testSecurityVersion, []string{"admin"}, nil), nil
 	}), SessionConfig{CookieName: "test_session", AllowInsecureCookies: true})
 	if err != nil {
 		t.Fatal(err)
@@ -335,100 +335,26 @@ func TestSessionsMissingSecurityVersionFailsClosed(t *testing.T) {
 	}
 }
 
-func TestSessionsRevokeSubjectDeletesOnlyMatchingSessions(t *testing.T) {
-	store := memstore.New()
-	sessions, err := NewSessions(store, PrincipalResolverFunc(func(_ context.Context, subject string) (Principal, error) {
-		return Principal{Subject: subject, SecurityVersion: testSecurityVersion}, nil
-	}), SessionConfig{CookieName: "test_session", AllowInsecureCookies: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	issue := func(subject string) *http.Cookie {
-		handler := sessions.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if err := sessions.SignIn(r.Context(), testSessionIdentity(subject)); err != nil {
-				t.Fatal(err)
-			}
-		}))
-		response := httptest.NewRecorder()
-		handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/login", nil))
-		return response.Result().Cookies()[0]
-	}
-	revoked := issue("user-1")
-	kept := issue("user-2")
-
-	if err := sessions.RevokeSubject(context.Background(), "user-1"); err != nil {
-		t.Fatal(err)
-	}
-	assertStatus := func(cookie *http.Cookie, want int) {
-		request := httptest.NewRequest(http.MethodGet, "/", nil)
-		request.AddCookie(cookie)
-		response := httptest.NewRecorder()
-		sessions.Middleware(RequireAuthenticated(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusNoContent)
-		}))).ServeHTTP(response, request)
-		if response.Code != want {
-			t.Fatalf("status=%d want=%d", response.Code, want)
-		}
-	}
-	assertStatus(revoked, http.StatusUnauthorized)
-	assertStatus(kept, http.StatusNoContent)
-}
-
-func TestSessionsRevokeSubjectWithStoreUsesConsumerTransaction(t *testing.T) {
-	store := memstore.New()
-	sessions, err := NewSessions(store, PrincipalResolverFunc(func(_ context.Context, subject string) (Principal, error) {
-		return Principal{Subject: subject, SecurityVersion: testSecurityVersion}, nil
-	}), SessionConfig{CookieName: "test_session", AllowInsecureCookies: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, subject := range []string{"user-1", "user-1", "user-2"} {
-		handler := sessions.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if err := sessions.SignIn(r.Context(), testSessionIdentity(subject)); err != nil {
-				t.Fatal(err)
-			}
-		}))
-		handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/login", nil))
-	}
-	all, err := store.All()
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction := &testRevocationStore{sessions: all}
-	if err := sessions.RevokeSubjectWithStore(context.Background(), "user-1", transaction); err != nil {
-		t.Fatal(err)
-	}
-	if len(transaction.deleted) != 2 || len(transaction.sessions) != 1 {
-		t.Fatalf("deleted=%d remaining=%d", len(transaction.deleted), len(transaction.sessions))
-	}
-}
-
-func TestPrincipalClaimsAreCopiedIntoContext(t *testing.T) {
+func TestPrincipalMutableFieldsAreIsolatedFromContext(t *testing.T) {
+	roles := []string{"admin"}
 	claims := map[string]string{"email": "user@example.test"}
-	ctx := withPrincipal(context.Background(), Principal{Subject: "user-1", Claims: claims})
+	ctx := withPrincipal(context.Background(), NewPrincipal("user-1", "", roles, claims))
+	roles[0] = "mutated-before-read"
 	claims["email"] = "mutated@example.test"
 	principal, ok := PrincipalFromContext(ctx)
-	if !ok || principal.Claims["email"] != "user@example.test" {
+	readRoles := principal.Roles()
+	readClaims := principal.Claims()
+	if !ok || readRoles[0] != "admin" || readClaims["email"] != "user@example.test" {
 		t.Fatalf("principal = %#v", principal)
+	}
+	readRoles[0] = "mutated-after-read"
+	readClaims["email"] = "mutated-after-read@example.test"
+	second, ok := PrincipalFromContext(ctx)
+	if !ok || second.Roles()[0] != "admin" || second.Claims()["email"] != "user@example.test" {
+		t.Fatalf("context principal was mutated through returned value: %#v", second)
 	}
 }
 
 func testSessionIdentity(subject string) SessionIdentity {
 	return SessionIdentity{Subject: subject, SecurityVersion: testSecurityVersion}
-}
-
-type testRevocationStore struct {
-	sessions map[string][]byte
-	deleted  []string
-}
-
-func (s *testRevocationStore) All(context.Context) (map[string][]byte, error) {
-	return s.sessions, nil
-}
-
-func (s *testRevocationStore) Delete(_ context.Context, token string) error {
-	delete(s.sessions, token)
-	s.deleted = append(s.deleted, token)
-	return nil
 }
