@@ -2,18 +2,20 @@
 package web
 
 import (
-	"errors"
 	"html/template"
 	"net/http"
 	"time"
 
-	"github.com/gorilla/csrf"
+	csrf "filippo.io/csrf/gorilla"
 )
 
-const maxCSRFMaxAge = time.Duration(1<<31-1) * time.Second
-
-// CSRFConfig controls cookie-backed masked CSRF tokens. Secure, HttpOnly,
-// SameSite=Strict cookies and whole-application path coverage are enforced.
+// CSRFConfig is retained for API compatibility with the previous
+// token-based middleware. Protection now uses browser Fetch metadata
+// (Sec-Fetch-Site / Origin), so tokens, cookies, and keys are no longer
+// part of the mechanism: AuthKey, CookieName, MaxAge, and
+// AllowInsecureCookies are accepted and ignored. FieldName still controls
+// the name attribute of the compatibility hidden input rendered by
+// [CSRFField], and ErrorHandler still receives denied requests.
 type CSRFConfig struct {
 	AuthKey              []byte
 	CookieName           string
@@ -23,51 +25,44 @@ type CSRFConfig struct {
 	ErrorHandler         http.Handler
 }
 
-// NewCSRF returns Gorilla CSRF middleware with platform security defaults for
-// cookie-authenticated browser routes. Bearer-token APIs should use a separate
-// router without cookie-backed CSRF middleware.
+// NewCSRF returns CSRF middleware for cookie-authenticated browser routes,
+// based on filippo.io/csrf (the maintained drop-in replacement for
+// github.com/gorilla/csrf, replacing it per GHSA-82ff-hg59-8x73 /
+// GO-2025-3884, which affects gorilla/csrf through v1.7.3 with no fixed
+// release planned).
+//
+// Safe methods (GET, HEAD, OPTIONS) and same-origin or non-browser requests
+// are allowed; cross-origin unsafe requests are rejected. Tokens and
+// cookies are not used: [CSRFToken] returns an ignored random value and
+// [CSRFField] renders an ignored hidden input, so existing forms keep
+// working unchanged. Bearer-token APIs should use a separate router without
+// CSRF middleware.
+//
+// NewCSRF no longer fails on weak keys or unusual MaxAge values; the error
+// result is retained for signature compatibility and is always nil.
 func NewCSRF(config CSRFConfig) (func(http.Handler) http.Handler, error) {
-	if len(config.AuthKey) < 32 {
-		return nil, errors.New("CSRF authentication key must contain at least 32 bytes")
-	}
-	if config.CookieName == "" {
-		config.CookieName = "outerstellar_csrf"
-	}
-	if config.FieldName == "" {
-		config.FieldName = "csrf_token"
-	}
-	if config.MaxAge < 0 {
-		return nil, errors.New("CSRF max age cannot be negative")
-	}
-	if config.MaxAge > 0 && (config.MaxAge < time.Second || config.MaxAge%time.Second != 0 || config.MaxAge > maxCSRFMaxAge) {
-		return nil, errors.New("positive CSRF max age must use whole-second precision and fit in 32-bit seconds")
-	}
-	maxAge := 12 * time.Hour
-	if config.MaxAge > 0 {
-		maxAge = config.MaxAge
-	}
-
-	options := []csrf.Option{
-		csrf.CookieName(config.CookieName),
-		csrf.FieldName(config.FieldName),
-		csrf.Path("/"),
-		csrf.HttpOnly(true),
-		csrf.Secure(!config.AllowInsecureCookies),
-		csrf.SameSite(csrf.SameSiteStrictMode),
-		csrf.MaxAge(int(maxAge.Seconds())),
+	options := []csrf.Option{}
+	if config.FieldName != "" {
+		options = append(options, csrf.FieldName(config.FieldName))
+	} else {
+		options = append(options, csrf.FieldName("csrf_token"))
 	}
 	if config.ErrorHandler != nil {
 		options = append(options, csrf.ErrorHandler(config.ErrorHandler))
 	}
-	return csrf.Protect(append([]byte(nil), config.AuthKey...), options...), nil
+	return csrf.Protect(nil, options...), nil
 }
 
-// CSRFToken returns the masked per-request token for JSON or custom templates.
+// CSRFToken returns a masked per-request token for JSON or custom templates.
+// The value is not validated by the middleware and is provided for
+// compatibility with token-based clients.
 func CSRFToken(request *http.Request) string {
 	return csrf.Token(request)
 }
 
-// CSRFField returns a safe hidden input for html/template forms.
+// CSRFField returns a safe hidden input for html/template forms. The input
+// is ignored by the middleware and is provided so existing forms render
+// unchanged.
 func CSRFField(request *http.Request) template.HTML {
 	return csrf.TemplateField(request)
 }

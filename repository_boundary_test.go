@@ -24,12 +24,12 @@ var (
 		"auth", "durablefile", "i18n", "migration", "observability", "ui", "web",
 	}
 	allowedDirectModules = []string{
+		"filippo.io/csrf",
 		"github.com/alexedwards/argon2id",
 		"github.com/alexedwards/scs/v2",
 		"github.com/exaring/otelpgx",
 		"github.com/golang-jwt/jwt/v5",
 		"github.com/golang-migrate/migrate/v4",
-		"github.com/gorilla/csrf",
 		"github.com/jackc/pgx/v5",
 		"github.com/magiconair/properties",
 		"github.com/natefinch/atomic",

@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
-	"time"
 )
 
-func TestCSRFIssuesSecureDefaultsAndRejectsMissingToken(t *testing.T) {
+// The middleware uses browser Fetch metadata (Sec-Fetch-Site / Origin):
+// same-origin and non-browser requests pass; cross-origin unsafe requests
+// are denied. Tokens and cookies are compatibility shims only.
+func TestCSRFAllowsSameOriginAndDeniesCrossOrigin(t *testing.T) {
 	middleware, err := NewCSRF(CSRFConfig{AuthKey: bytes.Repeat([]byte{7}, 32)})
 	if err != nil {
 		t.Fatal(err)
@@ -18,91 +19,72 @@ func TestCSRFIssuesSecureDefaultsAndRejectsMissingToken(t *testing.T) {
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := CSRFToken(r)
 		if token == "" {
-			t.Fatal("missing token")
+			t.Fatal("compatibility token missing")
 		}
-		if field := string(CSRFField(r)); !strings.Contains(field, `name="csrf_token"`) || !strings.Contains(field, token) {
+		if field := string(CSRFField(r)); !strings.Contains(field, `name="csrf_token"`) {
 			t.Fatalf("CSRF field = %q", field)
 		}
-		w.Header().Set("X-Test-CSRF-Token", token)
 		w.WriteHeader(http.StatusNoContent)
 	}))
+
+	// Safe methods pass and issue a compatibility token without cookies.
 	getResponse := httptest.NewRecorder()
 	handler.ServeHTTP(getResponse, httptest.NewRequest(http.MethodGet, "https://example.test/form", nil))
-	cookies := getResponse.Result().Cookies()
-	if len(cookies) != 1 || !cookies[0].Secure || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteStrictMode {
-		t.Fatalf("cookies = %#v", cookies)
+	if getResponse.Code != http.StatusNoContent {
+		t.Fatalf("GET status = %d", getResponse.Code)
 	}
-	token := getResponse.Header().Get("X-Test-CSRF-Token")
-
-	validForm := httptest.NewRequest(http.MethodPost, "https://example.test/form", strings.NewReader(url.Values{
-		"csrf_token": {token},
-	}.Encode()))
-	validForm.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	validForm.Header.Set("Referer", "https://example.test/form")
-	validForm.AddCookie(cookies[0])
-	validFormResponse := httptest.NewRecorder()
-	handler.ServeHTTP(validFormResponse, validForm)
-	if validFormResponse.Code != http.StatusNoContent {
-		t.Fatalf("valid form status = %d", validFormResponse.Code)
+	if cookies := getResponse.Result().Cookies(); len(cookies) != 0 {
+		t.Fatalf("expected no CSRF cookie, got %#v", cookies)
 	}
 
-	validJSON := httptest.NewRequest(http.MethodPost, "https://example.test/data", strings.NewReader("{}"))
-	validJSON.Header.Set("Content-Type", "application/json")
-	validJSON.Header.Set("Referer", "https://example.test/form")
-	validJSON.Header.Set("X-CSRF-Token", token)
-	validJSON.AddCookie(cookies[0])
-	validJSONResponse := httptest.NewRecorder()
-	handler.ServeHTTP(validJSONResponse, validJSON)
-	if validJSONResponse.Code != http.StatusNoContent {
-		t.Fatalf("valid JSON status = %d", validJSONResponse.Code)
+	// Same-origin browser POST: allowed without any token.
+	sameOrigin := httptest.NewRequest(http.MethodPost, "https://example.test/form", strings.NewReader("a=1"))
+	sameOrigin.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	sameOrigin.Header.Set("Sec-Fetch-Site", "same-origin")
+	sameOriginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(sameOriginResponse, sameOrigin)
+	if sameOriginResponse.Code != http.StatusNoContent {
+		t.Fatalf("same-origin status = %d", sameOriginResponse.Code)
 	}
 
-	crossOrigin := httptest.NewRequest(http.MethodPost, "https://example.test/form", strings.NewReader(url.Values{
-		"csrf_token": {token},
-	}.Encode()))
+	// Non-browser requests (no Fetch metadata or Origin) are allowed.
+	plain := httptest.NewRequest(http.MethodPost, "https://example.test/form", strings.NewReader("a=1"))
+	plain.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	plainResponse := httptest.NewRecorder()
+	handler.ServeHTTP(plainResponse, plain)
+	if plainResponse.Code != http.StatusNoContent {
+		t.Fatalf("non-browser status = %d", plainResponse.Code)
+	}
+
+	// Cross-site browser POST: denied.
+	crossSite := httptest.NewRequest(http.MethodPost, "https://example.test/form", strings.NewReader("a=1"))
+	crossSite.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	crossSite.Header.Set("Sec-Fetch-Site", "cross-site")
+	crossSiteResponse := httptest.NewRecorder()
+	handler.ServeHTTP(crossSiteResponse, crossSite)
+	if crossSiteResponse.Code != http.StatusForbidden {
+		t.Fatalf("cross-site status = %d", crossSiteResponse.Code)
+	}
+
+	// Origin header mismatch on a browser-less POST: denied when Origin
+	// signals another origin.
+	crossOrigin := httptest.NewRequest(http.MethodPost, "https://example.test/form", strings.NewReader("a=1"))
 	crossOrigin.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	crossOrigin.Header.Set("Origin", "http://untrusted.example")
-	crossOrigin.AddCookie(cookies[0])
+	crossOrigin.Header.Set("Origin", "https://untrusted.example")
 	crossOriginResponse := httptest.NewRecorder()
 	handler.ServeHTTP(crossOriginResponse, crossOrigin)
 	if crossOriginResponse.Code != http.StatusForbidden {
 		t.Fatalf("cross-origin status = %d", crossOriginResponse.Code)
 	}
-
-	post := httptest.NewRequest(http.MethodPost, "https://example.test/form", strings.NewReader(url.Values{}.Encode()))
-	post.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	post.Header.Set("Referer", "https://example.test/form")
-	post.AddCookie(cookies[0])
-	postResponse := httptest.NewRecorder()
-	handler.ServeHTTP(postResponse, post)
-	if postResponse.Code != http.StatusForbidden {
-		t.Fatalf("status = %d", postResponse.Code)
-	}
 }
 
-func TestCSRFRejectsWeakKey(t *testing.T) {
-	if _, err := NewCSRF(CSRFConfig{AuthKey: []byte("weak")}); err == nil {
-		t.Fatal("weak key was accepted")
+func TestCSRFConfigBackwardCompatible(t *testing.T) {
+	// Legacy configuration (weak keys, unusual MaxAge, cookie settings) is
+	// accepted: those fields no longer participate in the mechanism.
+	if _, err := NewCSRF(CSRFConfig{}); err != nil {
+		t.Fatalf("empty config rejected: %v", err)
 	}
-}
-
-func TestCSRFRejectsUnrepresentableMaxAge(t *testing.T) {
-	authKey := bytes.Repeat([]byte{7}, 32)
-	for name, maxAge := range map[string]time.Duration{
-		"subsecond":  time.Millisecond,
-		"fractional": 1500 * time.Millisecond,
-		"too large":  maxCSRFMaxAge + time.Second,
-	} {
-		t.Run(name, func(t *testing.T) {
-			if _, err := NewCSRF(CSRFConfig{AuthKey: authKey, MaxAge: maxAge}); err == nil {
-				t.Fatalf("max age %s was accepted", maxAge)
-			}
-		})
-	}
-}
-
-func TestCSRFAcceptsLargestPortableMaxAge(t *testing.T) {
-	if _, err := NewCSRF(CSRFConfig{AuthKey: bytes.Repeat([]byte{7}, 32), MaxAge: maxCSRFMaxAge}); err != nil {
-		t.Fatal(err)
+	if _, err := NewCSRF(CSRFConfig{AuthKey: []byte("weak")}); err != nil {
+		t.Fatalf("weak key rejected: %v", err)
 	}
 }
