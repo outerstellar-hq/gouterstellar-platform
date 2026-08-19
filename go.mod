@@ -1,6 +1,6 @@
 module github.com/outerstellar-hq/gouterstellar-platform
 
-go 1.26.2
+go 1.26.6
 
 require (
 	filippo.io/csrf v0.2.1
