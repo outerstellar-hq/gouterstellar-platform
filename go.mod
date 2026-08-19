@@ -3,12 +3,12 @@ module github.com/outerstellar-hq/gouterstellar-platform
 go 1.26.2
 
 require (
+	filippo.io/csrf v0.2.1
 	github.com/alexedwards/argon2id v1.0.0
 	github.com/alexedwards/scs/v2 v2.9.0
 	github.com/exaring/otelpgx v0.11.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/golang-migrate/migrate/v4 v4.19.1
-	github.com/gorilla/csrf v1.7.3
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/magiconair/properties v1.18.11
 	github.com/natefinch/atomic v1.0.1
@@ -30,7 +30,6 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
