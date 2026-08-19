@@ -78,6 +78,9 @@ jobs:
           version: v2.12.2
           args: --timeout=5m
 
+      - name: Vulnerability scan
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
   race:
     name: Race
     runs-on: ubuntu-latest
