@@ -42,10 +42,12 @@ type CSRFConfig struct {
 // result is retained for signature compatibility and is always nil.
 func NewCSRF(config CSRFConfig) (func(http.Handler) http.Handler, error) {
 	options := []csrf.Option{}
+	// The deprecated shims are called deliberately: FieldName keeps the
+	// compatibility hidden input's name attribute stable for consumers.
 	if config.FieldName != "" {
-		options = append(options, csrf.FieldName(config.FieldName))
+		options = append(options, csrf.FieldName(config.FieldName)) //nolint:staticcheck // compatibility shim
 	} else {
-		options = append(options, csrf.FieldName("csrf_token"))
+		options = append(options, csrf.FieldName("csrf_token")) //nolint:staticcheck // compatibility shim
 	}
 	if config.ErrorHandler != nil {
 		options = append(options, csrf.ErrorHandler(config.ErrorHandler))
@@ -57,12 +59,12 @@ func NewCSRF(config CSRFConfig) (func(http.Handler) http.Handler, error) {
 // The value is not validated by the middleware and is provided for
 // compatibility with token-based clients.
 func CSRFToken(request *http.Request) string {
-	return csrf.Token(request)
+	return csrf.Token(request) //nolint:staticcheck // compatibility shim
 }
 
 // CSRFField returns a safe hidden input for html/template forms. The input
 // is ignored by the middleware and is provided so existing forms render
 // unchanged.
 func CSRFField(request *http.Request) template.HTML {
-	return csrf.TemplateField(request)
+	return csrf.TemplateField(request) //nolint:staticcheck // compatibility shim
 }
