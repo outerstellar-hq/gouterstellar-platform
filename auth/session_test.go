@@ -358,3 +358,48 @@ func TestPrincipalMutableFieldsAreIsolatedFromContext(t *testing.T) {
 func testSessionIdentity(subject string) SessionIdentity {
 	return SessionIdentity{Subject: subject, SecurityVersion: testSecurityVersion}
 }
+
+func TestSessionsApplicationScopedValues(t *testing.T) {
+	sessions, err := NewSessions(memstore.New(), PrincipalResolverFunc(func(_ context.Context, subject string) (Principal, error) {
+		return NewPrincipal(subject, testSecurityVersion, nil, nil), nil
+	}), SessionConfig{CookieName: "test_session", AllowInsecureCookies: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	store := sessions.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sessions.Put(r.Context(), "mfaPendingSubject", "user-1")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	stored := httptest.NewRecorder()
+	store.ServeHTTP(stored, httptest.NewRequest(http.MethodPost, "/login", nil))
+	cookies := stored.Result().Cookies()
+
+	read := sessions.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := sessions.GetString(r.Context(), "mfaPendingSubject"); got != "user-1" {
+			t.Fatalf("value = %q, want user-1", got)
+		}
+		sessions.Remove(r.Context(), "mfaPendingSubject")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.AddCookie(cookies[0])
+	response := httptest.NewRecorder()
+	read.ServeHTTP(response, request)
+
+	cleared := sessions.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := sessions.GetString(r.Context(), "mfaPendingSubject"); got != "" {
+			t.Fatalf("value after remove = %q, want empty", got)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	request = httptest.NewRequest(http.MethodGet, "/", nil)
+	for _, cookie := range response.Result().Cookies() {
+		request.AddCookie(cookie)
+	}
+	final := httptest.NewRecorder()
+	cleared.ServeHTTP(final, request)
+	if final.Code != http.StatusNoContent {
+		t.Fatalf("status = %d", final.Code)
+	}
+}

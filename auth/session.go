@@ -221,6 +221,24 @@ func (s *Sessions) SignOut(ctx context.Context) error {
 	return nil
 }
 
+// Put stores an application-scoped string in the session, persisted by the
+// Middleware response commit. Callers own their key space; the platform
+// reserves its internal keys, so applications should prefix theirs (for
+// example "mfaPendingSubject").
+func (s *Sessions) Put(ctx context.Context, key, value string) {
+	s.manager.Put(ctx, key, value)
+}
+
+// GetString reads an application-scoped session string; "" when unset.
+func (s *Sessions) GetString(ctx context.Context, key string) string {
+	return s.manager.GetString(ctx, key)
+}
+
+// Remove deletes an application-scoped session value.
+func (s *Sessions) Remove(ctx context.Context, key string) {
+	s.manager.Remove(ctx, key)
+}
+
 // PrincipalFromContext returns the immutable principal resolved by Middleware.
 func PrincipalFromContext(ctx context.Context) (Principal, bool) {
 	principal, ok := ctx.Value(principalContextKey{}).(Principal)
