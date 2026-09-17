@@ -22,6 +22,7 @@ type Shell struct {
 	Labels             ShellLabels
 	Header             Header
 	Footer             Footer
+	Alpha              bool
 }
 
 // ShellLabels contains consumer-localizable text owned by the shared chrome.
@@ -87,7 +88,17 @@ type HiddenField struct{ Name, Value string }
 
 type (
 	Header struct{ Context, Title, Status string }
-	Footer struct{ Primary, Secondary string }
+	Footer struct {
+		Primary, Secondary string
+		Links              []FooterLink
+	}
+
+	// FooterLink is one footer navigation entry.
+	FooterLink struct {
+		Label    string
+		URL      string
+		External bool // opens in a new tab
+	}
 )
 
 func (s Shell) Validate() error {
