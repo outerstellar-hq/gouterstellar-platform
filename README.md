@@ -35,7 +35,8 @@ authorization engine such as Casbin when their policy exceeds simple roles.
 
 `member.New(store, "member", "admin")` accepts a consumer-owned account store.
 `ChangeAccount` rejects self changes and unrecognized roles. `member.Profile`
-contains the shared name, bio, visibility, and avatar presence fields; an
+contains shared name, headline, location, pronouns, bio, website, visibility,
+and avatar presence fields; an
 application can embed it and add its own fields. `member.NormalizeProfile`
 checks the shared editable fields. Applications own profile persistence and
 additional fields. `group.New(store)` handles group creation and join/leave

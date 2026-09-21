@@ -52,11 +52,16 @@ func TestAccountChanges(t *testing.T) {
 }
 
 func TestNormalizeProfile(t *testing.T) {
-	profile, err := NormalizeProfile(Profile{DisplayName: "  Alex  ", Bio: "  Hello  ", Public: true})
-	if err != nil || profile.DisplayName != "Alex" || profile.Bio != "Hello" {
+	profile, err := NormalizeProfile(Profile{DisplayName: "  Alex  ", Headline: "  Maker  ", Location: "  Bucharest  ", Bio: "  Hello  ", Website: "  https://example.com  ", Public: true})
+	if err != nil || profile.DisplayName != "Alex" || profile.Headline != "Maker" || profile.Location != "Bucharest" || profile.Bio != "Hello" || profile.Website != "https://example.com" {
 		t.Fatalf("profile=%+v err=%v", profile, err)
 	}
 	if _, err := NormalizeProfile(Profile{Public: true}); !errors.Is(err, ErrInvalidInput) {
 		t.Fatalf("public profile without name: %v", err)
+	}
+	for _, website := range []string{"javascript:alert(1)", "https://user:pass@example.com", "https://", "//example.com"} {
+		if _, err := NormalizeProfile(Profile{Website: website}); !errors.Is(err, ErrInvalidInput) {
+			t.Fatalf("unsafe website %q: %v", website, err)
+		}
 	}
 }
