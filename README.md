@@ -9,7 +9,8 @@ product schema, deployment image, product assets, or in-tree plugins.
 | Module | Shared responsibility | Proven implementation underneath |
 | --- | --- | --- |
 | `auth` | Argon2id passwords, opaque tokens, server-side sessions, principals, JWTs, TOTP | `alexedwards/argon2id`, `alexedwards/scs`, `golang-jwt/jwt`, `pquerna/otp` |
-| `membership` | account transitions and group creation/join/leave rules | Go standard library; consumer-owned store |
+| `member` | account transitions and common profile fields | Go standard library; consumer-owned store |
+| `group` | group creation and join/leave rules | Go standard library; consumer-owned store |
 | `faq` | bounded question-and-answer entries, draft/publish writes, published search | Go standard library; consumer-owned store |
 | `durablefile` | complete, crash-resistant file replacement with explicit Unix modes | `natefinch/atomic`, Go standard library |
 | `web` | masked CSRF tokens, strict bounded JSON, CSP nonces, security headers, body limits, sensitive-response caching | `gorilla/csrf`, `net/http` |
@@ -30,14 +31,17 @@ particular, applications should use `pgx` for PostgreSQL queries and
 transactions, a maintained SCS store for session persistence, and a mature
 authorization engine such as Casbin when their policy exceeds simple roles.
 
-## Membership workflows
+## Member and group workflows
 
-`membership.New(store, "member", "admin")` accepts a consumer-owned store.
-`ChangeAccount` rejects self changes and unrecognized roles; `CreateGroup`
-normalizes and bounds the name and description; `JoinGroup` and `LeaveGroup`
-delegate idempotent membership writes. Callers authenticate and authorize the
-actor before invoking these methods. Group queries, schema, pages, and routes
-remain application-owned.
+`member.New(store, "member", "admin")` accepts a consumer-owned account store.
+`ChangeAccount` rejects self changes and unrecognized roles. `member.Profile`
+contains the shared name, bio, visibility, and avatar presence fields; an
+application can embed it and add its own fields. `member.NormalizeProfile`
+checks the shared editable fields. Applications own profile persistence and
+additional fields. `group.New(store)` handles group creation and join/leave
+writes through a separate consumer-owned store. Callers authenticate and
+authorize actors before invoking these methods. Queries, schema, pages, and
+routes remain application-owned.
 
 ## FAQ workflows
 
