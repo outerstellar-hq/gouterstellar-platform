@@ -9,6 +9,7 @@ product schema, deployment image, product assets, or in-tree plugins.
 | Module | Shared responsibility | Proven implementation underneath |
 | --- | --- | --- |
 | `auth` | Argon2id passwords, opaque tokens, server-side sessions, principals, JWTs, TOTP | `alexedwards/argon2id`, `alexedwards/scs`, `golang-jwt/jwt`, `pquerna/otp` |
+| `membership` | account transitions and group creation/join/leave rules | Go standard library; consumer-owned store |
 | `durablefile` | complete, crash-resistant file replacement with explicit Unix modes | `natefinch/atomic`, Go standard library |
 | `web` | masked CSRF tokens, strict bounded JSON, CSP nonces, security headers, body limits, sensitive-response caching | `gorilla/csrf`, `net/http` |
 | `ui` | shared server-rendered application shell and composition contract | `html/template`, `embed` |
@@ -27,6 +28,15 @@ Use an upstream package directly when no platform policy is needed. In
 particular, applications should use `pgx` for PostgreSQL queries and
 transactions, a maintained SCS store for session persistence, and a mature
 authorization engine such as Casbin when their policy exceeds simple roles.
+
+## Membership workflows
+
+`membership.New(store, "member", "admin")` accepts a consumer-owned store.
+`ChangeAccount` rejects self changes and unrecognized roles; `CreateGroup`
+normalizes and bounds the name and description; `JoinGroup` and `LeaveGroup`
+delegate idempotent membership writes. Callers authenticate and authorize the
+actor before invoking these methods. Group queries, schema, pages, and routes
+remain application-owned.
 
 ## Authentication
 
