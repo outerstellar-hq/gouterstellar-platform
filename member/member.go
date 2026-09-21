@@ -5,6 +5,7 @@ package member
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strings"
 	"unicode/utf8"
 )
@@ -27,7 +28,11 @@ const (
 // Applications can embed it in a profile with their own fields.
 type Profile struct {
 	DisplayName string
+	Headline    string
+	Location    string
+	Pronouns    string
 	Bio         string
+	Website     string
 	Public      bool
 	HasAvatar   bool
 }
@@ -35,9 +40,19 @@ type Profile struct {
 // NormalizeProfile trims and checks the common editable fields.
 func NormalizeProfile(profile Profile) (Profile, error) {
 	profile.DisplayName = strings.TrimSpace(profile.DisplayName)
+	profile.Headline = strings.TrimSpace(profile.Headline)
+	profile.Location = strings.TrimSpace(profile.Location)
+	profile.Pronouns = strings.TrimSpace(profile.Pronouns)
 	profile.Bio = strings.TrimSpace(profile.Bio)
-	if utf8.RuneCountInString(profile.DisplayName) > 80 || utf8.RuneCountInString(profile.Bio) > 500 || (profile.Public && profile.DisplayName == "") {
+	profile.Website = strings.TrimSpace(profile.Website)
+	if utf8.RuneCountInString(profile.DisplayName) > 80 || utf8.RuneCountInString(profile.Headline) > 120 || utf8.RuneCountInString(profile.Location) > 120 || utf8.RuneCountInString(profile.Pronouns) > 60 || utf8.RuneCountInString(profile.Bio) > 1000 || len(profile.Website) > 300 || (profile.Public && profile.DisplayName == "") {
 		return Profile{}, ErrInvalidInput
+	}
+	if profile.Website != "" {
+		link, err := url.Parse(profile.Website)
+		if err != nil || (link.Scheme != "https" && link.Scheme != "http") || link.Hostname() == "" || link.User != nil {
+			return Profile{}, ErrInvalidInput
+		}
 	}
 	return profile, nil
 }
