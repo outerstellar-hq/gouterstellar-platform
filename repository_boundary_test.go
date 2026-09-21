@@ -18,10 +18,10 @@ var (
 	allowedRootEntries = []string{
 		".github", ".gitignore", ".golangci-lint.yml",
 		"AGENTS.md", "LICENSE", "README.md", "auth", "docs", "durablefile", "go.mod", "go.sum",
-		"i18n", "migration", "observability", "repository_boundary_test.go", "ui", "web",
+		"i18n", "membership", "migration", "observability", "repository_boundary_test.go", "ui", "web",
 	}
 	allowedPackageDirectories = []string{
-		"auth", "durablefile", "i18n", "migration", "observability", "ui", "web",
+		"auth", "durablefile", "i18n", "membership", "migration", "observability", "ui", "web",
 	}
 	allowedDirectModules = []string{
 		"filippo.io/csrf",
