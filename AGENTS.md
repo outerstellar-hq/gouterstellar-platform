@@ -9,6 +9,8 @@ This repository is a set of application-neutral Go libraries.
   import a consumer application.
 - Shared UI structure belongs in `ui`; product page content, CSS, state, and
   routing remain in the consumer repository.
+- Shared FAQ entry validation and workflow rules belong in `faq`; consumers
+  own their question content, storage, authorization, routes, and presentation.
 - Shared authentication and HTTP-security mechanics belong in `auth` and
   `web`. Shared account and group workflow rules belong in `membership`.
   Consumer repositories still own users, role definitions, authorization,

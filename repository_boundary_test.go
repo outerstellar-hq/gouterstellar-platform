@@ -17,11 +17,11 @@ import (
 var (
 	allowedRootEntries = []string{
 		".github", ".gitignore", ".golangci-lint.yml",
-		"AGENTS.md", "LICENSE", "README.md", "auth", "docs", "durablefile", "go.mod", "go.sum",
+		"AGENTS.md", "LICENSE", "README.md", "auth", "docs", "durablefile", "faq", "go.mod", "go.sum",
 		"i18n", "membership", "migration", "observability", "repository_boundary_test.go", "ui", "web",
 	}
 	allowedPackageDirectories = []string{
-		"auth", "durablefile", "i18n", "membership", "migration", "observability", "ui", "web",
+		"auth", "durablefile", "faq", "i18n", "membership", "migration", "observability", "ui", "web",
 	}
 	allowedDirectModules = []string{
 		"filippo.io/csrf",
