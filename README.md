@@ -9,6 +9,9 @@ product schema, deployment image, product assets, or in-tree plugins.
 | Module | Shared responsibility | Proven implementation underneath |
 | --- | --- | --- |
 | `auth` | Argon2id passwords, opaque tokens, server-side sessions, principals, JWTs, TOTP | `alexedwards/argon2id`, `alexedwards/scs`, `golang-jwt/jwt`, `pquerna/otp` |
+| `member` | account transitions and common profile fields | Go standard library; consumer-owned store |
+| `group` | group creation and join/leave rules | Go standard library; consumer-owned store |
+| `faq` | bounded question-and-answer entries, draft/publish writes, published search | Go standard library; consumer-owned store |
 | `durablefile` | complete, crash-resistant file replacement with explicit Unix modes | `natefinch/atomic`, Go standard library |
 | `web` | masked CSRF tokens, strict bounded JSON, CSP nonces, security headers, body limits, sensitive-response caching | `gorilla/csrf`, `net/http` |
 | `ui` | shared server-rendered application shell and composition contract | `html/template`, `embed` |
@@ -27,6 +30,26 @@ Use an upstream package directly when no platform policy is needed. In
 particular, applications should use `pgx` for PostgreSQL queries and
 transactions, a maintained SCS store for session persistence, and a mature
 authorization engine such as Casbin when their policy exceeds simple roles.
+
+## Member and group workflows
+
+`member.New(store, "member", "admin")` accepts a consumer-owned account store.
+`ChangeAccount` rejects self changes and unrecognized roles. `member.Profile`
+contains shared name, headline, location, pronouns, bio, website, visibility,
+and avatar presence fields; an
+application can embed it and add its own fields. `member.NormalizeProfile`
+checks the shared editable fields. Applications own profile persistence and
+additional fields. `group.New(store)` handles group creation and join/leave
+writes through a separate consumer-owned store. Callers authenticate and
+authorize actors before invoking these methods. Queries, schema, pages, and
+routes remain application-owned.
+
+## FAQ workflows
+
+`faq.New(store)` accepts an application-owned store. `Search` limits query
+length and requests published answers only; `Save` trims and bounds questions
+and answers before create or update. The application authorizes admin writes
+and supplies the SQL schema, pages, and question content.
 
 ## Authentication
 
