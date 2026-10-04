@@ -8,13 +8,17 @@ import (
 
 // Shell contains application-neutral chrome data for one rendered page.
 type Shell struct {
-	Language           string
-	Title              string
-	ProductName        string
-	ProductSubtitle    string
-	BrandURL           string
-	BodyClass          string
-	Stylesheets        []string
+	Language        string
+	Title           string
+	ProductName     string
+	ProductSubtitle string
+	BrandURL        string
+	BodyClass       string
+	Stylesheets     []string
+	// Favicon is a same-origin icon URL rendered as <link rel="icon"> in the
+	// shared head; empty emits no link. The application serves the file and
+	// owns its content type and versioning.
+	Favicon            string
 	AutoRefreshSeconds int
 	Status             *Status
 	Navigation         []NavigationGroup
@@ -118,6 +122,9 @@ func (s Shell) Validate() error {
 		if err := validateSameOriginPath("stylesheet", stylesheet, false); err != nil {
 			return err
 		}
+	}
+	if err := validateSameOriginPath("favicon", s.Favicon, true); err != nil {
+		return err
 	}
 	if s.User != nil {
 		if err := validateSameOriginPath("avatar", s.User.AvatarURL, true); err != nil {

@@ -13,11 +13,11 @@ func TestRendererComposesConsumerContentIntoSharedShell(t *testing.T) {
 		t.Fatal(err)
 	}
 	var rendered bytes.Buffer
-	err = renderer.Render(&rendered, Shell{Language: "en", Title: "Workers", ProductName: "Example", ProductSubtitle: "Operations", Stylesheets: []string{"/assets/app.css"}, AutoRefreshSeconds: 15, Status: &Status{Label: "Home control plane", Title: "Primary", Detail: "2 workers online", Online: true}, Navigation: []NavigationGroup{{Label: "Control", Items: []NavigationItem{{Label: "Workers", URL: "/workers", Count: "2", Active: true}}}}, User: &User{DisplayName: "Operator", RoleLabel: "Administrator", Initial: "O", ProfileURL: "/profile", LogoutURL: "/logout"}, Header: Header{Context: "Primary / Control", Title: "Workers", Status: "Live database view"}, Footer: Footer{Primary: "Version 1", Secondary: "Database is authoritative"}}, struct{ Message string }{"consumer page"})
+	err = renderer.Render(&rendered, Shell{Language: "en", Title: "Workers", ProductName: "Example", ProductSubtitle: "Operations", Stylesheets: []string{"/assets/app.css"}, Favicon: "/assets/favicon.svg", AutoRefreshSeconds: 15, Status: &Status{Label: "Home control plane", Title: "Primary", Detail: "2 workers online", Online: true}, Navigation: []NavigationGroup{{Label: "Control", Items: []NavigationItem{{Label: "Workers", URL: "/workers", Count: "2", Active: true}}}}, User: &User{DisplayName: "Operator", RoleLabel: "Administrator", Initial: "O", ProfileURL: "/profile", LogoutURL: "/logout"}, Header: Header{Context: "Primary / Control", Title: "Workers", Status: "Live database view"}, Footer: Footer{Primary: "Version 1", Secondary: "Database is authoritative"}}, struct{ Message string }{"consumer page"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"<title>Workers · Example</title>", `href="/workers" aria-current="page"`, "consumer page", "Operator", "Live database view", "Version 1"} {
+	for _, want := range []string{"<title>Workers · Example</title>", `<link rel="icon" href="/assets/favicon.svg">`, `href="/workers" aria-current="page"`, "consumer page", "Operator", "Live database view", "Version 1"} {
 		if !bytes.Contains(rendered.Bytes(), []byte(want)) {
 			t.Errorf("rendered shell missing %q", want)
 		}
@@ -97,6 +97,7 @@ func TestShellRejectsCrossOriginChromeURLs(t *testing.T) {
 		"backslash":  {Title: "Example", ProductName: "Example", BrandURL: `/\untrusted.example/path`},
 		"encoded":    {Title: "Example", ProductName: "Example", BrandURL: `/%2f%2funtrusted.example/path`},
 		"stylesheet": {Title: "Example", ProductName: "Example", Stylesheets: []string{"//example.com/app.css"}},
+		"favicon":    {Title: "Example", ProductName: "Example", Favicon: "https://example.com/icon.svg"},
 		"avatar":     {Title: "Example", ProductName: "Example", User: &User{AvatarURL: "https://example.com/avatar.png", ProfileURL: "/profile", LogoutURL: "/logout"}},
 		"profile":    {Title: "Example", ProductName: "Example", User: &User{ProfileURL: "https://example.com", LogoutURL: "/logout"}},
 		"logout":     {Title: "Example", ProductName: "Example", User: &User{ProfileURL: "/profile", LogoutURL: "logout"}},
@@ -106,5 +107,22 @@ func TestShellRejectsCrossOriginChromeURLs(t *testing.T) {
 				t.Fatal("expected cross-origin URL error")
 			}
 		})
+	}
+}
+
+func TestShellOmitsIconLinkWithoutFavicon(t *testing.T) {
+	renderer, err := NewRenderer(Options{
+		Templates: fstest.MapFS{"page.html": &fstest.MapFile{Data: []byte(`{{define "application-content"}}content{{end}}`)}},
+		Patterns:  []string{"*.html"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rendered bytes.Buffer
+	if err := renderer.Render(&rendered, Shell{Title: "Example", ProductName: "Example"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(rendered.String(), `rel="icon"`) {
+		t.Fatal("shell emitted an icon link although Favicon is empty")
 	}
 }
