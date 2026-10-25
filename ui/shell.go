@@ -39,8 +39,11 @@ const (
 	// links (body class layout-sidebar). It is the zero value.
 	LayoutSidebar Layout = ""
 	// LayoutTopbar is a bar above the page (body class layout-topbar). Each
-	// navigation group is a menu: a button with the group's label, and a
-	// panel (.nav-menu-panel) holding its links with their descriptions.
+	// navigation group is a menu: its label (a link to the group's URL, or
+	// a button without one) and a panel (.nav-menu-panel) holding its links
+	// with their descriptions. The active group's links are also listed in
+	// a sidebar beside the page (.app-subnav), so moving between the pages
+	// of one section never goes through the top bar.
 	// The shell ships no script; the application's stylesheet opens the
 	// panel, for example on .nav-menu:hover and .nav-menu:focus-within, so
 	// a pointer, a tap (which focuses the button) and Tab all reach it.
@@ -49,6 +52,17 @@ const (
 
 // Topbar reports whether the shell renders the top-bar layout.
 func (s Shell) Topbar() bool { return s.Layout == LayoutTopbar }
+
+// Section is the reader's navigation group, the first active one, which
+// the top-bar layout lists in its sidebar; nil when no group is active.
+func (s Shell) Section() *NavigationGroup {
+	for i := range s.Navigation {
+		if s.Navigation[i].Active() {
+			return &s.Navigation[i]
+		}
+	}
+	return nil
+}
 
 // ShellLabels contains consumer-localizable text owned by the shared chrome.
 // Empty fields use English defaults.
@@ -84,11 +98,21 @@ type NavigationGroup struct {
 	Collapsible bool
 	Count       string
 	Items       []NavigationItem
+	// URL makes the group's top-bar label a link (usually to its first
+	// page); without it the label is a button that only opens the menu.
+	URL string
+	// Current marks the group as the reader's section when no item is the
+	// current page, such as a drill-down page beneath one of its entries.
+	Current bool
 }
 
-// Active reports whether the group holds the current page, so a top-bar
-// menu can mark the section the reader is in.
+// Active reports whether the group is the reader's section: it is Current
+// or holds the current page. A top-bar menu marks it, and the top-bar layout
+// lists its items in the sidebar.
 func (g NavigationGroup) Active() bool {
+	if g.Current {
+		return true
+	}
 	for _, item := range g.Items {
 		if item.hasActive() {
 			return true
@@ -181,6 +205,9 @@ func (s Shell) Validate() error {
 		}
 	}
 	for _, group := range s.Navigation {
+		if err := validateSameOriginPath("navigation group", group.URL, true); err != nil {
+			return err
+		}
 		for _, item := range group.Items {
 			if err := validateNavigationItem(item); err != nil {
 				return err

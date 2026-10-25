@@ -216,3 +216,55 @@ func TestNavigationGroupActiveFollowsChildren(t *testing.T) {
 		t.Fatal("a group without the current page reports active")
 	}
 }
+
+// TestTopbarSidebarListsTheCurrentSection: in the top-bar layout the active
+// group's links are listed beside the page, labelled with the group's name;
+// a group with a URL has a link as its top-bar label; a group marked Current
+// is the section even when none of its items is the current page; and a page
+// in no section gets no sidebar.
+func TestTopbarSidebarListsTheCurrentSection(t *testing.T) {
+	render := func(nav []NavigationGroup) string {
+		t.Helper()
+		var rendered bytes.Buffer
+		if err := newContentRenderer(t).Render(&rendered, Shell{Title: "T", ProductName: "Example", Layout: LayoutTopbar, Navigation: nav}, nil); err != nil {
+			t.Fatal(err)
+		}
+		return rendered.String()
+	}
+	nav := []NavigationGroup{
+		{Label: "Fleet", URL: "/workers", Items: []NavigationItem{{Label: "Workers", URL: "/workers"}, {Label: "Queues", URL: "/queues", Active: true}}},
+		{Label: "Settings", URL: "/profile", Items: []NavigationItem{{Label: "Profile", URL: "/profile"}}},
+	}
+	html := render(nav)
+	for _, want := range []string{
+		`<a class="nav-menu-label" href="/workers" aria-current="true"><span>Fleet</span></a>`,
+		`<a class="nav-menu-label" href="/profile"><span>Settings</span></a>`,
+		`<div class="app-body"><nav class="app-subnav" aria-label="Fleet"><span class="nav-label">Fleet</span>`,
+		`</main></div></div></body>`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("top-bar shell missing %q", want)
+		}
+	}
+	sub := html[strings.Index(html, `class="app-subnav"`):strings.Index(html, "<main")]
+	if !strings.Contains(sub, `href="/queues" aria-current="page"`) || strings.Contains(sub, "Profile") {
+		t.Errorf("the sidebar does not list exactly the current section: %s", sub)
+	}
+
+	nav[0].Items[1].Active = false
+	nav[1].Current = true
+	if html := render(nav); !strings.Contains(html, `<nav class="app-subnav" aria-label="Settings">`) {
+		t.Error("a Current group is not the sidebar's section")
+	}
+	nav[1].Current = false
+	if html := render(nav); strings.Contains(html, "app-subnav") || !strings.Contains(html, `<div class="app-body"><main`) {
+		t.Error("a page in no section renders a sidebar")
+	}
+}
+
+func TestShellRejectsCrossOriginGroupURL(t *testing.T) {
+	err := (Shell{Title: "Example", ProductName: "Example", Navigation: []NavigationGroup{{Label: "Bad", URL: "https://example.com"}}}).Validate()
+	if err == nil {
+		t.Fatal("expected cross-origin group URL error")
+	}
+}
