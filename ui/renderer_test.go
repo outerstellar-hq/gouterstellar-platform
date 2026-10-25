@@ -126,3 +126,93 @@ func TestShellOmitsIconLinkWithoutFavicon(t *testing.T) {
 		t.Fatal("shell emitted an icon link although Favicon is empty")
 	}
 }
+
+func newContentRenderer(t *testing.T) *Renderer {
+	t.Helper()
+	renderer, err := NewRenderer(Options{
+		Templates: fstest.MapFS{"page.html": &fstest.MapFile{Data: []byte(`{{define "application-content"}}content{{end}}`)}},
+		Patterns:  []string{"*.html"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return renderer
+}
+
+var layoutNavigation = []NavigationGroup{
+	{Label: "Fleet", Items: []NavigationItem{
+		{Label: "Workers", URL: "/workers", Description: "Every worker and its load."},
+		{Label: "Queues", URL: "/queues", Active: true, Count: "3", CountAriaLabel: "queues"},
+	}},
+	{Label: "Settings", Items: []NavigationItem{{Label: "Profile", URL: "/profile"}}},
+}
+
+// TestTopbarLayoutRendersGroupsAsMenus: the top bar puts the brand and one
+// menu per group in a header above the page; each menu is a button plus a
+// panel of links carrying their descriptions, and the group holding the
+// current page is marked active.
+func TestTopbarLayoutRendersGroupsAsMenus(t *testing.T) {
+	var rendered bytes.Buffer
+	shell := Shell{Title: "Queues", ProductName: "Example", Layout: LayoutTopbar, Navigation: layoutNavigation,
+		Status: &Status{Label: "Plane", Title: "Primary", Detail: "online"}}
+	if err := newContentRenderer(t).Render(&rendered, shell, nil); err != nil {
+		t.Fatal(err)
+	}
+	html := rendered.String()
+	for _, want := range []string{
+		`<body class="layout-topbar">`,
+		`<header class="app-topbar"><a class="brand" href="/">`,
+		`<nav class="app-menu" aria-label="Primary navigation">`,
+		`<div class="nav-menu active">`,
+		`<button type="button" class="nav-menu-label"><span>Fleet</span></button>`,
+		`<strong>Workers</strong><small>Every worker and its load.</small>`,
+		`href="/queues" aria-current="page"`,
+		`aria-label="queues">3</span>`,
+		`<div class="nav-plane" aria-label="Plane">`,
+		`<main id="main-content"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("top-bar shell missing %q", want)
+		}
+	}
+	if strings.Count(html, `class="nav-menu-label"`) != 2 || strings.Count(html, `<div class="nav-menu active">`) != 1 {
+		t.Error("want two menus with only the current page's group active")
+	}
+	if strings.Contains(html, "app-nav") || strings.Contains(html, "layout-sidebar") {
+		t.Error("top-bar shell still renders the sidebar")
+	}
+}
+
+// TestSidebarLayoutIsTheDefault: without a layout the shell keeps the
+// sidebar, and descriptions stay out of it.
+func TestSidebarLayoutIsTheDefault(t *testing.T) {
+	var rendered bytes.Buffer
+	if err := newContentRenderer(t).Render(&rendered, Shell{Title: "Queues", ProductName: "Example", Navigation: layoutNavigation}, nil); err != nil {
+		t.Fatal(err)
+	}
+	html := rendered.String()
+	for _, want := range []string{`<body class="layout-sidebar">`, `<nav class="app-nav" aria-label="Primary navigation"><a class="brand"`, `<span class="nav-label">Fleet</span>`, `<div class="nav-spacer"></div>`} {
+		if !strings.Contains(html, want) {
+			t.Errorf("sidebar shell missing %q", want)
+		}
+	}
+	if strings.Contains(html, "Every worker and its load.") || strings.Contains(html, "nav-menu") {
+		t.Error("the sidebar renders top-bar menu markup")
+	}
+}
+
+func TestShellRejectsUnknownLayout(t *testing.T) {
+	if err := (Shell{Title: "Example", ProductName: "Example", Layout: "drawer"}).Validate(); err == nil {
+		t.Fatal("expected unknown layout error")
+	}
+}
+
+func TestNavigationGroupActiveFollowsChildren(t *testing.T) {
+	group := NavigationGroup{Items: []NavigationItem{{Label: "Parent", URL: "/p", Children: []NavigationItem{{Label: "Child", URL: "/c", Active: true}}}}}
+	if !group.Active() {
+		t.Fatal("a group whose nested item is current is not active")
+	}
+	if (NavigationGroup{Items: []NavigationItem{{Label: "Other", URL: "/o"}}}).Active() {
+		t.Fatal("a group without the current page reports active")
+	}
+}
