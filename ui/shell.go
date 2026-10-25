@@ -27,7 +27,28 @@ type Shell struct {
 	Header             Header
 	Footer             Footer
 	Alpha              bool
+	// Layout places the primary navigation; the zero value is the sidebar.
+	Layout Layout
 }
+
+// Layout is where the shell places the brand and the primary navigation.
+type Layout string
+
+const (
+	// LayoutSidebar is a column beside the page listing every group's
+	// links (body class layout-sidebar). It is the zero value.
+	LayoutSidebar Layout = ""
+	// LayoutTopbar is a bar above the page (body class layout-topbar). Each
+	// navigation group is a menu: a button with the group's label, and a
+	// panel (.nav-menu-panel) holding its links with their descriptions.
+	// The shell ships no script; the application's stylesheet opens the
+	// panel, for example on .nav-menu:hover and .nav-menu:focus-within, so
+	// a pointer, a tap (which focuses the button) and Tab all reach it.
+	LayoutTopbar Layout = "topbar"
+)
+
+// Topbar reports whether the shell renders the top-bar layout.
+func (s Shell) Topbar() bool { return s.Layout == LayoutTopbar }
 
 // ShellLabels contains consumer-localizable text owned by the shared chrome.
 // Empty fields use English defaults.
@@ -65,9 +86,23 @@ type NavigationGroup struct {
 	Items       []NavigationItem
 }
 
+// Active reports whether the group holds the current page, so a top-bar
+// menu can mark the section the reader is in.
+func (g NavigationGroup) Active() bool {
+	for _, item := range g.Items {
+		if item.hasActive() {
+			return true
+		}
+	}
+	return false
+}
+
 type NavigationItem struct {
-	Label          string
-	URL            string
+	Label string
+	URL   string
+	// Description is one line shown under the label in a top-bar menu
+	// panel; the sidebar does not render it.
+	Description    string
 	Class          string
 	Code           string
 	Count          string
@@ -115,6 +150,9 @@ func (s Shell) Validate() error {
 	if s.AutoRefreshSeconds < 0 {
 		return fmt.Errorf("UI shell refresh interval must not be negative")
 	}
+	if s.Layout != LayoutSidebar && s.Layout != LayoutTopbar {
+		return fmt.Errorf("UI shell layout %q is unknown", s.Layout)
+	}
 	if err := validateSameOriginPath("brand", s.BrandURL, true); err != nil {
 		return err
 	}
@@ -150,6 +188,18 @@ func (s Shell) Validate() error {
 		}
 	}
 	return nil
+}
+
+func (item NavigationItem) hasActive() bool {
+	if item.Active {
+		return true
+	}
+	for _, child := range item.Children {
+		if child.hasActive() {
+			return true
+		}
+	}
+	return false
 }
 
 func validateNavigationItem(item NavigationItem) error {
